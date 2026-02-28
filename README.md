@@ -10,6 +10,7 @@
   <a href="#quickstart">Quickstart</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
   <a href="#cli">CLI</a> &middot;
+  <a href="#emergent-context-propagation">Context</a> &middot;
   <a href="#test-suite">Tests</a> &middot;
   <a href="#configuration">Config</a>
 </p>
@@ -54,24 +55,28 @@ pnpm typecheck     # tsc --noEmit
 
 ```
 src/mesh/
-  manager.ts          # Orchestrator: discovery, peer clients, registries
-  discovery.ts        # mDNS polling with peer-discovered/peer-lost events
-  capabilities.ts     # Capability registry (channel:*, skill:*)
-  routing.ts          # Local-first routing: local caps -> mesh peers -> unavailable
-  forwarding.ts       # RPC-based message forwarding between peers
-  peer-trust.ts       # File-backed trust store with atomic writes
-  peer-registry.ts    # Connected peer session tracking
-  handshake.ts        # Ed25519 signed auth payloads
-  server-methods/     # Gateway RPC handlers (peers, trust, forward)
+  manager.ts              # Orchestrator: discovery, peer clients, registries
+  discovery.ts            # mDNS polling with peer-discovered/peer-lost events
+  capabilities.ts         # Capability registry (channel:*, skill:*)
+  routing.ts              # Local-first routing: local caps -> mesh peers -> unavailable
+  forwarding.ts           # RPC-based message forwarding between peers
+  peer-trust.ts           # File-backed trust store with atomic writes
+  peer-registry.ts        # Connected peer session tracking
+  handshake.ts            # Ed25519 signed auth payloads
+  context-types.ts        # ContextFrame types for emergent context
+  context-propagator.ts   # Broadcast context frames to mesh peers
+  world-model.ts          # Ingest and track mesh-wide knowledge
+  mock-sensor.ts          # Mock sensor for testing context propagation
+  server-methods/         # Gateway RPC handlers (peers, trust, forward)
 
 src/infra/
-  device-identity.ts  # Ed25519 key generation + deviceId derivation
-  bonjour-discovery.ts # mDNS/Avahi/dns-sd beacon scanning
+  device-identity.ts      # Ed25519 key generation + deviceId derivation
+  bonjour-discovery.ts    # mDNS/Avahi/dns-sd beacon scanning
 
 src/cli/
-  clawmesh-cli.ts     # Commander-based CLI
+  clawmesh-cli.ts         # Commander-based CLI
 
-src/terminal/theme.ts # Lobster palette theming (chalk)
+src/terminal/theme.ts     # Lobster palette theming (chalk)
 ```
 
 ### Routing Decision Flow
@@ -96,6 +101,80 @@ clawmesh trust add <deviceId> --name "Jetson"
 clawmesh trust remove <deviceId>      # Untrust a peer
 clawmesh peers                        # List connected mesh peers
 clawmesh status                       # Gateway + mesh status
+clawmesh world                        # Query the world model
+```
+
+### Starting a Mesh Node
+
+```bash
+# Basic node
+clawmesh start --name my-node --port 18789
+
+# Node with mock sensor broadcasting context every 3s
+clawmesh start --name sensor-node --port 18790 --mock-sensor --sensor-interval 3000
+
+# Node with mock actuator for trust-gated commands
+clawmesh start --name actuator-node --mock-actuator
+
+# Connect to a static peer
+clawmesh start --name observer --peer "<deviceId>=ws://192.168.1.39:18790"
+```
+
+### Connecting to Remote Gateways
+
+```bash
+# Connect to an OpenClaw gateway and save as named target
+clawmesh gateway-connect --url ws://192.168.1.39:18789 --password secret --save jetson
+
+# Reconnect using saved name
+clawmesh gateway-connect jetson
+
+# List saved gateway targets
+clawmesh gateways
+```
+
+## Emergent Context Propagation
+
+ClawMesh nodes build intelligence organically through continuous context gossip.
+
+When a sensor on one node detects a state change, that **observation becomes context** — a `ContextFrame` that propagates across the mesh. Other nodes ingest this context into their **world model**, building a live picture of mesh-wide state. Planner LLMs can reason over this emergent knowledge and forward execution commands to nodes with the right capabilities.
+
+### Example: Field Sensor -> Mesh Awareness -> Intelligent Execution
+
+```
+1. Jetson sensor detects low soil moisture in zone-1
+2. Context propagates to mesh:
+     { kind: "observation", zone: "zone-1", moisture: 15.2%, status: "critical" }
+3. Mac planner LLM reasons over mesh-wide context
+4. Mac forwards execution command: actuate:pump:P1
+5. Jetson validates trust policy and starts pump
+```
+
+No file syncing. No manual coordination. Just emergent intelligence.
+
+### Context Frame Types
+
+| Kind | Description | Example |
+|------|-------------|---------|
+| `observation` | Sensor readings, measurements | Soil moisture 15.2% |
+| `event` | Task completed, state change | Pump P1 started |
+| `human_input` | Operator commands, notes | "Inspect pump P1" |
+| `inference` | LLM-derived conclusions | "Zone 1 needs irrigation" |
+| `capability_update` | Node capabilities changed | Node gained `actuator:pump` |
+
+### Testing with Mock Sensor
+
+```bash
+# Terminal 1: Node broadcasting sensor context
+clawmesh start --name sensor-node --port 18790 --mock-sensor --sensor-interval 3000
+
+# Terminal 2: Observer node ingesting context
+clawmesh start --name observer --port 18791 --peer "<sensor-deviceId>=ws://127.0.0.1:18790"
+```
+
+The observer's world model will log each ingested context frame:
+```
+[world-model] Ingested observation from sensor-node
 ```
 
 ## Test Suite
@@ -139,11 +218,16 @@ mesh:
 - **Capability-driven**: Route by advertised capabilities, not hard-coded plugin lookups
 - **Trust before traffic**: Discovered peers are ignored unless explicitly trusted
 - **Local-first**: Always prefer local capabilities over mesh peers
+- **Emergent intelligence**: Context gossip builds distributed awareness without central coordination
 - **Lean core**: Small enough to reason about and deploy on edge devices
 
 ## Roadmap
 
-- [ ] Wire runnable `clawmesh start` gateway boot path
+- [x] Wire runnable `clawmesh start` gateway boot path
+- [x] Emergent context propagation (ContextFrame, WorldModel, gossip)
+- [x] Mock sensor for testing context broadcast
+- [ ] Pi-mono LLM planner integration (context -> decision -> command)
+- [ ] Real GPIO sensor integration (moisture, temperature, pressure)
 - [ ] Build output + npm packaging for the `clawmesh` binary
 - [ ] Multi-node end-to-end examples (discovery + trust + forwarding)
 - [ ] Deployment docs for home lab / LAN setups

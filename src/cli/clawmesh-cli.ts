@@ -1,12 +1,16 @@
 import { Command } from "commander";
 import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
 import { buildLlmOnlyActuationTrust, MeshNodeRuntime } from "../mesh/node-runtime.js";
+import { MockSensor } from "../mesh/mock-sensor.js";
+import { connectToGateway } from "../mesh/gateway-connect.js";
 import {
   addTrustedPeer,
   listTrustedPeers,
   removeTrustedPeer,
 } from "../mesh/peer-trust.js";
-import type { MeshStaticPeer } from "../config/types.mesh.js";
+import type { MeshStaticPeer, MeshGatewayTarget } from "../config/types.mesh.js";
+import { loadGatewayTargets, saveGatewayTarget } from "../mesh/gateway-config.js";
+import { rawDataToString } from "../infra/ws.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -71,6 +75,8 @@ export function createClawMeshCli(): Command {
       [],
     )
     .option("--mock-actuator", "Enable mock actuator handler for clawmesh commands")
+    .option("--mock-sensor", "Enable mock sensor (broadcasts periodic moisture readings)")
+    .option("--sensor-interval <ms>", "Mock sensor interval in milliseconds", (v) => Number(v), 5000)
     .action(
       async (opts: {
         host: string;
@@ -79,6 +85,8 @@ export function createClawMeshCli(): Command {
         capability: string[];
         peer: string[];
         mockActuator?: boolean;
+        mockSensor?: boolean;
+        sensorInterval: number;
       }) => {
         const identity = loadOrCreateDeviceIdentity();
         const staticPeers = opts.peer.map(parsePeerSpec);
@@ -106,6 +114,15 @@ export function createClawMeshCli(): Command {
         console.log(`Capabilities: ${capabilities.length > 0 ? capabilities.join(", ") : "(none)"}`);
         if (opts.mockActuator) {
           console.log("Mock actuator: enabled");
+        }
+        if (opts.mockSensor) {
+          const mockSensor = new MockSensor({
+            contextPropagator: runtime.contextPropagator,
+            intervalMs: opts.sensorInterval,
+            zone: "zone-1",
+          });
+          mockSensor.start();
+          console.log(`Mock sensor: enabled (${opts.sensorInterval}ms interval)`);
         }
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);
@@ -247,6 +264,170 @@ export function createClawMeshCli(): Command {
       }
     });
 
+  // ── gateway-connect ─────────────────────────────────────
+  program
+    .command("gateway-connect [name]")
+    .description("Connect to a remote OpenClaw gateway")
+    .option("--url <url>", "Gateway WebSocket URL (e.g. ws://192.168.1.39:18789)")
+    .option("--password <password>", "Gateway auth password")
+    .option("--token <token>", "Gateway auth token")
+    .option("--role <role>", "Role to request", "node")
+    .option("--name <displayName>", "Display name for this node")
+    .option("--save", "Save this gateway target to config for future use")
+    .option("--timeout-ms <ms>", "Connection timeout", (v) => Number(v), 15_000)
+    .action(
+      async (
+        targetName: string | undefined,
+        opts: {
+          url?: string;
+          password?: string;
+          token?: string;
+          role: string;
+          name?: string;
+          save?: boolean;
+          timeoutMs: number;
+        },
+      ) => {
+        const identity = loadOrCreateDeviceIdentity();
+
+        // Resolve target: from saved config or CLI flags
+        let url = opts.url;
+        let password = opts.password;
+        let token = opts.token;
+        let displayName = opts.name;
+
+        if (targetName && !url) {
+          const targets = loadGatewayTargets();
+          const target = targets.find((t) => t.name === targetName);
+          if (!target) {
+            const available = targets.map((t) => t.name).join(", ") || "(none)";
+            console.error(`Unknown gateway target "${targetName}". Available: ${available}`);
+            process.exit(1);
+          }
+          url = target.url;
+          password = password ?? target.password;
+          token = token ?? target.token;
+          displayName = displayName ?? target.displayName;
+        }
+
+        if (!url) {
+          console.error("Missing --url or saved gateway target name.");
+          console.error("Usage: clawmesh gateway-connect --url ws://host:port [--password ...]");
+          console.error("   or: clawmesh gateway-connect <saved-name>");
+          process.exit(1);
+        }
+
+        console.log(`Device ID:  ${identity.deviceId}`);
+        console.log(`Target:     ${url}`);
+
+        const result = await connectToGateway({
+          url,
+          identity,
+          password,
+          token,
+          role: opts.role,
+          displayName: displayName ?? "clawmesh",
+          timeoutMs: opts.timeoutMs,
+          log: {
+            info: (msg) => console.log(msg),
+            warn: (msg) => console.warn(msg),
+            error: (msg) => console.error(msg),
+          },
+        });
+
+        if (!result.ok) {
+          console.error(`\nConnection failed: ${result.error}`);
+          process.exit(1);
+        }
+
+        console.log(`\nConnected to gateway`);
+        console.log(`  Server:   ${result.server?.version}`);
+        console.log(`  ConnId:   ${result.server?.connId}`);
+        console.log(`  Protocol: ${result.protocol}`);
+        console.log(`  Methods:  ${result.methods?.length ?? 0} available`);
+        console.log(`  Events:   ${result.events?.length ?? 0} available`);
+        if (result.auth) {
+          console.log(`  Auth:     device token issued, role=${result.auth.role}`);
+        }
+        if (result.presence && result.presence.length > 0) {
+          console.log(`  Presence: ${result.presence.length} nodes`);
+          for (const p of result.presence) {
+            const host = p.host ?? p.id ?? "unknown";
+            const platform = p.platform ?? "?";
+            const mode = p.mode ?? "?";
+            const roles = (p.roles ?? []).join(",") || "none";
+            console.log(`    - ${host} (${platform}/${mode}) roles=${roles}`);
+          }
+        }
+
+        // Save target if requested
+        if (opts.save && targetName) {
+          saveGatewayTarget({
+            name: targetName,
+            url,
+            password,
+            token,
+            role: opts.role,
+            displayName,
+          });
+          console.log(`\nSaved gateway target "${targetName}".`);
+        }
+
+        // Keep alive and print events
+        const ws = result.ws;
+        if (!ws) {
+          return;
+        }
+        console.log("\nListening for events... (Ctrl+C to disconnect)");
+
+        ws.on("message", (data) => {
+          try {
+            const msg = JSON.parse(rawDataToString(data));
+            if (msg.type === "event") {
+              const ts = new Date().toISOString().slice(11, 19);
+              console.log(`  [${ts}] event: ${msg.event}`);
+            }
+          } catch {
+            // ignore
+          }
+        });
+
+        ws.on("close", (code, reason) => {
+          console.log(`\nDisconnected (${code}): ${rawDataToString(reason)}`);
+          process.exit(0);
+        });
+
+        await new Promise<void>((resolve) => {
+          const shutdown = () => {
+            process.off("SIGINT", onSignal);
+            process.off("SIGTERM", onSignal);
+            ws.close();
+            resolve();
+          };
+          const onSignal = () => void shutdown();
+          process.once("SIGINT", onSignal);
+          process.once("SIGTERM", onSignal);
+        });
+      },
+    );
+
+  // ── gateway list ───────────────────────────────────────
+  program
+    .command("gateways")
+    .description("List saved gateway targets")
+    .action(() => {
+      const targets = loadGatewayTargets();
+      if (targets.length === 0) {
+        console.log("No saved gateway targets.");
+        console.log("Use: clawmesh gateway-connect --url <url> --save <name>");
+        return;
+      }
+      for (const t of targets) {
+        const auth = t.password ? "password" : t.token ? "token" : "none";
+        console.log(`  ${t.name}  ${t.url}  auth=${auth}  role=${t.role ?? "node"}`);
+      }
+    });
+
   // ── peers ────────────────────────────────────────────────
   program
     .command("peers")
@@ -266,6 +447,15 @@ export function createClawMeshCli(): Command {
       console.log(`Device ID:  ${identity.deviceId}`);
       console.log("Gateway:    not running");
       console.log("Mesh peers: 0");
+    });
+
+  // ── world ─────────────────────────────────────────────────
+  program
+    .command("world")
+    .description("Query the world model (requires running node)")
+    .action(() => {
+      console.log("World model query requires a running node.");
+      console.log("Use: clawmesh start --mock-sensor (and watch logs)");
     });
 
   return program;

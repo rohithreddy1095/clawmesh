@@ -9,6 +9,9 @@ import { MeshCapabilityRegistry } from "./capabilities.js";
 import { MockActuatorController, createMockActuatorHandlers } from "./mock-actuator.js";
 import { MeshPeerClient } from "./peer-client.js";
 import { PeerRegistry } from "./peer-registry.js";
+import type { ContextFrame } from "./context-types.js";
+import { ContextPropagator } from "./context-propagator.js";
+import { WorldModel } from "./world-model.js";
 import { createMeshServerHandlers } from "./peer-server.js";
 import { createMeshForwardHandlers } from "./server-methods/forward.js";
 import { createMeshPeersHandlers } from "./server-methods/peers.js";
@@ -93,6 +96,8 @@ export class MeshNodeRuntime {
   readonly identity: DeviceIdentity;
   readonly peerRegistry = new PeerRegistry();
   readonly capabilityRegistry = new MeshCapabilityRegistry();
+  readonly contextPropagator: ContextPropagator;
+  readonly worldModel: WorldModel;
   readonly mockActuator?: MockActuatorController;
 
   private readonly host: string;
@@ -125,6 +130,18 @@ export class MeshNodeRuntime {
         this.capabilities.push("actuator:mock");
       }
     }
+
+    this.contextPropagator = new ContextPropagator({
+      identity: this.identity,
+      peerRegistry: this.peerRegistry,
+      displayName: this.displayName,
+      log: this.log,
+    });
+
+    this.worldModel = new WorldModel({
+      maxHistory: 1000,
+      log: this.log,
+    });
 
     const sharedHandlers: GatewayRequestHandlers = {
       ...createMeshServerHandlers({
@@ -367,11 +384,23 @@ export class MeshNodeRuntime {
       return;
     }
 
-    if (!parsed || typeof parsed !== "object" || !("type" in parsed)) {
+    if (!parsed || typeof parsed !== "object") {
       return;
     }
 
     const frame = parsed as Record<string, unknown>;
+
+    // Handle context.frame events from peers
+    if (frame.type === "event" && frame.event === "context.frame") {
+      const contextFrame = frame.payload as ContextFrame;
+      this.worldModel.ingest(contextFrame);
+      return;
+    }
+
+    if (!("type" in frame)) {
+      return;
+    }
+
     if (frame.type === "res") {
       if (typeof frame.id !== "string" || typeof frame.ok !== "boolean") {
         return;
