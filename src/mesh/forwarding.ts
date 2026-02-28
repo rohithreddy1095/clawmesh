@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { createClawMeshCommandEnvelope } from "./command-envelope.js";
 import type { PeerRegistry } from "./peer-registry.js";
-import type { MeshForwardPayload } from "./types.js";
+import type {
+  ClawMeshCommandEnvelopeV1,
+  MeshForwardPayload,
+  MeshForwardTrustMetadata,
+} from "./types.js";
 
 export type ForwardResult = {
   ok: boolean;
@@ -23,7 +28,16 @@ export async function forwardMessageToPeer(params: {
   accountId?: string;
   originGatewayId: string;
   idempotencyKey?: string;
+  command?: ClawMeshCommandEnvelopeV1;
+  commandDraft?: Omit<ClawMeshCommandEnvelopeV1, "version" | "kind" | "commandId" | "createdAtMs"> & {
+    commandId?: string;
+    createdAtMs?: number;
+  };
+  trust?: MeshForwardTrustMetadata;
 }): Promise<ForwardResult> {
+  const command = params.commandDraft ? createClawMeshCommandEnvelope(params.commandDraft) : params.command;
+  const trust = params.trust ?? command?.trust;
+
   const payload: MeshForwardPayload = {
     channel: params.channel,
     to: params.to,
@@ -33,6 +47,8 @@ export async function forwardMessageToPeer(params: {
     accountId: params.accountId,
     originGatewayId: params.originGatewayId,
     idempotencyKey: params.idempotencyKey ?? randomUUID(),
+    command,
+    trust,
   };
 
   const result = await params.peerRegistry.invoke({

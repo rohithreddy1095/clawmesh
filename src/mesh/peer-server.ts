@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
-import type { GatewayRequestHandlers } from "../gateway/server-methods/types.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import { isTrustedPeer } from "./peer-trust.js";
 import type { MeshConnectParams, PeerSession } from "./types.js";
+import type { WebSocket } from "ws";
+
+type HandlerFn = (opts: {
+  req: Record<string, unknown>;
+  params: Record<string, unknown>;
+  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
+}) => void | Promise<void>;
+type GatewayRequestHandlers = Record<string, HandlerFn>;
 
 export type MeshServerHandlerDeps = {
   identity: DeviceIdentity;
@@ -68,12 +75,13 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
       // In a real implementation, we'd get the WS from the request context.
       // For now, we register with a placeholder that the manager will update.
       const connId = (req as { _connId?: string })._connId ?? randomUUID();
+      const socket = (req as { _socket?: WebSocket })._socket;
       const session: PeerSession = {
         deviceId: p.deviceId,
         connId,
         displayName: p.displayName,
         publicKey: p.publicKey,
-        socket: null as unknown as PeerSession["socket"], // Will be set by the WS handler layer
+        socket: (socket ?? (null as unknown)) as PeerSession["socket"],
         outbound: false,
         capabilities: p.capabilities ?? [],
         connectedAtMs: Date.now(),

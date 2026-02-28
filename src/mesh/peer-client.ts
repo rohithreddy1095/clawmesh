@@ -36,6 +36,8 @@ export class MeshPeerClient {
   private backoffMs = 1000;
   private closed = false;
   private connId: string = randomUUID();
+  private connectRequestId: string | null = null;
+  private connected = false;
 
   constructor(opts: MeshPeerClientOptions) {
     this.opts = opts;
@@ -46,6 +48,8 @@ export class MeshPeerClient {
       return;
     }
     this.connId = randomUUID();
+    this.connectRequestId = null;
+    this.connected = false;
     const url = this.opts.url;
 
     const wsOptions: ClientOptions = {
@@ -114,9 +118,11 @@ export class MeshPeerClient {
       displayName: this.opts.displayName,
       capabilities: this.opts.capabilities,
     });
+    const requestId = randomUUID();
+    this.connectRequestId = requestId;
     const frame = JSON.stringify({
       type: "req",
-      id: randomUUID(),
+      id: requestId,
       method: "mesh.connect",
       params: { version: 1, ...auth },
     });
@@ -126,11 +132,25 @@ export class MeshPeerClient {
   private handleMessage(raw: string) {
     try {
       const parsed = JSON.parse(raw);
-      if (parsed.type === "res" && parsed.ok) {
+      if (
+        parsed.type === "res" &&
+        parsed.id &&
+        !this.connected &&
+        this.connectRequestId &&
+        parsed.id === this.connectRequestId &&
+        parsed.ok
+      ) {
         this.handleConnectResponse(parsed.payload as MeshConnectResult);
         return;
       }
-      if (parsed.type === "res" && !parsed.ok) {
+      if (
+        parsed.type === "res" &&
+        parsed.id &&
+        !this.connected &&
+        this.connectRequestId &&
+        parsed.id === this.connectRequestId &&
+        !parsed.ok
+      ) {
         this.opts.onError?.(new Error(parsed.error?.message ?? "mesh.connect rejected"));
         this.ws?.close(1008, "mesh.connect rejected");
         return;
@@ -191,6 +211,7 @@ export class MeshPeerClient {
     };
     this.opts.peerRegistry.register(session);
     this.backoffMs = 1000;
+    this.connected = true;
     this.opts.onConnected?.(session);
   }
 

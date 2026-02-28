@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { resolveStateDir } from "../config/paths.js";
 
 export type DeviceIdentity = {
   deviceId: string;
@@ -18,7 +18,8 @@ type StoredIdentity = {
 };
 
 function resolveDefaultIdentityPath(): string {
-  return path.join(resolveStateDir(), "identity", "device.json");
+  const stateDir = process.env.OPENCLAW_STATE_DIR?.trim() || path.join(os.homedir(), ".openclaw");
+  return path.join(stateDir, "identity", "device.json");
 }
 
 function ensureDir(filePath: string) {

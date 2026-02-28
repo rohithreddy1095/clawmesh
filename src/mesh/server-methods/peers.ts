@@ -1,6 +1,10 @@
-import type { GatewayRequestHandlers } from "../../gateway/server-methods/types.js";
 import type { MeshCapabilityRegistry } from "../capabilities.js";
 import type { PeerRegistry } from "../peer-registry.js";
+
+type HandlerFn = (opts: {
+  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
+}) => void | Promise<void>;
+type GatewayRequestHandlers = Record<string, HandlerFn>;
 
 export function createMeshPeersHandlers(deps: {
   peerRegistry: PeerRegistry;

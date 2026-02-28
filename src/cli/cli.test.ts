@@ -15,6 +15,8 @@ describe("ClawMesh CLI", () => {
     const commandNames = program.commands.map((cmd) => cmd.name());
 
     expect(commandNames).toContain("identity");
+    expect(commandNames).toContain("start");
+    expect(commandNames).toContain("demo-actuate");
     expect(commandNames).toContain("trust");
     expect(commandNames).toContain("peers");
     expect(commandNames).toContain("status");

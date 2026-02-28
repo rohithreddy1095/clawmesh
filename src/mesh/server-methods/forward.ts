@@ -1,4 +1,6 @@
 import type { DeviceIdentity } from "../../infra/device-identity.js";
+import { resolveMeshForwardTrustMetadata } from "../command-envelope.js";
+import { evaluateMeshForwardTrust } from "../trust-policy.js";
 import type { MeshForwardPayload } from "../types.js";
 
 /**
@@ -37,6 +39,26 @@ export function createMeshForwardHandlers(deps: {
         respond(false, undefined, {
           code: "LOOP_DETECTED",
           message: "message originated from this gateway; rejecting to prevent loop",
+        });
+        return;
+      }
+
+      const trustMetadataResult = resolveMeshForwardTrustMetadata(p);
+      if (!trustMetadataResult.ok) {
+        respond(false, undefined, {
+          code: trustMetadataResult.code,
+          message: trustMetadataResult.message,
+        });
+        return;
+      }
+
+      const trustDecision = evaluateMeshForwardTrust(
+        trustMetadataResult.trust ? { ...p, trust: trustMetadataResult.trust } : p,
+      );
+      if (!trustDecision.ok) {
+        respond(false, undefined, {
+          code: trustDecision.code,
+          message: trustDecision.message,
         });
         return;
       }

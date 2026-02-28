@@ -159,4 +159,88 @@ describe("forwardMessageToPeer()", () => {
     peerRegistry.handleRpcResult({ id: sentFrame.id, ok: true, payload: {} });
     await forwardPromise;
   });
+
+  it("passes trust metadata through to mesh.message.forward", async () => {
+    const { socket, send } = createMockSocket();
+    peerRegistry.register({
+      deviceId: "peer-b",
+      connId: "conn-1",
+      socket,
+      outbound: true,
+      capabilities: [],
+      connectedAtMs: Date.now(),
+    });
+
+    const forwardPromise = forwardMessageToPeer({
+      peerRegistry,
+      peerDeviceId: "peer-b",
+      channel: "clawmesh",
+      to: "actuator:pump:main",
+      message: "start",
+      originGatewayId: "gw-1",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor", "human"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "human",
+        verification_satisfied: true,
+      },
+    });
+
+    const sentFrame = JSON.parse(send.mock.calls[0][0] as string);
+    expect(sentFrame.params.trust).toMatchObject({
+      action_type: "actuation",
+      minimum_trust_tier: "T2_operational_observation",
+      verification_required: "human",
+    });
+
+    peerRegistry.handleRpcResult({ id: sentFrame.id, ok: true, payload: {} });
+    await forwardPromise;
+  });
+
+  it("derives top-level trust from commandDraft for consistent runtime enforcement", async () => {
+    const { socket, send } = createMockSocket();
+    peerRegistry.register({
+      deviceId: "peer-b",
+      connId: "conn-1",
+      socket,
+      outbound: true,
+      capabilities: [],
+      connectedAtMs: Date.now(),
+    });
+
+    const forwardPromise = forwardMessageToPeer({
+      peerRegistry,
+      peerDeviceId: "peer-b",
+      channel: "clawmesh",
+      to: "actuator:valve:zone-a",
+      originGatewayId: "gw-1",
+      commandDraft: {
+        source: { nodeId: "mac-claw", role: "planner" },
+        target: { kind: "capability", ref: "actuator:valve:zone-a" },
+        operation: { name: "open", params: { durationSec: 30 } },
+        trust: {
+          action_type: "actuation",
+          evidence_sources: ["sensor", "human"],
+          evidence_trust_tier: "T3_verified_action_evidence",
+          minimum_trust_tier: "T2_operational_observation",
+          verification_required: "human",
+          verification_satisfied: true,
+        },
+      },
+    });
+
+    const sentFrame = JSON.parse(send.mock.calls[0][0] as string);
+    expect(sentFrame.params.command).toMatchObject({
+      kind: "clawmesh.command",
+      version: 1,
+      target: { kind: "capability", ref: "actuator:valve:zone-a" },
+      operation: { name: "open" },
+    });
+    expect(sentFrame.params.trust).toEqual(sentFrame.params.command.trust);
+
+    peerRegistry.handleRpcResult({ id: sentFrame.id, ok: true, payload: {} });
+    await forwardPromise;
+  });
 });
