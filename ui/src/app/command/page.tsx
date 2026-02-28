@@ -1,11 +1,44 @@
 "use client";
 
-import { TerminalSquare, Send, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
+import { TerminalSquare, Send, CheckCircle2, AlertTriangle, ShieldAlert, XCircle } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useMesh } from "@/lib/useMesh";
 
 export default function CommandPage() {
+    const { isConnected, sendCommand } = useMesh();
     const [command, setCommand] = useState("");
+
+    // Store sent commands
+    const [sentCommands, setSentCommands] = useState<{ id: string, text: string, time: string }[]>([]);
+
+    // Local state to simulate resolving the mocked L3 execution request
+    const [mockTaskStatus, setMockTaskStatus] = useState<"pending" | "approved" | "rejected">("pending");
+
+    const handleApprove = () => {
+        setMockTaskStatus("approved");
+        // In a real app we'd dispatch: sendCommand("jetson-field-01", "actuator:pump:P1", "flush")
+    };
+
+    const handleReject = () => {
+        setMockTaskStatus("rejected");
+    };
+
+    const handleSubmitCommand = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!command.trim()) return;
+
+        const newCmd = {
+            id: Math.random().toString(36).substring(7),
+            text: command.trim(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setSentCommands(prev => [...prev, newCmd]);
+        setCommand("");
+
+        // In a real implementation: sendCommand('target', 'intent:parse', command.trim())
+    };
 
     return (
         <div className="h-full w-full flex flex-col p-8 max-w-6xl mx-auto">
@@ -18,6 +51,17 @@ export default function CommandPage() {
                     <p className="mt-2 text-foreground/60 font-mono text-sm">
                         Execute mesh capabilities and review high-risk tasks.
                     </p>
+                </div>
+
+                {/* Connection Badge */}
+                <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/5">
+                    <span className="relative flex h-3 w-3">
+                        <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isConnected ? "bg-green-400" : "bg-red-400")}></span>
+                        <span className={cn("relative inline-flex rounded-full h-3 w-3", isConnected ? "bg-green-500" : "bg-red-500")}></span>
+                    </span>
+                    <span className="font-mono text-xs text-foreground/60">
+                        {isConnected ? "MESH_CONNECTED" : "OFFLINE"}
+                    </span>
                 </div>
             </div>
 
@@ -40,33 +84,73 @@ export default function CommandPage() {
                                 <p className="text-sm text-foreground/70">Completed reading sequence. Pushed environment state to Mac-planner.</p>
                             </div>
 
-                            <div className="bg-mesh-alert/10 border-l-4 border-l-mesh-alert border-y border-r border-y-mesh-alert/20 border-r-mesh-alert/20 rounded-r-xl p-4 shadow-[0_0_15px_rgba(226,61,45,0.15)]">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2 text-mesh-alert">
-                                        <ShieldAlert size={18} />
-                                        <span className="font-bold">Human Verification Required (L3)</span>
+                            {mockTaskStatus === "pending" ? (
+                                <div className="bg-mesh-alert/10 border-l-4 border-l-mesh-alert border-y border-r border-y-mesh-alert/20 border-r-mesh-alert/20 rounded-r-xl p-4 shadow-[0_0_15px_rgba(226,61,45,0.15)] transition-all">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2 text-mesh-alert">
+                                            <ShieldAlert size={18} />
+                                            <span className="font-bold">Human Verification Required (L3)</span>
+                                        </div>
+                                        <span className="text-xs font-mono text-foreground/40">10:52 AM</span>
                                     </div>
-                                    <span className="text-xs font-mono text-foreground/40">10:52 AM</span>
+                                    <p className="text-sm text-foreground/80 mb-4">Jetson Nano proposed an emergency 30-min irrigation flush for Zone 1 due to critical moisture drop.</p>
+                                    <div className="bg-black/40 rounded-lg p-3 font-mono text-xs text-mesh-warn mb-4">
+                                        {'>>'} Target: actuator:pump:P1<br />
+                                        {'>>'} Duration: 1800s<br />
+                                        {'>>'} Requester: jetson-field-01
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button onClick={handleApprove} className="bg-mesh-active hover:bg-mesh-active/80 text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer">
+                                            APPROVE EXECUTION
+                                        </button>
+                                        <button onClick={handleReject} className="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer">
+                                            REJECT
+                                        </button>
+                                    </div>
                                 </div>
-                                <p className="text-sm text-foreground/80 mb-4">Jetson Nano proposed an emergency 30-min irrigation flush for Zone 1 due to critical moisture drop.</p>
-                                <div className="bg-black/40 rounded-lg p-3 font-mono text-xs text-mesh-warn mb-4">
-                                    {'>>'} Target: actuator:pump:P1<br />
-                                    {'>>'} Duration: 1800s<br />
-                                    {'>>'} Requester: jetson-field-01
+                            ) : mockTaskStatus === "approved" ? (
+                                <div className="bg-white/5 border border-white/5 border-l-2 border-l-mesh-active rounded-xl p-4 transition-all">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2 text-mesh-active">
+                                            <CheckCircle2 size={18} />
+                                            <span className="font-semibold text-white">Execution Approved</span>
+                                        </div>
+                                        <span className="text-xs font-mono text-foreground/40">Just now</span>
+                                    </div>
+                                    <p className="text-sm text-foreground/50 line-through">Jetson Nano proposed an emergency 30-min irrigation flush for Zone 1...</p>
+                                    <div className="mt-3 text-xs font-mono text-mesh-active">{'>>'} Sent ClawMeshCommandEnvelopeV1 to jetson-field-01</div>
                                 </div>
-                                <div className="flex gap-3">
-                                    <button className="bg-mesh-active hover:bg-mesh-active/80 text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors">
-                                        APPROVE EXECUTION
-                                    </button>
-                                    <button className="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors">
-                                        REJECT
-                                    </button>
+                            ) : (
+                                <div className="bg-white/5 border border-white/5 border-l-2 border-l-foreground/30 rounded-xl p-4 transition-all opacity-60">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2 text-foreground/50">
+                                            <XCircle size={18} />
+                                            <span className="font-semibold text-white">Execution Rejected</span>
+                                        </div>
+                                        <span className="text-xs font-mono text-foreground/40">Just now</span>
+                                    </div>
+                                    <p className="text-sm text-foreground/50 line-through">Jetson Nano proposed an emergency 30-min irrigation flush for Zone 1...</p>
+                                    <div className="mt-3 text-xs font-mono text-foreground/50">{'>>'} Task discarded by operator.</div>
                                 </div>
-                            </div>
+                            )}
+
+                            {sentCommands.map((cmd) => (
+                                <div key={cmd.id} className="bg-white/5 border border-white/5 border-l-2 border-l-claw-accent rounded-xl p-4 transition-all">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2 text-claw-accent">
+                                            <TerminalSquare size={18} />
+                                            <span className="font-semibold text-white">Operator Intent Dispatched</span>
+                                        </div>
+                                        <span className="text-xs font-mono text-foreground/40">{cmd.time}</span>
+                                    </div>
+                                    <p className="text-sm text-foreground/80 font-mono">"{cmd.text}"</p>
+                                    <div className="mt-3 text-xs font-mono text-claw-accent">{'>>'} Processing via Mac-planner</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="glass-panel p-4 flex gap-3 items-center ring-1 ring-white/10 focus-within:ring-claw-accent/50 focus-within:shadow-[0_0_20px_rgba(255,90,45,0.2)] transition-all">
+                    <form onSubmit={handleSubmitCommand} className="glass-panel p-4 flex gap-3 items-center ring-1 ring-white/10 focus-within:ring-claw-accent/50 focus-within:shadow-[0_0_20px_rgba(255,90,45,0.2)] transition-all">
                         <TerminalSquare className="text-claw-accent" />
                         <input
                             type="text"
@@ -75,10 +159,10 @@ export default function CommandPage() {
                             value={command}
                             onChange={(e) => setCommand(e.target.value)}
                         />
-                        <button className="bg-claw-accent hover:bg-claw-accent-bright text-white p-2 rounded-xl transition-colors">
+                        <button type="submit" disabled={!command.trim()} className="bg-claw-accent hover:bg-claw-accent-bright disabled:opacity-50 disabled:cursor-not-allowed text-white p-2 rounded-xl transition-colors cursor-pointer">
                             <Send size={18} />
                         </button>
-                    </div>
+                    </form>
                 </div>
 
                 <div className="w-80 glass-panel p-6 flex flex-col">
