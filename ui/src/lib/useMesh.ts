@@ -33,8 +33,9 @@ export function useMesh() {
                 reconnectTimeout.current = setTimeout(connect, 3000);
             };
 
-            ws.onerror = (err) => {
-                console.error("[useMesh] WebSocket error", err);
+            ws.onerror = () => {
+                // Silently handle connection errors (likely just means the local node is offline)
+                // We don't want to spam the console or trigger Next.js error overlays.
             };
 
             ws.onmessage = (event) => {
