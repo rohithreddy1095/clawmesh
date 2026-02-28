@@ -38,7 +38,12 @@ export default function CommandPage() {
 
         // Dispatch to backend simulator
         if (isConnected) {
-            sendCommand("agent:pi", "intent:parse", { text: command.trim() });
+            sendCommand({
+                to: "agent:pi",
+                targetRef: "agent:pi",
+                operation: "intent:parse",
+                operationParams: { text: command.trim() }
+            });
         }
 
         setCommand("");

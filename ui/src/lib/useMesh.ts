@@ -23,7 +23,7 @@ export function useMesh() {
                 setConnected(true);
 
                 // Ask for currently connected peers on open
-                ws.send(JSON.stringify({ type: "req", id: crypto.randomUUID(), method: "clawmesh.peers.list" }));
+                ws.send(JSON.stringify({ type: "req", id: crypto.randomUUID(), method: "mesh.peers" }));
             };
 
             ws.onclose = () => {
@@ -67,20 +67,25 @@ export function useMesh() {
         };
     }, [setConnected, setPeers, addFrame]);
 
-    // Command to send mock actuator forwards
-    const sendCommand = (peerDeviceId: string, targetRef: string, operation: string, note?: string) => {
+    // Command to send mesh forwards
+    const sendCommand = (params: { to: string; targetRef: string; operation: string; operationParams?: any; note?: string }) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         wsRef.current.send(JSON.stringify({
             type: "req",
             id: crypto.randomUUID(),
-            method: "clawmesh.forward",
+            method: "mesh.message.forward",
             params: {
-                peerDeviceId,
                 channel: "clawmesh",
-                targetRef,
-                operation,
-                note
+                to: params.to,
+                originGatewayId: "ui-client",
+                idempotencyKey: crypto.randomUUID(),
+                commandDraft: {
+                    source: { nodeId: "ui-client", role: "operator" },
+                    target: { kind: "capability", ref: params.targetRef },
+                    operation: { name: params.operation, params: params.operationParams },
+                    note: params.note
+                }
             }
         }));
     };

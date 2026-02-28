@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@homebridge/ciao": "^1.3.5",
     "commander": "^13.0.0",
     "ws": "^8.18.0"
   },

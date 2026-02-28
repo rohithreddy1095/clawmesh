@@ -23,6 +23,7 @@ import type {
 } from "./types.js";
 import { createMeshTools } from "../agents/tools/mesh-tools.js";
 import { runIntelligenceAgent } from "../agents/intelligence-runner.js";
+import { MeshDiscovery } from "./discovery.js";
 
 type RpcRequestFrame = {
   type: "req";
@@ -108,6 +109,7 @@ export class MeshNodeRuntime {
   readonly contextPropagator: ContextPropagator;
   readonly worldModel: WorldModel;
   readonly mockActuator?: MockActuatorController;
+  readonly discovery?: MeshDiscovery;
 
   private readonly opts: MeshNodeRuntimeOptions;
   private readonly host: string;
@@ -243,6 +245,17 @@ export class MeshNodeRuntime {
       `mesh: listening on ws://${this.host}:${this.listenAddress().port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
     );
 
+    // Start mDNS discovery
+    (this as any).discovery = new MeshDiscovery({
+      localDeviceId: this.identity.deviceId,
+      localPort: this.listenAddress().port,
+      displayName: this.displayName,
+    });
+    this.discovery?.start();
+    this.discovery?.on("peer-discovered", (peer) => {
+      this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
+    });
+
     for (const peer of this.staticPeers) {
       this.connectToPeer(peer);
     }
@@ -260,6 +273,10 @@ export class MeshNodeRuntime {
     if (this.piAgentAbort) {
       this.piAgentAbort.abort();
       this.log.info("mesh: intelligence agent stopped");
+    }
+
+    if (this.discovery) {
+      this.discovery.stop();
     }
 
     for (const client of this.outboundClients.values()) {
@@ -494,26 +511,10 @@ Be proactive, safe, and always explain your reasoning.`;
     }
 
     // --- MOCK INTELLIGENCE HANDLER FOR UI TESTING ---
-    // Route clawmesh.forward → mesh.message.forward so it goes through
-    // the standard trust-evaluated forward handler. Also handle the
-    // agent:pi intent-parsing special case, but only AFTER trust evaluation.
-    if (frame.type === "req" && frame.method === "clawmesh.forward") {
+    if (frame.type === "req" && frame.method === "mesh.message.forward") {
       const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
 
-      // Rewrite to the canonical method that goes through trust evaluation
-      const rewritten: RpcRequestFrame = {
-        type: "req",
-        id: frame.id as string,
-        method: "mesh.message.forward",
-        params: {
-          ...fwdParams,
-          // Ensure required fields for the forward handler
-          originGatewayId: fwdParams.originGatewayId ?? "ui-client",
-          idempotencyKey: fwdParams.idempotencyKey ?? `ui-${Date.now()}`,
-        },
-      };
-
-      // If targeting agent:pi, register an onForward callback to handle the intent
+      // If targeting agent:pi, we intercept it as a local intent parse
       if (fwdParams.to === "agent:pi" && fwdParams.channel === "clawmesh") {
         const cmd = fwdParams.commandDraft as Record<string, unknown> | undefined;
         const operation = cmd?.operation as Record<string, unknown> | undefined;
@@ -541,9 +542,6 @@ Be proactive, safe, and always explain your reasoning.`;
           }, 2000);
         }
       }
-
-      await this.dispatchRpcRequest(socket, connId, rewritten);
-      return;
     }
     // ------------------------------------------------
 

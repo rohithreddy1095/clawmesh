@@ -1,10 +1,31 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
 import { addTrustedPeer } from "./peer-trust.js";
 import { buildLlmOnlyActuationTrust, MeshNodeRuntime } from "./node-runtime.js";
+
+vi.mock("@homebridge/ciao", () => {
+  const browser = {
+    on: vi.fn(),
+    start: vi.fn(),
+  };
+  const service = {
+    advertise: vi.fn().mockResolvedValue(undefined),
+    end: vi.fn().mockResolvedValue(undefined),
+  };
+  const responder = {
+    createService: vi.fn(() => service),
+    createServiceBrowser: vi.fn(() => browser),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    default: {
+      getResponder: vi.fn(() => responder),
+    },
+  };
+});
 
 describe("MeshNodeRuntime", () => {
   let tempStateDir: string;
