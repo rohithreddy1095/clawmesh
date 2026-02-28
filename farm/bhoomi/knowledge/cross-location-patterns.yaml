@@ -1,0 +1,140 @@
+schema_version: "0.1"
+knowledge:
+  dataset_id: "bhoomi-cross-location-patterns-v0"
+  type: "cross_location_video_analysis_seed"
+  source_ref: "farm/bhoomi/sources.yaml#yt-analysis-locations"
+  confidence: "inference_repo"
+  generated_from_repo_on: "2026-02-26"
+  purpose:
+    - "support comparative learning across Bhoomi projects"
+    - "seed hypotheses for what may transfer to Shamli or other sites"
+    - "track terrain/climate adaptation examples"
+  caution:
+    - "Video summaries are informative but not a substitute for field measurements."
+    - "Applicability to Bhoomi Main Farm requires field validation."
+
+  locations:
+    - location_id: "loc-mumbai"
+      name: "Mumbai"
+      video_count: 5
+      project_type: "hillside transformation"
+      project_summary: >
+        A hillside food forest transformation project with a journey from scratch to sustainability
+        over 1+ years, highlighting avocado and papaya companion planting.
+      key_crops:
+        - "Avocado"
+        - "Papaya"
+      key_techniques:
+        - "Companion Planting"
+        - "Food Forest"
+        - "Multilayer"
+        - "Permaculture"
+      transferability_notes:
+        - "Companion planting patterns may transfer conceptually; water and slope conditions likely differ."
+
+    - location_id: "loc-kolkata"
+      name: "Kolkata"
+      video_count: 1
+      project_type: "wasteland transformation with pond"
+      project_summary: >
+        Transformation of waste land into a productive ecosystem featuring a pond and food forest structure.
+      key_crops: []
+      key_techniques:
+        - "Food Forest"
+      transferability_notes:
+        - "Pond integration and wasteland recovery patterns may inform water/land restoration strategies."
+
+    - location_id: "loc-shamli-main"
+      name: "Main Farm (Shamli)"
+      video_count: 34
+      project_type: "primary mature farm / headquarters"
+      project_summary: >
+        The primary 10-acre headquarters in Shamli, UP. A mature multilayer food forest showcasing
+        diverse crops, no-till techniques, and natural farming tutorials.
+      key_crops:
+        - "Avocado"
+        - "Banana"
+        - "Black Rice"
+        - "Chiku"
+        - "Elaichi Banana"
+        - "Gladiolus"
+        - "Guava"
+        - "Jackfruit"
+        - "Litchi"
+        - "Mango"
+        - "Papaya"
+        - "Peach"
+        - "Pear"
+        - "Pineapple"
+        - "Plum"
+        - "Rajnigandha"
+        - "Rice"
+        - "Tuberose"
+        - "Turmeric"
+        - "Victoria Queen"
+      key_techniques:
+        - "Composting"
+        - "Food Forest"
+        - "Grafting"
+        - "Multilayer"
+        - "Natural Farming"
+        - "Pruning"
+      transferability_notes:
+        - "Treat as primary operational reference for Bhoomi farm twin, but still verify current state in field."
+
+    - location_id: "loc-noida"
+      name: "Noida"
+      video_count: 3
+      project_type: "2-acre farmland transformation"
+      project_summary: >
+        A 2-acre transformation project turning standard farmland into a food forest, with rapid
+        growth and biodiversity reported within 8 months.
+      key_crops: []
+      key_techniques:
+        - "Food Forest"
+        - "Multilayer"
+      transferability_notes:
+        - "Useful for timeline expectations and staged transformation planning."
+
+    - location_id: "loc-delhi"
+      name: "Delhi"
+      video_count: 1
+      project_type: "urban food forest initiative"
+      project_summary: >
+        Urban food forest initiative established to bring sustainable agriculture to the capital region.
+      key_crops: []
+      key_techniques:
+        - "Food Forest"
+      transferability_notes:
+        - "May inform constrained-space design and outreach models more than Shamli operations."
+
+    - location_id: "loc-konkan"
+      name: "Konkan"
+      video_count: 1
+      project_type: "permaculture / western ghats initiative"
+      project_summary: >
+        Permaculture and food forest initiative located in the biodiversity-rich Konkan Western Ghats.
+      key_crops: []
+      key_techniques:
+        - "Food Forest"
+        - "Permaculture"
+      transferability_notes:
+        - "High ecological relevance but likely different rainfall/humidity patterns than Shamli."
+
+    - location_id: "loc-dehradun"
+      name: "Dehradun"
+      video_count: 1
+      project_type: "collaborative institutional initiative"
+      project_summary: >
+        Collaborative initiative featuring natural farming practices at the Forest Research Institute (FRI).
+      key_crops: []
+      key_techniques:
+        - "Food Forest"
+        - "Natural Farming"
+      transferability_notes:
+        - "Useful for institutional collaboration patterns and educational framing."
+
+  cross_location_questions_for_research:
+    - "Which techniques are invariant across locations (core Bhoomi method) vs site-specific adaptations?"
+    - "What transformation timelines are realistic by terrain and water access?"
+    - "Which crop combinations repeatedly appear across regions vs only in one region?"

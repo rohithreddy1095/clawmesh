@@ -1,0 +1,62 @@
+schema_version: "0.1"
+control_mesh:
+  status: "draft"
+  needs_field_validation: true
+  architecture:
+    planner_node:
+      node_id: "mac-main"
+      role: "planner_operator_console"
+      expected_capabilities:
+        - "planner:seasonal"
+        - "planner:trial-design"
+        - "knowledge:crop-suitability"
+        - "task:human-field-check"
+    field_node:
+      node_id: "jetson-field-01"
+      role: "field_brain"
+      hardware: "Jetson Nano"
+      expected_capabilities:
+        - "planner:irrigation"
+        - "vision:plant-health:*"
+        - "vision:pollinator-activity:*"
+        - "exec:workflow"
+        - "safety:interlock"
+      deployment_constraints:
+        - "weather-safe enclosure required"
+        - "stable power + backup preferred"
+        - "network fallback strategy required"
+    field_nodes_planned:
+      - node_id: "field-node-water-01"
+        role: "water_control_io"
+        expected_capabilities:
+          - "sensor:tank-level:*"
+          - "sensor:flow:*"
+          - "actuator:pump:*"
+          - "actuator:valve:*"
+      - node_id: "field-node-weather-01"
+        role: "weather_microclimate"
+        expected_capabilities:
+          - "sensor:rain"
+          - "sensor:wind"
+          - "sensor:air-temp:*"
+          - "sensor:humidity:*"
+    human_client:
+      node_id: "human-mobile-01"
+      role: "human_verification"
+      expected_capabilities:
+        - "observe:photo"
+        - "observe:note"
+        - "task:human-field-check"
+  network_survey:
+    wifi_coverage_map: null
+    cellular_coverage_notes: null
+    dead_zones: []
+    power_points: []
+    mesh_transport_candidates:
+      - "Wi-Fi LAN"
+      - "local hotspot fallback"
+      - "cellular backhaul (to confirm)"
+  safety_defaults:
+    - "Actuators fail safe on controller reboot"
+    - "Jetson local policy can continue only bounded low-risk workflows if Mac is offline"
+    - "No blind pump starts without source/tank checks"

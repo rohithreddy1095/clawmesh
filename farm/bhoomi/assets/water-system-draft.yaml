@@ -1,0 +1,56 @@
+schema_version: "0.1"
+water_system:
+  system_id: "water-system-main"
+  status: "draft"
+  needs_field_validation: true
+  goals:
+    - "Model source -> storage -> pump -> distribution -> zones"
+    - "Enable safe future pump/valve automation"
+    - "Capture manual override and failure states"
+  sources:
+    - source_id: "ws-source-01"
+      type: "unknown"
+      label: "Primary water source (to survey)"
+      location_zone_id: "z-water-infra"
+      availability:
+        seasonal_notes: null
+        reliability: "unknown"
+      sensors_planned:
+        - "sensor:level_or_flow:to_define"
+      needs_field_validation: true
+  storage:
+    - tank_id: "tank-01"
+      label: "Main storage tank (to survey)"
+      capacity_liters: null
+      location_zone_id: "z-water-infra"
+      level_sensing:
+        present: false
+        planned_capability: "sensor:tank-level:tank-01"
+      needs_field_validation: true
+  pumps:
+    - pump_id: "pump-main-01"
+      label: "Main irrigation pump (to survey)"
+      location_zone_id: "z-water-infra"
+      power_source: "unknown"
+      flow_rate_lpm: null
+      control_mode_current: "manual_unknown"
+      planned_capabilities:
+        - "actuator:pump:pump-main-01"
+        - "sensor:power:pump-main-01"
+      safety_constraints:
+        - "must verify water availability before start"
+        - "must enforce max runtime"
+        - "manual override priority"
+      needs_field_validation: true
+  distribution:
+    lines: []
+    valves: []
+    notes:
+      - "Populate after topology walk-through and mapping."
+      - "Assign one valve asset per independently controllable irrigation branch."
+  unknowns_high_priority:
+    - "Water source type(s): borewell, pond, canal, municipal, mixed?"
+    - "Tank count and capacities"
+    - "Pump specs (HP, power source, priming behavior)"
+    - "Manual irrigation sequence by zone"
+    - "Existing line/valve segmentation"

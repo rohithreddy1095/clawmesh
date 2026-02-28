@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import type { GatewayBonjourBeacon } from "../infra/bonjour-discovery.js";
+import type { GatewayBonjourBeacon } from "./bonjour-types.js";
 import { MeshDiscovery } from "./discovery.js";
 
 function createBeacon(overrides: Partial<GatewayBonjourBeacon> = {}): GatewayBonjourBeacon {

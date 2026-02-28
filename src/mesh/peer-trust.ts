@@ -17,7 +17,11 @@ type TrustedPeersStore = {
 const EMPTY_STORE: TrustedPeersStore = { version: 1, peers: [] };
 
 function resolveStateDir(): string {
-  return process.env.OPENCLAW_STATE_DIR?.trim() || path.join(os.homedir(), ".openclaw");
+  const override = process.env.CLAWMESH_STATE_DIR?.trim() || process.env.OPENCLAW_STATE_DIR?.trim();
+  if (override) {
+    return override;
+  }
+  return path.join(os.homedir(), ".clawmesh");
 }
 
 function resolveStorePath(): string {

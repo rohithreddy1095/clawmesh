@@ -149,6 +149,7 @@ describe("MeshNodeRuntime", () => {
     const connected = await nodeA.waitForPeerConnected(identityB.deviceId, 10_000);
     expect(connected).toBe(true);
 
+    // LLM-only actuation: sender-side trust evaluation should reject
     const forward = await nodeA.sendMockActuation({
       peerDeviceId: identityB.deviceId,
       targetRef: "actuator:mock:pump-1",
@@ -157,6 +158,128 @@ describe("MeshNodeRuntime", () => {
     });
 
     expect(forward.ok).toBe(false);
-    expect(forward.error).toContain("LLM-only");
+    expect(forward.error).toContain("LLM_ONLY_ACTUATION_BLOCKED");
+
+    // Verify the actuator was never reached (no state change)
+    const state = await nodeA.queryPeerMockActuatorState({
+      peerDeviceId: identityB.deviceId,
+      targetRef: "actuator:mock:pump-1",
+    });
+    expect(state.ok).toBe(true);
+    const payload = state.payload as { records: unknown[] };
+    expect(payload.records).toHaveLength(0);
+  });
+
+  it("rejects actuation with insufficient trust tier at sender", async () => {
+    const identityA = loadOrCreateDeviceIdentity(path.join(tempStateDir, "id-a3.json"));
+    const identityB = loadOrCreateDeviceIdentity(path.join(tempStateDir, "id-b3.json"));
+
+    await addTrustedPeer({ deviceId: identityA.deviceId, displayName: "node-a3" });
+    await addTrustedPeer({ deviceId: identityB.deviceId, displayName: "node-b3" });
+
+    nodeB = new MeshNodeRuntime({
+      identity: identityB,
+      host: "127.0.0.1",
+      port: 0,
+      enableMockActuator: true,
+      capabilities: ["channel:clawmesh", "actuator:mock"],
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    const addrB = await startOrSkip(nodeB);
+    if (!addrB) {
+      return;
+    }
+
+    nodeA = new MeshNodeRuntime({
+      identity: identityA,
+      host: "127.0.0.1",
+      port: 0,
+      capabilities: ["channel:clawmesh"],
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    if (!(await startOrSkip(nodeA))) {
+      return;
+    }
+    nodeA.connectToPeer({
+      deviceId: identityB.deviceId,
+      url: `ws://127.0.0.1:${addrB.port}`,
+    });
+
+    const connected = await nodeA.waitForPeerConnected(identityB.deviceId, 10_000);
+    expect(connected).toBe(true);
+
+    // Insufficient trust tier: T1 evidence but T2 required
+    const forward = await nodeA.sendMockActuation({
+      peerDeviceId: identityB.deviceId,
+      targetRef: "actuator:mock:pump-1",
+      operation: "start",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor"],
+        evidence_trust_tier: "T1_unverified_observation",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
+    });
+
+    expect(forward.ok).toBe(false);
+    expect(forward.error).toContain("INSUFFICIENT_TRUST_TIER");
+  });
+
+  it("rejects actuation with unsatisfied verification at sender", async () => {
+    const identityA = loadOrCreateDeviceIdentity(path.join(tempStateDir, "id-a4.json"));
+    const identityB = loadOrCreateDeviceIdentity(path.join(tempStateDir, "id-b4.json"));
+
+    await addTrustedPeer({ deviceId: identityA.deviceId, displayName: "node-a4" });
+    await addTrustedPeer({ deviceId: identityB.deviceId, displayName: "node-b4" });
+
+    nodeB = new MeshNodeRuntime({
+      identity: identityB,
+      host: "127.0.0.1",
+      port: 0,
+      enableMockActuator: true,
+      capabilities: ["channel:clawmesh", "actuator:mock"],
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    const addrB = await startOrSkip(nodeB);
+    if (!addrB) {
+      return;
+    }
+
+    nodeA = new MeshNodeRuntime({
+      identity: identityA,
+      host: "127.0.0.1",
+      port: 0,
+      capabilities: ["channel:clawmesh"],
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    if (!(await startOrSkip(nodeA))) {
+      return;
+    }
+    nodeA.connectToPeer({
+      deviceId: identityB.deviceId,
+      url: `ws://127.0.0.1:${addrB.port}`,
+    });
+
+    const connected = await nodeA.waitForPeerConnected(identityB.deviceId, 10_000);
+    expect(connected).toBe(true);
+
+    // Human verification required but not satisfied
+    const forward = await nodeA.sendMockActuation({
+      peerDeviceId: identityB.deviceId,
+      targetRef: "actuator:mock:pump-1",
+      operation: "start",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor", "human"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "human",
+        // verification_satisfied intentionally omitted
+      },
+    });
+
+    expect(forward.ok).toBe(false);
+    expect(forward.error).toContain("VERIFICATION_REQUIRED");
   });
 });

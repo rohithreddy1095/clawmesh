@@ -1,0 +1,100 @@
+schema_version: "0.1"
+policy:
+  policy_id: "bhoomi-evidence-trust-policy-v0"
+  status: "draft_active"
+  purpose: >
+    Define what information is trusted for planning vs operational decisions vs
+    physical actuation in the Bhoomi farm twin and ClawMesh execution stack.
+
+  core_rule:
+    statement: >
+      LLM-generated outputs (reports, summaries, recommendations, extracted insights)
+      are planning inputs only and must not directly trigger physical actuation.
+
+  trust_tiers:
+    - id: "T0_planning_inference"
+      description: "LLM-generated or derived planning content; useful for ideas and task proposals."
+      allowed_uses:
+        - "planning"
+        - "task proposal generation"
+        - "question generation"
+        - "design comparisons"
+      disallowed_uses:
+        - "direct actuation"
+        - "final task completion proof"
+      examples:
+        - "Mr Green report diagnostics"
+        - "LLM crop suitability suggestions"
+        - "video-summary-based farm hypotheses"
+
+    - id: "T1_unverified_observation"
+      description: "Real-world data present but not yet proven reliable or fresh enough."
+      allowed_uses:
+        - "alerts"
+        - "human review"
+        - "triage"
+      disallowed_uses:
+        - "high-risk actuation"
+      examples:
+        - "new sensor readings before calibration"
+        - "stale telemetry"
+        - "uncorroborated camera inference"
+
+    - id: "T2_operational_observation"
+      description: "Known operational telemetry or routine human observations with acceptable provenance."
+      allowed_uses:
+        - "bounded low-risk workflows"
+        - "decision support"
+        - "state estimation"
+      disallowed_uses:
+        - "high-risk actuation without policy requirements"
+      examples:
+        - "calibrated tank level sensor"
+        - "pump power telemetry from known controller"
+        - "human field note from assigned operator"
+
+    - id: "T3_verified_action_evidence"
+      description: "Cross-checked or confirmed evidence used to prove an action happened correctly."
+      allowed_uses:
+        - "task closure"
+        - "audits"
+        - "automation performance evaluation"
+        - "safe progression to dependent tasks"
+      examples:
+        - "pump power + flow + valve state agree"
+        - "human photo + checklist confirms pruning"
+        - "human confirmation plus sensor trend confirms irrigation completion"
+
+  command_gating_examples:
+    - command_type: "read_telemetry"
+      minimum_trust_tier: "T1_unverified_observation"
+      notes: "Allowed, but UI should show trust/freshness."
+
+    - command_type: "short_bounded_irrigation_cycle"
+      minimum_trust_tier: "T2_operational_observation"
+      additional_requirements:
+        - "policy limit exists"
+        - "source/tank condition known"
+        - "manual override available"
+
+    - command_type: "high_impact_actuation"
+      minimum_trust_tier: "T2_operational_observation"
+      additional_requirements:
+        - "human approval"
+        - "safety interlock checks pass"
+        - "execution verification path defined"
+
+    - command_type: "task_completion_for_critical_operation"
+      minimum_trust_tier: "T3_verified_action_evidence"
+
+  conflict_resolution:
+    rules:
+      - "Prefer fresher real-world evidence over older real-world evidence."
+      - "Prefer calibrated sensor/device telemetry over LLM inference."
+      - "Escalate to human verification when trusted signals conflict."
+      - "Fail safe when required trust tier is unavailable."
+
+  implementation_notes:
+    - "Carry `trust_tier` and freshness on every evidence record."
+    - "Command policies should encode minimum trust tier and verification requirements."
+    - "LLM outputs should produce `proposed` tasks, never direct actuator calls."

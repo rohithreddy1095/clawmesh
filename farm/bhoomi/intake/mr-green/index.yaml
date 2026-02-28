@@ -1,0 +1,85 @@
+schema_version: "0.1"
+imports:
+  imported_at: 2026-02-26T15:41:16.166Z
+  downloads_dir: /Users/rohhh/Downloads
+  report_count: 7
+  output_dir: farm/bhoomi/intake/mr-green/reports
+  reports:
+    - report_id: mrgreen-report-2025-12-21-1
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21-1.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 1
+      json_masterplans: 1
+    - report_id: mrgreen-report-2025-12-21-2
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21-2.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 2
+      json_masterplans: 1
+    - report_id: mrgreen-report-2025-12-21-3
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21-3.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 1
+      json_masterplans: 1
+    - report_id: mrgreen-report-2025-12-21-4
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21-4.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 1
+      json_masterplans: 1
+    - report_id: mrgreen-report-2025-12-21-5
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21-5.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 1
+      json_masterplans: 1
+    - report_id: mrgreen-report-2025-12-21
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-2025-12-21.yaml
+      title: Mr Green Ecological Report - green
+      report_date_iso: 2025-12-21
+      report_location: green
+      source_type: html+json
+      strategic_vision_boards: 7
+      initial_site_photos: 0
+      rendered_masterplans: 1
+      json_masterplans: 1
+    - report_id: mrgreen-report-ganugabanda-garidepally-2026-02-24
+      output_file: farm/bhoomi/intake/mr-green/reports/mrgreen-report-ganugabanda-garidepally-2026-02-24.yaml
+      title: Mr Green Ecological Report - ganugabanda, garidepally
+      report_date_iso: 2026-02-24
+      report_location: ganugabanda, garidepally
+      source_type: html
+      strategic_vision_boards: 7
+      initial_site_photos: 1
+      rendered_masterplans: 1
+      json_masterplans: 0
+summary:
+  by_source_type:
+    html+json: 6
+    html: 1
+  total_strategic_vision_boards: 49
+  total_initial_site_photos: 1
+  total_rendered_masterplans: 8
+  total_json_masterplans: 6

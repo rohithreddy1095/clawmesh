@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { withTempHome } from "../../test/helpers/temp-home.js";
+import { withTempHome } from "./test-helpers.js";
 import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth, buildMeshAuthPayload } from "./handshake.js";
 

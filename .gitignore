@@ -1,2 +1,4 @@
 node_modules/
+dist/
 .clawmesh-run/
+backend.log

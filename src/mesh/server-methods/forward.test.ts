@@ -1,24 +1,12 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import type { ErrorShape } from "../../gateway/protocol/index.js";
-import type {
-  GatewayRequestHandlers,
-  GatewayRequestHandlerOptions,
-} from "../../gateway/server-methods/types.js";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { DeviceIdentity } from "../../infra/device-identity.js";
+import type { MeshForwardPayload } from "../types.js";
 import { createMeshForwardHandlers } from "./forward.js";
 
-// Mock the dynamic imports used in the handler.
-vi.mock("../../config/config.js", () => ({
-  loadConfig: vi.fn(() => ({ channels: {} })),
-}));
-
-vi.mock("../../infra/outbound/targets.js", () => ({
-  resolveOutboundTarget: vi.fn(() => ({ ok: true, to: "resolved-target" })),
-}));
-
-vi.mock("../../infra/outbound/deliver.js", () => ({
-  deliverOutboundPayloads: vi.fn(async () => [{ messageId: "msg-123" }]),
-}));
+type Handlers = Record<string, (opts: {
+  params: Record<string, unknown>;
+  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
+}) => void | Promise<void>>;
 
 const localIdentity: DeviceIdentity = {
   deviceId: "local-gateway-id",
@@ -27,34 +15,24 @@ const localIdentity: DeviceIdentity = {
 };
 
 function callHandler(
-  handlers: GatewayRequestHandlers,
+  handlers: Handlers,
   method: string,
   params: Record<string, unknown> = {},
 ) {
-  return new Promise<{ ok: boolean; payload?: unknown; error?: ErrorShape }>((resolve) => {
-    const respond = (ok: boolean, payload?: unknown, error?: ErrorShape) =>
+  return new Promise<{ ok: boolean; payload?: unknown; error?: { code: string; message: string } }>((resolve) => {
+    const respond = (ok: boolean, payload?: unknown, error?: { code: string; message: string }) =>
       resolve({ ok, payload, error });
-    void handlers[method]({
-      req: { method },
-      params,
-      client: null,
-      isWebchatConnect: () => false,
-      respond,
-      context: {} as unknown as GatewayRequestHandlerOptions["context"],
-    } as unknown as GatewayRequestHandlerOptions);
+    void handlers[method]({ params, respond });
   });
 }
 
 describe("mesh.message.forward handler", () => {
-  let handlers: GatewayRequestHandlers;
+  let handlers: Handlers;
+  let onForward: ReturnType<typeof vi.fn<(payload: MeshForwardPayload) => void>>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    handlers = createMeshForwardHandlers({ identity: localIdentity });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    onForward = vi.fn<(payload: MeshForwardPayload) => void>();
+    handlers = createMeshForwardHandlers({ identity: localIdentity, onForward });
   });
 
   it("valid forward delivers message and returns messageId", async () => {
@@ -67,14 +45,14 @@ describe("mesh.message.forward handler", () => {
     });
     expect(ok).toBe(true);
     const result = payload as { messageId: string; channel: string };
-    expect(result.messageId).toBe("msg-123");
+    expect(result.messageId).toBeTruthy();
     expect(result.channel).toBe("telegram");
+    expect(onForward).toHaveBeenCalledOnce();
   });
 
   it("missing params returns INVALID_PARAMS error", async () => {
     const { ok, error } = await callHandler(handlers, "mesh.message.forward", {
       channel: "telegram",
-      // missing: to, originGatewayId
     });
     expect(ok).toBe(false);
     expect(error?.code).toBe("INVALID_PARAMS");
@@ -85,7 +63,7 @@ describe("mesh.message.forward handler", () => {
       channel: "telegram",
       to: "user-123",
       message: "looped message",
-      originGatewayId: "local-gateway-id", // same as local identity
+      originGatewayId: "local-gateway-id",
       idempotencyKey: "idem-2",
     });
     expect(ok).toBe(false);
@@ -93,8 +71,7 @@ describe("mesh.message.forward handler", () => {
   });
 
   it("delivery failure returns DELIVERY_FAILED error", async () => {
-    const { deliverOutboundPayloads } = await import("../../infra/outbound/deliver.js");
-    vi.mocked(deliverOutboundPayloads).mockRejectedValueOnce(new Error("delivery boom"));
+    onForward.mockRejectedValueOnce(new Error("delivery boom"));
 
     const { ok, error } = await callHandler(handlers, "mesh.message.forward", {
       channel: "telegram",
@@ -107,21 +84,58 @@ describe("mesh.message.forward handler", () => {
     expect(error?.code).toBe("DELIVERY_FAILED");
   });
 
-  it("target resolution failure returns TARGET_RESOLUTION_FAILED", async () => {
-    const { resolveOutboundTarget } = await import("../../infra/outbound/targets.js");
-    vi.mocked(resolveOutboundTarget).mockReturnValueOnce({
-      ok: false,
-      error: "no target",
-    } as unknown as ReturnType<typeof resolveOutboundTarget>);
-
+  it("blocks LLM-only actuation commands", async () => {
     const { ok, error } = await callHandler(handlers, "mesh.message.forward", {
-      channel: "telegram",
-      to: "user-123",
-      message: "will fail resolve",
+      channel: "clawmesh",
+      to: "actuator:pump:P1",
+      message: "start pump",
       originGatewayId: "remote-gateway-id",
-      idempotencyKey: "idem-4",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["llm"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
     });
     expect(ok).toBe(false);
-    expect(error?.code).toBe("TARGET_RESOLUTION_FAILED");
+    expect(error?.code).toBe("LLM_ONLY_ACTUATION_BLOCKED");
+  });
+
+  it("blocks actuation with insufficient trust tier", async () => {
+    const { ok, error } = await callHandler(handlers, "mesh.message.forward", {
+      channel: "clawmesh",
+      to: "actuator:pump:P1",
+      message: "start pump",
+      originGatewayId: "remote-gateway-id",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor"],
+        evidence_trust_tier: "T1_unverified_observation",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
+    });
+    expect(ok).toBe(false);
+    expect(error?.code).toBe("INSUFFICIENT_TRUST_TIER");
+  });
+
+  it("allows actuation with proper trust metadata", async () => {
+    const { ok } = await callHandler(handlers, "mesh.message.forward", {
+      channel: "clawmesh",
+      to: "actuator:pump:P1",
+      message: "start pump",
+      originGatewayId: "remote-gateway-id",
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor", "human"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "human",
+        verification_satisfied: true,
+        approved_by: ["operator:local-cli"],
+      },
+    });
+    expect(ok).toBe(true);
   });
 });

@@ -1,0 +1,30 @@
+schema_version: "0.1"
+plant_unit:
+  plant_unit_id: "pu-<slug>"
+  zone_id: "z-<zone>"
+  layer: "<canopy|subcanopy|shrub|ground|soil_root|support>"
+  crop_species: "<species common name>"
+  variety: null
+  count: 1
+  count_unit: "plant"
+  age_stage: "<new_planting|vegetative|flowering|fruiting|post_harvest|dormant|unknown>"
+  companion_relationships: []
+  irrigation_dependency:
+    water_line_id: null
+    valve_id: null
+    sensitivity_notes: null
+  health_status:
+    summary: "unknown"
+    issues: []
+    last_observation_at: null
+  seasonality:
+    expected_flowering_window: null
+    expected_harvest_window: null
+  economics:
+    priority_rank: null
+    market_channel: null
+  evidence_refs: []
+  validation:
+    needs_field_validation: true
+    last_validated_at: null
+    validated_by: null

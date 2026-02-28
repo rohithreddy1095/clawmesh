@@ -1,41 +1,34 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { ErrorShape } from "../../gateway/protocol/index.js";
-import type {
-  GatewayRequestHandlers,
-  GatewayRequestHandlerOptions,
-} from "../../gateway/server-methods/types.js";
 import { MeshCapabilityRegistry } from "../capabilities.js";
 import { PeerRegistry } from "../peer-registry.js";
 import type { PeerSession } from "../types.js";
 import { createMeshPeersHandlers } from "./peers.js";
+
+type Handlers = Record<string, (opts: {
+  params: Record<string, unknown>;
+  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
+}) => void | Promise<void>>;
 
 function createMockSocket() {
   return { send: vi.fn(), close: vi.fn(), readyState: 1 } as unknown as PeerSession["socket"];
 }
 
 function callHandler(
-  handlers: GatewayRequestHandlers,
+  handlers: Handlers,
   method: string,
   params: Record<string, unknown> = {},
 ) {
-  return new Promise<{ ok: boolean; payload?: unknown; error?: ErrorShape }>((resolve) => {
-    const respond = (ok: boolean, payload?: unknown, error?: ErrorShape) =>
+  return new Promise<{ ok: boolean; payload?: unknown; error?: { code: string; message: string } }>((resolve) => {
+    const respond = (ok: boolean, payload?: unknown, error?: { code: string; message: string }) =>
       resolve({ ok, payload, error });
-    void handlers[method]({
-      req: { method },
-      params,
-      client: null,
-      isWebchatConnect: () => false,
-      respond,
-      context: {} as unknown as GatewayRequestHandlerOptions["context"],
-    } as unknown as GatewayRequestHandlerOptions);
+    void handlers[method]({ params, respond });
   });
 }
 
 describe("mesh.peers handler", () => {
   let peerRegistry: PeerRegistry;
   let capabilityRegistry: MeshCapabilityRegistry;
-  let handlers: GatewayRequestHandlers;
+  let handlers: Handlers;
 
   beforeEach(() => {
     peerRegistry = new PeerRegistry();

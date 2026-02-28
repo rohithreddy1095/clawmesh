@@ -1,0 +1,35 @@
+schema_version: "0.1"
+asset:
+  asset_id: "<asset-id>"
+  asset_type: "<pump|valve|tank|water_source|sensor_node|camera_node|power_unit|filter|line|other>"
+  name: "<human-readable name>"
+  location_zone_id: "z-<zone>"
+  status: "unknown"
+  specs: {}
+  current_operation:
+    control_mode: "<manual|assisted|automated|unknown>"
+    manual_controls: []
+    normal_use_notes: null
+  mesh:
+    node_id: null
+    capabilities: []
+    telemetry_enabled: false
+    control_enabled: false
+  safety:
+    criticality: "<low|medium|high>"
+    failure_modes: []
+    fail_safe_state: null
+    manual_override_method: null
+    max_runtime_seconds: null
+  maintenance:
+    schedule: null
+    last_service_at: null
+    notes: []
+  evidence:
+    nameplate_photo_ref: null
+    latest_observation_at: null
+    refs: []
+  validation:
+    needs_field_validation: true
+    last_validated_at: null
+    validated_by: null

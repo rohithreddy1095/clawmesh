@@ -8,7 +8,7 @@ import {
   listTrustedPeers,
   removeTrustedPeer,
 } from "../mesh/peer-trust.js";
-import type { MeshStaticPeer, MeshGatewayTarget } from "../config/types.mesh.js";
+import type { MeshStaticPeer, MeshGatewayTarget } from "../mesh/types.mesh.js";
 import { loadGatewayTargets, saveGatewayTarget } from "../mesh/gateway-config.js";
 import { rawDataToString } from "../infra/ws.js";
 
@@ -77,6 +77,12 @@ export function createClawMeshCli(): Command {
     .option("--mock-actuator", "Enable mock actuator handler for clawmesh commands")
     .option("--mock-sensor", "Enable mock sensor (broadcasts periodic moisture readings)")
     .option("--sensor-interval <ms>", "Mock sensor interval in milliseconds", (v) => Number(v), 5000)
+    .option("--intelligence", "Enable intelligence mode (runs LLM agent with mesh tools)")
+    .option("--intelligence-model <model>", "LLM model for intelligence", "claude-sonnet-4-5-20250929")
+    .option("--sensors", "Shorthand: enable mock sensor")
+    .option("--actuators", "Shorthand: enable mock actuator")
+    .option("--field-node", "Shorthand: --sensors --actuators")
+    .option("--command-center", "Shorthand: --intelligence")
     .action(
       async (opts: {
         host: string;
@@ -87,7 +93,28 @@ export function createClawMeshCli(): Command {
         mockActuator?: boolean;
         mockSensor?: boolean;
         sensorInterval: number;
+        intelligence?: boolean;
+        intelligenceModel: string;
+        sensors?: boolean;
+        actuators?: boolean;
+        fieldNode?: boolean;
+        commandCenter?: boolean;
       }) => {
+        // Expand shorthand flags
+        if (opts.fieldNode) {
+          opts.sensors = true;
+          opts.actuators = true;
+        }
+        if (opts.commandCenter) {
+          opts.intelligence = true;
+        }
+        if (opts.sensors) {
+          opts.mockSensor = true;
+        }
+        if (opts.actuators) {
+          opts.mockActuator = true;
+        }
+
         const identity = loadOrCreateDeviceIdentity();
         const staticPeers = opts.peer.map(parsePeerSpec);
         const runtime = new MeshNodeRuntime({
@@ -98,6 +125,8 @@ export function createClawMeshCli(): Command {
           capabilities: opts.capability,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,
+          enableIntelligence: !!opts.intelligence,
+          intelligenceModel: opts.intelligenceModel,
           log: {
             info: (msg) => console.log(msg),
             warn: (msg) => console.warn(msg),
@@ -123,6 +152,10 @@ export function createClawMeshCli(): Command {
           });
           mockSensor.start();
           console.log(`Mock sensor: enabled (${opts.sensorInterval}ms interval)`);
+        }
+        if (opts.intelligence) {
+          console.log(`Intelligence: enabled (${opts.intelligenceModel})`);
+          console.log("  Tools: query_world_model, execute_mesh_command, list_mesh_capabilities");
         }
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);

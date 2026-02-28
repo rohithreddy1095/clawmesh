@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withTempHome } from "../../test/helpers/temp-home.js";
+import { withTempHome } from "./test-helpers.js";
 import {
   addTrustedPeer,
   removeTrustedPeer,

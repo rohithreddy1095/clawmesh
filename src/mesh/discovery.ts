@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { GatewayBonjourBeacon } from "../infra/bonjour-discovery.js";
+import type { GatewayBonjourBeacon } from "./bonjour-types.js";
 
 export type MeshDiscoveredPeer = {
   deviceId: string;

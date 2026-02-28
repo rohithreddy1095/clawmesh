@@ -1,0 +1,29 @@
+schema_version: "0.1"
+trial:
+  trial_id: "trial-<slug>"
+  status: "proposed"
+  zone_id: "z-<zone>"
+  hypothesis: "<what do we believe and why>"
+  objective: "<desired outcome>"
+  species_variety:
+    crop_species: "<species>"
+    variety: null
+  companion_plan: []
+  resource_budget:
+    water: null
+    labor: null
+    inputs: []
+  timeline:
+    start_planned_at: null
+    end_planned_at: null
+    observation_schedule: []
+  success_metrics: []
+  risks: []
+  owner:
+    human_owner: null
+    agent_owner: "mac-main"
+  evidence_refs: []
+  result_summary: null
+  validation:
+    evidence_label: "inference_repo"
+    field_verified: false

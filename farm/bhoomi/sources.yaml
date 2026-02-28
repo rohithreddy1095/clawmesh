@@ -1,0 +1,88 @@
+schema_version: "0.1"
+sources:
+  website-index:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/website/index.html"
+    usage:
+      - "farm identity and location"
+      - "main process steps"
+      - "multilayer food forest structure"
+      - "products and outputs"
+    quality: "primary_repo_content"
+  website-locations:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/website/data/locations.json"
+    usage:
+      - "project summaries by location"
+      - "Main Farm (Shamli) video_count and key crops/techniques"
+    quality: "structured_secondary"
+  yt-analysis-summary:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/refs/youtube/analysis/summary.json"
+    usage:
+      - "total video count"
+      - "category breakdown"
+      - "location coverage"
+    quality: "structured_aggregate"
+  yt-analysis-locations:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/refs/youtube/analysis/locations.json"
+    usage:
+      - "cross-location learning inventory"
+      - "location-level crop and technique keys"
+    quality: "structured_aggregate"
+  yt-analysis-extracted:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/refs/youtube/analysis/extracted_data.json"
+    usage:
+      - "structured crops/techniques/timeline mentions"
+      - "Shamli subset signal extraction"
+    quality: "structured_aggregate_partial"
+    caveats:
+      - "Only a subset of total videos is fully structured."
+      - "Fields are useful for trend signals, not final agronomy decisions."
+  yt-analysis-markdown:
+    type: "repo_directory"
+    path: "/Users/rohhh/repo/bhoominatural/refs/youtube/analysis/*.md"
+    usage:
+      - "per-video summaries"
+      - "operational clues (harvest, irrigation, composting, bees)"
+    quality: "variable"
+    caveats:
+      - "Detail level varies significantly by video/transcript availability."
+  bhoomi-claude-doc:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/CLAUDE.md"
+    usage:
+      - "repository data pipeline documentation"
+      - "references to Bhoomi analysis skills"
+    quality: "repo_dev_doc"
+  bhoomi-skill-doc:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/.claude/commands/bhoomi.md"
+    usage:
+      - "brand/context summary"
+      - "platform/channel overview"
+    quality: "assistant_skill_doc"
+  bhoomi-analyze-skill-doc:
+    type: "repo_file"
+    path: "/Users/rohhh/repo/bhoominatural/.claude/commands/bhoomi-analyze.md"
+    usage:
+      - "YouTube analysis workflow template"
+      - "future ingestion pipeline alignment"
+    quality: "assistant_skill_doc"
+
+data_quality_policy:
+  recommendation_labels:
+    - "fact_repo"
+    - "inference_repo"
+    - "field_verified"
+  default_label_for_new_recommendations_from_video_analysis: "inference_repo"
+  trust_tiers:
+    - "T0_planning_inference"
+    - "T1_unverified_observation"
+    - "T2_operational_observation"
+    - "T3_verified_action_evidence"
+  execution_rules:
+    - "LLM-generated reports and summaries are planning inputs only."
+    - "Physical actuation requires trusted on-farm sensor/device/human evidence per command policy."

@@ -1,0 +1,78 @@
+schema_version: "0.1"
+catalog:
+  source_policy:
+    default_confidence: "repo_observed"
+    requires_field_validation_for_live_inventory: true
+
+  layers:
+    canopy:
+      examples_from_website:
+        - "Mango"
+        - "Litchi"
+    subcanopy:
+      examples_from_website:
+        - "Avocado"
+        - "Papaya"
+        - "Jackfruit"
+    shrub:
+      examples_from_website:
+        - "Gladiolus"
+        - "Tuberose"
+    ground:
+      examples_from_website:
+        - "Turmeric"
+        - "Pineapple"
+    soil_root:
+      examples_from_website:
+        - "Earthworms"
+        - "Microbes"
+
+  crops_observed_in_repo:
+    fruits:
+      - "Mango"
+      - "Litchi"
+      - "Guava"
+      - "Papaya"
+      - "Banana"
+      - "Peach"
+      - "Pear"
+      - "Chiku"
+      - "Jackfruit"
+      - "Pineapple"
+      - "Avocado"
+      - "Plum"
+    flowers:
+      - "Gladiolus"
+      - "Tuberose"
+      - "Rajnigandha"
+      - "Flowers (generic)"
+    spices_grains:
+      - "Turmeric"
+      - "Black Rice"
+      - "Desi Basmati"
+      - "Rice (other desi varieties)"
+    value_added_outputs:
+      - "Raw Honey"
+      - "Mango Pickle"
+      - "Dried Fruits"
+
+  priority_crops_for_initial_modeling:
+    - crop: "Mango"
+      reason: "High recurrence in repo + economic importance likely high"
+      needs_field_validation: true
+    - crop: "Litchi"
+      reason: "High recurrence in repo + flowering/fruiting signals in videos"
+      needs_field_validation: true
+    - crop: "Turmeric"
+      reason: "Ground layer and intercropping relevance (e.g., pineapple cover)"
+      needs_field_validation: true
+    - crop: "Gladiolus"
+      reason: "Clear harvest-to-packaging workflow"
+      needs_field_validation: true
+    - crop: "Tuberose"
+      reason: "Flower income layer and recurring mentions"
+      needs_field_validation: true
+
+  live_inventory_status:
+    modeled_plant_units: 0
+    note: "This file is a catalog/observed list, not the actual current field inventory."

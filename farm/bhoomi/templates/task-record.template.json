@@ -1,0 +1,17 @@
+{
+  "task_id": "task-<id>",
+  "type": "human_task",
+  "status": "proposed",
+  "title": "<short title>",
+  "site_id": "bhoomi-main-shamli",
+  "zone_id": null,
+  "asset_id": null,
+  "operation_id": null,
+  "priority": "medium",
+  "requested_by": "mac-main",
+  "approved_by": null,
+  "assignee": null,
+  "evidence_required": [],
+  "constraints": {},
+  "needs_field_validation": true
+}

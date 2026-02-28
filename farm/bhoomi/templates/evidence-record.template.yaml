@@ -1,0 +1,34 @@
+schema_version: "0.1"
+evidence:
+  evidence_id: "ev-<timestamp>-<slug>"
+  recorded_at: "<ISO8601>"
+  source_type: "<human_photo|human_note|sensor|camera_inference|external_weather|system_event>"
+  source_device_id: null
+  confidence: "<low|medium|high>"
+  trust_tier: "<T0_planning_inference|T1_unverified_observation|T2_operational_observation|T3_verified_action_evidence>"
+  freshness:
+    observed_at: "<ISO8601 or null>"
+    ingested_at: "<ISO8601 or null>"
+    stale_after_seconds: null
+  calibration_ref: null
+  labels: []
+  links:
+    site_id: "bhoomi-main-shamli"
+    zone_ids: []
+    asset_ids: []
+    plant_unit_ids: []
+    task_ids: []
+    event_ids: []
+  summary: "<short plain-language description>"
+  raw_payload:
+    uri: null
+    content_type: null
+    checksum: null
+  verification:
+    status: "<unreviewed|accepted|rejected>"
+    reviewed_by: null
+    reviewed_at: null
+    notes: null
+  actuation_use:
+    eligible: false
+    reason_if_not_eligible: "default deny until policy and provenance checks pass"

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 describe("ClawMesh smoke test", () => {
-  it("imports MeshManager cleanly", async () => {
-    const mod = await import("./manager.js");
-    expect(mod.MeshManager).toBeDefined();
-    expect(typeof mod.MeshManager).toBe("function");
+  it("imports MeshNodeRuntime cleanly", async () => {
+    const mod = await import("./node-runtime.js");
+    expect(mod.MeshNodeRuntime).toBeDefined();
+    expect(typeof mod.MeshNodeRuntime).toBe("function");
   });
 
   it("imports MeshCapabilityRegistry cleanly", async () => {
@@ -43,5 +43,20 @@ describe("ClawMesh smoke test", () => {
   it("imports routing cleanly", async () => {
     const mod = await import("./routing.js");
     expect(mod.resolveMeshRoute).toBeDefined();
+  });
+
+  it("imports trust policy cleanly", async () => {
+    const mod = await import("./trust-policy.js");
+    expect(mod.evaluateMeshForwardTrust).toBeDefined();
+  });
+
+  it("imports world model cleanly", async () => {
+    const mod = await import("./world-model.js");
+    expect(mod.WorldModel).toBeDefined();
+  });
+
+  it("imports context propagator cleanly", async () => {
+    const mod = await import("./context-propagator.js");
+    expect(mod.ContextPropagator).toBeDefined();
   });
 });

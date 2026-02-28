@@ -1,0 +1,35 @@
+schema_version: "0.1"
+zone:
+  zone_id: "z-site-root"
+  name: "Bhoomi Main Farm (Shamli)"
+  zone_type: "site_root"
+  parent_zone_id: null
+  approx_area:
+    value: 10
+    unit: "acre"
+    approx: true
+  boundaries:
+    type: "unknown"
+    polygon: null
+    map_reference: null
+    needs_field_validation: true
+  soil_profile_ref: null
+  water_access_ref: "water-system-main"
+  shade_profile: "mixed multilayer food forest canopy dynamics"
+  current_use:
+    - "multilayer food forest production"
+    - "education / farm tours"
+    - "harvest and packing workflows"
+    - "ongoing natural farming experimentation"
+  constraints:
+    - "Exact subzone boundaries unknown"
+    - "Irrigation topology not yet modeled"
+    - "Power/network coverage unknown"
+  evidence:
+    repo_sources:
+      - "/Users/rohhh/repo/bhoominatural/website/index.html"
+      - "/Users/rohhh/repo/bhoominatural/website/data/locations.json"
+      - "/Users/rohhh/repo/bhoominatural/refs/youtube/analysis/locations.json"
+  validation:
+    needs_field_validation: true
+    priority: "high"

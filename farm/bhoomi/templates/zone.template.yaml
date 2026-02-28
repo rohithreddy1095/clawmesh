@@ -1,0 +1,31 @@
+schema_version: "0.1"
+zone:
+  zone_id: "z-<slug>"
+  name: "<human-readable zone name>"
+  zone_type: "<production|infrastructure|nursery_trial|post_harvest|inputs_biology|pollinator_support|other>"
+  parent_zone_id: "z-site-root"
+  status: "active"
+  approx_area:
+    value: null
+    unit: "sq_m"
+    approx: true
+  boundaries:
+    type: "sketch_only" # later: gps_polygon
+    polygon: null
+    map_reference: null
+  soil_profile_ref: null
+  water_access_ref: null
+  shade_profile: null
+  current_use: []
+  constraints: []
+  mesh_relevance:
+    automation_candidate: false
+    required_capabilities: []
+  evidence:
+    latest_observation_at: null
+    refs: []
+  validation:
+    needs_field_validation: true
+    priority: "medium"
+    last_validated_at: null
+    validated_by: null

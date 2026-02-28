@@ -29,4 +29,7 @@ export type ContextFrame = {
 
   /** Optional human-readable note. */
   note?: string;
+
+  /** Number of gossip hops this frame has traversed (0 = originated here). */
+  hops?: number;
 };

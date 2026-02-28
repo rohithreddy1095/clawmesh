@@ -1,0 +1,215 @@
+schema_version: "0.1"
+operations:
+  - operation_id: "op-land-assessment"
+    name: "Assess Land"
+    purpose: "Collect baseline site, soil, sun, water, and vegetation conditions before intervention."
+    source_type: "website_process"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "new site setup"
+      - "new zone planning"
+      - "major issue diagnosis"
+    preconditions:
+      - "zone identified or sketch available"
+    evidence_required:
+      - "human notes"
+      - "photos/video"
+      - "soil/water observations"
+    safety_constraints:
+      - "No invasive changes during assessment unless separately approved"
+    status: "seeded"
+
+  - operation_id: "op-no-till-foundation"
+    name: "No-Till Foundation Setup"
+    purpose: "Preserve and support existing soil ecosystem without conventional tillage."
+    source_type: "website_process"
+    required_roles:
+      - "human"
+    trigger_conditions:
+      - "new zone establishment"
+      - "conversion from conventional layout"
+    evidence_required:
+      - "before/after photos"
+      - "zone notes"
+    safety_constraints:
+      - "Avoid soil disturbance outside approved plan"
+    status: "seeded"
+
+  - operation_id: "op-mulch-cover"
+    name: "Mulch and Cover Layering"
+    purpose: "Protect soil surface and feed below-ground biology."
+    source_type: "website_process"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "new planting"
+      - "soil exposure observed"
+      - "post-harvest recovery"
+    evidence_required:
+      - "zone photo"
+      - "mulch thickness notes"
+    safety_constraints:
+      - "Keep trunks/crowns safe where required (crop-specific)"
+    status: "seeded"
+
+  - operation_id: "op-earthworm-support-observe"
+    name: "Earthworm Support and Observation"
+    purpose: "Track and encourage soil biota activity as a core soil health signal."
+    source_type: "website_process_plus_video_theme"
+    required_roles:
+      - "human"
+      - "inspection_task"
+    trigger_conditions:
+      - "soil health check cycle"
+      - "after mulch/compost applications"
+    evidence_required:
+      - "human notes"
+      - "photos"
+    status: "seeded"
+
+  - operation_id: "op-jeevamrit-application"
+    name: "Jeevamrit Application"
+    purpose: "Apply fermented natural input to support beneficial microbes."
+    source_type: "website_process_plus_video_theme"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "scheduled natural farming input cycle"
+      - "soil biology support plan"
+    preconditions:
+      - "mixture prepared and verified"
+      - "target zone identified"
+    evidence_required:
+      - "application log"
+      - "human confirmation"
+    safety_constraints:
+      - "Dosage and dilution policy must be defined before automation support"
+    status: "seeded"
+
+  - operation_id: "op-compost-ghanjeevamrit-application"
+    name: "Compost / Ghanjeevamrit Application"
+    purpose: "Replenish soil organic matter and nutrient cycling after harvest or during maintenance."
+    source_type: "video_theme"
+    required_roles:
+      - "human"
+    trigger_conditions:
+      - "post-harvest maintenance"
+      - "soil recovery cycle"
+    evidence_required:
+      - "input batch note"
+      - "zone application record"
+    status: "seeded"
+
+  - operation_id: "op-pruning-post-harvest"
+    name: "Pruning After Harvest"
+    purpose: "Maintain plant structure, productivity, and health after harvest cycles."
+    source_type: "video_theme"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "post-harvest state"
+      - "shape/health correction"
+    evidence_required:
+      - "before photo"
+      - "after photo"
+      - "pruning note/checklist"
+    safety_constraints:
+      - "Human approval required for high-impact cuts"
+    status: "seeded"
+
+  - operation_id: "op-grafting"
+    name: "Grafting / Variety Development"
+    purpose: "Propagate or develop varieties (notably mango-related workflows in Bhoomi content)."
+    source_type: "video_theme"
+    required_roles:
+      - "human"
+    trigger_conditions:
+      - "nursery plan"
+      - "variety experimentation"
+    evidence_required:
+      - "graft log"
+      - "stock/scion metadata"
+      - "follow-up survival observations"
+    status: "seeded"
+
+  - operation_id: "op-multilayer-planting"
+    name: "Multilayer Planting"
+    purpose: "Establish companion plantings across canopy/sub-canopy/shrub/ground layers."
+    source_type: "website_process_plus_video_theme"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "new design implementation"
+      - "gap filling in established zone"
+    preconditions:
+      - "zone plan"
+      - "water access"
+    evidence_required:
+      - "planting map update"
+      - "photos"
+      - "initial watering confirmation"
+    status: "seeded"
+
+  - operation_id: "op-irrigation-water-saving"
+    name: "Irrigation / Water-Saving Execution"
+    purpose: "Deliver water efficiently while conserving water and cost."
+    source_type: "video_theme"
+    required_roles:
+      - "hybrid"
+      - "jetson"
+      - "field_node"
+    trigger_conditions:
+      - "zone water demand"
+      - "schedule window"
+      - "manual request"
+    preconditions:
+      - "source/tank status known"
+      - "pump and valve path known"
+    evidence_required:
+      - "pump/valve event log"
+      - "flow/power verification"
+      - "human verification for exceptions"
+    safety_constraints:
+      - "bounded runtime/volume"
+      - "fail-safe on comm loss"
+    status: "seeded"
+
+  - operation_id: "op-flower-harvest-packaging"
+    name: "Flower Harvest and Packaging (Gladiolus/Tuberose)"
+    purpose: "Standardize harvest-to-packaging workflow with quality and timing records."
+    source_type: "video_theme"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "harvest-ready flower batch"
+    evidence_required:
+      - "harvest count/weight"
+      - "packaging completion confirmation"
+      - "photos"
+    status: "seeded"
+
+  - operation_id: "op-pollinator-scouting"
+    name: "Pollinator / Bee Activity Scouting"
+    purpose: "Track pollinator presence and investigate decline events."
+    source_type: "video_theme"
+    required_roles:
+      - "human"
+      - "hybrid"
+    trigger_conditions:
+      - "routine biodiversity check"
+      - "suspected bee decline"
+    evidence_required:
+      - "observation notes"
+      - "photos/video"
+      - "time-of-day and weather context"
+    status: "seeded"
+
+metadata:
+  note: "Operation definitions are templates and require field-specific SOP details before automation."

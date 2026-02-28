@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { WebSocket, WebSocketServer } from "ws";
-import type { MeshStaticPeer } from "../config/types.mesh.js";
+import type { MeshStaticPeer } from "../mesh/types.mesh.js";
 import { rawDataToString } from "../infra/ws.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import { forwardMessageToPeer } from "./forwarding.js";
@@ -15,11 +15,14 @@ import { WorldModel } from "./world-model.js";
 import { createMeshServerHandlers } from "./peer-server.js";
 import { createMeshForwardHandlers } from "./server-methods/forward.js";
 import { createMeshPeersHandlers } from "./server-methods/peers.js";
+import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
   MeshForwardTrustMetadata,
 } from "./types.js";
+import { createMeshTools } from "../agents/tools/mesh-tools.js";
+import { runIntelligenceAgent } from "../agents/intelligence-runner.js";
 
 type RpcRequestFrame = {
   type: "req";
@@ -54,6 +57,12 @@ export type MeshNodeRuntimeOptions = {
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
+  /** Enable intelligence mode (starts LLM agent with mesh tools). */
+  enableIntelligence?: boolean;
+  /** LLM model ID for intelligence mode (default: claude-sonnet-4-5-20250929). */
+  intelligenceModel?: string;
+  /** Override the default system prompt for the intelligence agent. */
+  intelligenceSystemPrompt?: string;
   log?: {
     info: (msg: string) => void;
     warn: (msg: string) => void;
@@ -100,9 +109,10 @@ export class MeshNodeRuntime {
   readonly worldModel: WorldModel;
   readonly mockActuator?: MockActuatorController;
 
+  private readonly opts: MeshNodeRuntimeOptions;
   private readonly host: string;
   private readonly requestedPort: number;
-  private readonly displayName?: string;
+  readonly displayName?: string;
   private readonly capabilities: string[];
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
@@ -111,8 +121,10 @@ export class MeshNodeRuntime {
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   private wss: WebSocketServer | null = null;
+  private piAgentAbort?: AbortController;
 
   constructor(opts: MeshNodeRuntimeOptions) {
+    this.opts = opts;
     this.identity = opts.identity;
     this.host = opts.host ?? "0.0.0.0";
     this.requestedPort = opts.port ?? 18789;
@@ -235,10 +247,21 @@ export class MeshNodeRuntime {
       this.connectToPeer(peer);
     }
 
+    // Start intelligence agent if enabled
+    if (this.opts.enableIntelligence) {
+      this.startIntelligenceAgent();
+    }
+
     return this.listenAddress();
   }
 
   async stop(): Promise<void> {
+    // Stop intelligence agent
+    if (this.piAgentAbort) {
+      this.piAgentAbort.abort();
+      this.log.info("mesh: intelligence agent stopped");
+    }
+
     for (const client of this.outboundClients.values()) {
       client.stop();
     }
@@ -260,6 +283,59 @@ export class MeshNodeRuntime {
         wss.close(() => resolve());
       });
     }
+  }
+
+  private startIntelligenceAgent(): void {
+    this.piAgentAbort = new AbortController();
+
+    const systemPrompt =
+      this.opts.intelligenceSystemPrompt ?? this.buildFarmIntelligencePrompt();
+    const tools = createMeshTools(this);
+
+    runIntelligenceAgent({
+      model: this.opts.intelligenceModel ?? "claude-sonnet-4-5-20250929",
+      systemPrompt,
+      tools,
+      signal: this.piAgentAbort.signal,
+      log: this.log,
+    }).catch((err) => {
+      this.log.error(`mesh: intelligence agent error: ${err}`);
+    });
+
+    this.log.info("mesh: intelligence agent started with mesh tools");
+  }
+
+  private buildFarmIntelligencePrompt(): string {
+    const nodeName = this.displayName ?? this.identity.deviceId.slice(0, 12);
+    return `You are the intelligence layer for a ClawMesh farm management system.
+
+# Your Role
+Monitor sensor data from field nodes, reason over farm state, and orchestrate
+irrigation, monitoring, and other farm operations.
+
+# This Node
+- Name: ${nodeName}
+- Device ID: ${this.identity.deviceId.slice(0, 12)}...
+
+# Available Tools
+1. **query_world_model** — View sensor observations, events from all mesh nodes
+2. **execute_mesh_command** — Send commands to field nodes (pumps, sensors, etc.)
+3. **list_mesh_capabilities** — Discover available sensors and actuators
+
+# Decision Framework
+When you observe critical conditions (e.g., low moisture, temperature alerts):
+1. Query world model to understand current state
+2. Check mesh capabilities to find relevant sensors/actuators
+3. Reason about the best action
+4. Execute commands with clear reasoning
+5. Monitor feedback (execution results propagate back as context)
+
+# Farm Operations Examples
+- Moisture below threshold -> start irrigation pump
+- Temperature spike -> alert and activate cooling
+- Human input -> interpret and execute farm tasks
+
+Be proactive, safe, and always explain your reasoning.`;
   }
 
   listenAddress(): { host: string; port: number } {
@@ -328,10 +404,30 @@ export class MeshNodeRuntime {
   }
 
   async sendMockActuation(params: SendMockActuationParams) {
-    const trust = {
-      ...defaultActuationTrust(),
-      ...(params.trust ?? {}),
-    } as ClawMeshCommandEnvelopeV1["trust"];
+    // If the caller provides explicit trust metadata, use it as-is.
+    // Only apply the safe defaults when no trust is specified.
+    const trust = (params.trust ?? defaultActuationTrust()) as ClawMeshCommandEnvelopeV1["trust"];
+
+    // Sender-side trust evaluation: reject before transmitting over the wire.
+    // This catches policy violations early (e.g. LLM-only actuation) rather than
+    // letting the receiver reject after a round-trip.
+    const senderPayload: MeshForwardPayload = {
+      channel: "clawmesh",
+      to: params.targetRef,
+      originGatewayId: this.identity.deviceId,
+      idempotencyKey: "",
+      trust,
+    };
+    const trustDecision = evaluateMeshForwardTrust(senderPayload);
+    if (!trustDecision.ok) {
+      this.log.warn(
+        `mesh: sender-side trust rejection: ${trustDecision.code} — ${trustDecision.message}`,
+      );
+      return {
+        ok: false,
+        error: `trust policy: ${trustDecision.code} — ${trustDecision.message}`,
+      };
+    }
 
     return await forwardMessageToPeer({
       peerRegistry: this.peerRegistry,
@@ -396,6 +492,60 @@ export class MeshNodeRuntime {
       this.worldModel.ingest(contextFrame);
       return;
     }
+
+    // --- MOCK INTELLIGENCE HANDLER FOR UI TESTING ---
+    // Route clawmesh.forward → mesh.message.forward so it goes through
+    // the standard trust-evaluated forward handler. Also handle the
+    // agent:pi intent-parsing special case, but only AFTER trust evaluation.
+    if (frame.type === "req" && frame.method === "clawmesh.forward") {
+      const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
+
+      // Rewrite to the canonical method that goes through trust evaluation
+      const rewritten: RpcRequestFrame = {
+        type: "req",
+        id: frame.id as string,
+        method: "mesh.message.forward",
+        params: {
+          ...fwdParams,
+          // Ensure required fields for the forward handler
+          originGatewayId: fwdParams.originGatewayId ?? "ui-client",
+          idempotencyKey: fwdParams.idempotencyKey ?? `ui-${Date.now()}`,
+        },
+      };
+
+      // If targeting agent:pi, register an onForward callback to handle the intent
+      if (fwdParams.to === "agent:pi" && fwdParams.channel === "clawmesh") {
+        const cmd = fwdParams.commandDraft as Record<string, unknown> | undefined;
+        const operation = cmd?.operation as Record<string, unknown> | undefined;
+        if (operation?.name === "intent:parse") {
+          const intentText = (operation.params as Record<string, unknown>)?.text ?? "Unknown intent";
+          this.log.info(`[mock-pi] Received natural language intent: "${intentText}"`);
+
+          // Broadcast as human input
+          this.contextPropagator.broadcastHumanInput({
+            data: { intent: intentText },
+            note: `Operator submitted intent`,
+          });
+
+          // Simulate processing delay for inference broadcast
+          setTimeout(() => {
+            this.contextPropagator.broadcastInference({
+              data: {
+                decision: `Simulated execution of: ${intentText}`,
+                targetRef: "actuator:mock:simulated",
+                operation: "execute",
+              },
+              note: `Intelligence: Parsed intent and determined next best action.`,
+            });
+            this.log.info(`[mock-pi] Broadcasted mock inference for intent.`);
+          }, 2000);
+        }
+      }
+
+      await this.dispatchRpcRequest(socket, connId, rewritten);
+      return;
+    }
+    // ------------------------------------------------
 
     if (!("type" in frame)) {
       return;

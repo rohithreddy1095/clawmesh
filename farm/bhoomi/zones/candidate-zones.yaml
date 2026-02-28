@@ -1,0 +1,92 @@
+schema_version: "0.1"
+zones:
+  - zone_id: "z-water-infra"
+    name: "Water Source / Tank / Pump Area"
+    zone_type: "infrastructure"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Required for safe mesh control; exact layout unknown."
+    expected_assets:
+      - "water_source"
+      - "tank"
+      - "pump"
+      - "main_valves"
+      - "filters"
+    needs_field_validation: true
+    survey_priority: "highest"
+
+  - zone_id: "z-food-forest-core"
+    name: "Main Multilayer Food Forest Core"
+    zone_type: "production"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Primary fruit/flower/spice multilayer production area referenced across repo content."
+    observed_layers:
+      - "canopy"
+      - "subcanopy"
+      - "shrub"
+      - "ground"
+      - "soil/root"
+    needs_field_validation: true
+    survey_priority: "highest"
+
+  - zone_id: "z-flower-production"
+    name: "Flower Production / Harvest Zone (Gladiolus/Tuberose)"
+    zone_type: "production"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Gladiolus harvest and packaging workflows are prominent in repo videos."
+    likely_outputs:
+      - "gladiolus"
+      - "tuberose"
+    needs_field_validation: true
+    survey_priority: "high"
+
+  - zone_id: "z-rice-or-seasonal-grain"
+    name: "Rice / Seasonal Grain Patch"
+    zone_type: "seasonal_production"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Black rice and desi rice appear in Bhoomi content."
+    needs_field_validation: true
+    survey_priority: "medium"
+
+  - zone_id: "z-compost-inputs"
+    name: "Compost / Jeevamrit / Ghanjeevamrit Preparation Area"
+    zone_type: "inputs_biology"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Composting + Jeevamrit/Ghanjeevamrit are central operational themes."
+    needs_field_validation: true
+    survey_priority: "high"
+
+  - zone_id: "z-nursery-grafting-trials"
+    name: "Nursery / Grafting / Trial Area"
+    zone_type: "nursery_trial"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Grafting and variety development appear in multiple videos."
+    needs_field_validation: true
+    survey_priority: "high"
+
+  - zone_id: "z-harvest-packing"
+    name: "Harvest Sorting / Packing Area"
+    zone_type: "post_harvest"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Flower harvest-to-packaging workflow likely uses a repeatable processing area."
+    needs_field_validation: true
+    survey_priority: "medium"
+
+  - zone_id: "z-beekeeping-pollinators"
+    name: "Beekeeping / Pollinator Observation Area"
+    zone_type: "pollinator_support"
+    parent_zone_id: "z-site-root"
+    status: "candidate"
+    rationale: "Bee decline issue is present in Bhoomi content and should be tracked explicitly."
+    needs_field_validation: true
+    survey_priority: "medium"
+
+notes:
+  - "These are modeling candidates, not confirmed physical boundaries."
+  - "Replace with measured zones after field survey."

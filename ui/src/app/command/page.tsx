@@ -35,9 +35,13 @@ export default function CommandPage() {
         };
 
         setSentCommands(prev => [...prev, newCmd]);
-        setCommand("");
 
-        // In a real implementation: sendCommand('target', 'intent:parse', command.trim())
+        // Dispatch to backend simulator
+        if (isConnected) {
+            sendCommand("agent:pi", "intent:parse", { text: command.trim() });
+        }
+
+        setCommand("");
     };
 
     return (

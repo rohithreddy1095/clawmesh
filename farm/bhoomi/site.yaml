@@ -1,0 +1,79 @@
+schema_version: "0.1"
+site:
+  site_id: "bhoomi-main-shamli"
+  name: "Bhoomi Natural"
+  aliases:
+    - "Bhoomi Natural Farms"
+  location:
+    district: "Shamli"
+    state: "Uttar Pradesh"
+    country: "India"
+    lat_lon: null
+    needs_field_validation: true
+  area:
+    value: 10
+    unit: "acre"
+    approx: true
+    source: "repo_website_and_video_analysis"
+  languages_used:
+    - "Hindi"
+    - "English"
+  farming_principles:
+    - "no-till"
+    - "chemical-free"
+    - "multilayer food forest"
+    - "biodiversity-oriented"
+    - "natural farming"
+  mission_summary: >
+    Food-forest based natural farming and education, with a focus on regenerative,
+    no-till, chemical-free growing and practical transformation of land into productive ecosystems.
+  operator_contacts:
+    primary_human_owner: "rohhh (to confirm name used in farm ops records)"
+    farm_lead_mentioned_in_repo: "Abhay Rod"
+    phone_whatsapp: "+91-7500312013"
+    needs_field_validation: true
+  digital_twin_status:
+    maturity: "seed-v0"
+    field_validated: false
+    notes:
+      - "Seeded from BhoomiNatural repository website and YouTube analysis artifacts."
+      - "Zone map, water topology, and live assets are not yet surveyed."
+  repo_derived_summary:
+    youtube_summary:
+      total_videos: 46
+      locations_found:
+        - "Dehradun"
+        - "Delhi"
+        - "Kolkata"
+        - "Konkan"
+        - "Maharashtra"
+        - "Main Farm (Shamli)"
+        - "Mumbai"
+        - "Noida"
+        - "Shamli"
+      source_generated_at: "2026-01-18T12:13:15.588221"
+    shamli_structured_extraction_subset:
+      analyzed_videos: 21
+      top_techniques:
+        - "Food Forest"
+        - "Jeevamrit"
+        - "Vermicompost"
+        - "Grafting"
+        - "Multilayer"
+      top_crops:
+        - "Litchi"
+        - "Mango"
+        - "Flowers"
+        - "Peach"
+        - "Turmeric"
+        - "Pear"
+        - "Banana"
+        - "Guava"
+        - "Tuberose"
+        - "Chiku"
+        - "Papaya"
+  source_refs:
+    - "farm/bhoomi/sources.yaml#website-index"
+    - "farm/bhoomi/sources.yaml#website-locations"
+    - "farm/bhoomi/sources.yaml#yt-analysis-summary"
+    - "farm/bhoomi/sources.yaml#yt-analysis-extracted"
