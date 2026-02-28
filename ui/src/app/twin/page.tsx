@@ -1,9 +1,12 @@
 "use client";
 
-import { Map as MapIcon, Droplets, ThermometerSun, Leaf } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Map as MapIcon, Droplets, ThermometerSun, Leaf, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMeshStore } from "@/lib/store";
+import { useMesh } from "@/lib/useMesh";
 
-const zones = [
+const defaultZones = [
     { id: "z1", name: "Mango Orchard", moisture: 42, temp: 31, active: true, coordinates: "col-start-1 col-end-4 row-start-1 row-end-4" },
     { id: "z2", name: "Banana Layer", moisture: 68, temp: 28, active: false, coordinates: "col-start-4 col-end-7 row-start-1 row-end-3" },
     { id: "z3", name: "Nursery / Herbs", moisture: 85, temp: 26, active: true, coordinates: "col-start-1 col-end-3 row-start-4 row-end-7" },
@@ -11,6 +14,38 @@ const zones = [
 ];
 
 export default function DigitalTwinPage() {
+    const { getFramesByKind } = useMeshStore();
+    const { isConnected } = useMesh();
+
+    // Compute current live zones from the context gossip
+    const [liveZones, setLiveZones] = useState(defaultZones);
+
+    useEffect(() => {
+        // Find all observation frames
+        const obsFrames = getFramesByKind("observation");
+
+        setLiveZones(currentZones => currentZones.map(zone => {
+            // Find the most recent moisture/temp frames for this zone
+            const zoneFrames = obsFrames.filter(f => f.data?.zone === zone.id || (f.data?.zone === "zone-1" && zone.id === "z1"));
+
+            let updatedZone = { ...zone };
+
+            // Apply the latest observations to the zone visual layer
+            for (const frame of zoneFrames) {
+                if (frame.data?.metric === "moisture" && typeof frame.data?.value === "number") {
+                    updatedZone.moisture = frame.data.value;
+                    // Flash 'active' green style if recent
+                    updatedZone.active = (Date.now() - frame.timestamp) < 10000;
+                }
+                if (frame.data?.metric === "temp" && typeof frame.data?.value === "number") {
+                    updatedZone.temp = frame.data.value;
+                }
+            }
+
+            return updatedZone;
+        }));
+    }, [getFramesByKind]);
+
     return (
         <div className="h-full w-full flex flex-col p-8">
             <div className="mb-6 z-10">
@@ -21,6 +56,15 @@ export default function DigitalTwinPage() {
                 <p className="mt-2 text-foreground/60 font-mono text-sm max-w-xl">
                     Shamli 10-Acre Food Forest. Sensor data overlaid on logical zones.
                 </p>
+                <div className="mt-4 flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                        <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isConnected ? "bg-green-400" : "bg-red-400")}></span>
+                        <span className={cn("relative inline-flex rounded-full h-3 w-3", isConnected ? "bg-green-500" : "bg-red-500")}></span>
+                    </span>
+                    <span className="font-mono text-sm text-foreground/60">
+                        {isConnected ? "WORLD_MODEL_SYNCED" : "OFFLINE"}
+                    </span>
+                </div>
             </div>
 
             <div className="flex-1 grid grid-cols-12 gap-6 relative z-10">
@@ -29,17 +73,21 @@ export default function DigitalTwinPage() {
                     <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(var(--color-claw-accent) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
                     <div className="flex-1 grid grid-cols-8 grid-rows-6 gap-4 relative z-10">
-                        {zones.map(zone => (
+                        {liveZones.map(zone => (
                             <div
                                 key={zone.id}
                                 className={cn(
-                                    "rounded-2xl border-2 p-4 transition-all hover:scale-[1.02] cursor-pointer flex flex-col justify-between backdrop-blur-md",
+                                    "rounded-2xl border-2 p-4 transition-all duration-500  cursor-pointer flex flex-col justify-between backdrop-blur-md",
                                     zone.coordinates,
-                                    zone.isTank ? "border-blue-500/50 bg-blue-500/10" : "border-mesh-active/30 bg-mesh-active/5 hover:border-mesh-active/80"
+                                    zone.isTank ? "border-blue-500/50 bg-blue-500/10" :
+                                        zone.active ? "border-mesh-active/80 bg-mesh-active/10 scale-[1.02]" : "border-mesh-active/30 bg-mesh-active/5"
                                 )}
                             >
                                 <div>
-                                    <div className="font-bold text-lg text-white mb-1 tracking-tight">{zone.name}</div>
+                                    <div className="font-bold text-lg text-white mb-1 tracking-tight flex items-center justify-between">
+                                        {zone.name}
+                                        {zone.active && !zone.isTank && <Activity size={16} className="text-mesh-active animate-pulse" />}
+                                    </div>
                                     <div className="font-mono text-[10px] text-foreground/50 uppercase tracking-widest">{zone.id}</div>
                                 </div>
 
