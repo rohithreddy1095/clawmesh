@@ -196,20 +196,21 @@ The observer's world model will log each ingested context frame:
 
 ## Test Suite
 
-**62 tests, 6 files** — all built test-first with Red/Green TDD.
+**119 tests across 15 files** — built test-first to ensure networking robustness and correct intelligence wiring.
 
-| File | Tests | What it covers |
-|------|-------|----------------|
-| `src/strip.test.ts` | 31 | Stripped directories don't exist |
-| `src/strip-imports.test.ts` | 2 | No source file imports from 32 stripped modules |
-| `src/mesh/smoke.test.ts` | 8 | All mesh modules import cleanly |
-| `src/mesh/routing.test.ts` | 7 | Capability-based local-first routing |
-| `src/cli/cli.test.ts` | 4 | CLI command structure |
-| `src/mesh/integration.test.ts` | 10 | Routing + forwarding end-to-end |
+| Area | What it covers |
+|------|----------------|
+| `src/mesh/peer-registry.test.ts` | Connection tracking, event broadcasting |
+| `src/mesh/capabilities.test.ts` | Dynamic capability advertising and lookups |
+| `src/mesh/peer-trust.test.ts` | Ed25519 identity verification and local trust storage |
+| `src/mesh/integration.test.ts` | End-to-end routing + forwarding between multiple nodes |
+| `src/mesh/routing.test.ts` | Capability-based local-first routing rules |
+| `src/mesh/forwarding.test.ts` | RPC payload construction and dispatch |
+| `src/mesh/trust-policy.test.ts` | L0–L3 approval tiers and sensor evidence validation |
+| `src/agents/planner.test.ts` | Farm context loading and task proposal types |
 
 ```bash
 pnpm test                              # Run all tests
-pnpm vitest run src/mesh/              # Mesh tests only
 ```
 
 ## Configuration
