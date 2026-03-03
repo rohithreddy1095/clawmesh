@@ -4,7 +4,7 @@ import path from "node:path";
 import type { MeshGatewayTarget } from "./types.mesh.js";
 
 function resolveStateDir(): string {
-  const override = process.env.CLAWMESH_STATE_DIR?.trim() || process.env.OPENCLAW_STATE_DIR?.trim();
+  const override = process.env.CLAWMESH_STATE_DIR?.trim();
   if (override) {
     return override;
   }

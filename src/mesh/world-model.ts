@@ -11,6 +11,9 @@ export class WorldModel {
   private frameLog: ContextFrame[] = [];
   private seenFrameIds = new Set<string>();
 
+  /** Optional callback fired after each successful ingest. Used by PiPlanner. */
+  onIngest?: (frame: ContextFrame) => void;
+
   constructor(
     private opts: {
       maxHistory?: number;
@@ -55,6 +58,9 @@ export class WorldModel {
     const source =
       frame.sourceDisplayName ?? `${frame.sourceDeviceId.slice(0, 12)}...`;
     this.opts.log.info(`[world-model] Ingested ${frame.kind} from ${source}`);
+
+    // Notify listener (e.g. PiPlanner)
+    this.onIngest?.(frame);
 
     return true;
   }

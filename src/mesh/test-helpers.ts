@@ -10,11 +10,9 @@ export async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise
   const base = await fs.mkdtemp(path.join(os.tmpdir(), "clawmesh-test-home-"));
   const origHome = process.env.HOME;
   const origStateDir = process.env.CLAWMESH_STATE_DIR;
-  const origOpenClawStateDir = process.env.OPENCLAW_STATE_DIR;
 
   process.env.HOME = base;
   process.env.CLAWMESH_STATE_DIR = path.join(base, ".clawmesh");
-  delete process.env.OPENCLAW_STATE_DIR;
 
   try {
     return await fn(base);
@@ -28,11 +26,6 @@ export async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise
       delete process.env.CLAWMESH_STATE_DIR;
     } else {
       process.env.CLAWMESH_STATE_DIR = origStateDir;
-    }
-    if (origOpenClawStateDir === undefined) {
-      delete process.env.OPENCLAW_STATE_DIR;
-    } else {
-      process.env.OPENCLAW_STATE_DIR = origOpenClawStateDir;
     }
     try {
       await fs.rm(base, { recursive: true, force: true });

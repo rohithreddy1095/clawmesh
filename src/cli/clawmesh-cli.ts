@@ -11,6 +11,8 @@ import {
 import type { MeshStaticPeer, MeshGatewayTarget } from "../mesh/types.mesh.js";
 import { loadGatewayTargets, saveGatewayTarget } from "../mesh/gateway-config.js";
 import { rawDataToString } from "../infra/ws.js";
+import { loadBhoomiContext } from "../agents/farm-context-loader.js";
+import type { ThresholdRule } from "../agents/types.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -77,12 +79,14 @@ export function createClawMeshCli(): Command {
     .option("--mock-actuator", "Enable mock actuator handler for clawmesh commands")
     .option("--mock-sensor", "Enable mock sensor (broadcasts periodic moisture readings)")
     .option("--sensor-interval <ms>", "Mock sensor interval in milliseconds", (v) => Number(v), 5000)
-    .option("--intelligence", "Enable intelligence mode (runs LLM agent with mesh tools)")
-    .option("--intelligence-model <model>", "LLM model for intelligence", "claude-sonnet-4-5-20250929")
+    .option("--pi-planner", "Enable Pi-powered planner (event-driven, multi-provider)")
+    .option("--pi-model <provider/model>", "Model spec (e.g. anthropic/claude-sonnet-4-5-20250929)", "anthropic/claude-sonnet-4-5-20250929")
+    .option("--thinking <level>", "Thinking level (off|minimal|low|medium|high)", "off")
+    .option("--planner-interval <ms>", "Proactive planner check interval (ms)", (v) => Number(v), 60000)
     .option("--sensors", "Shorthand: enable mock sensor")
     .option("--actuators", "Shorthand: enable mock actuator")
     .option("--field-node", "Shorthand: --sensors --actuators")
-    .option("--command-center", "Shorthand: --intelligence")
+    .option("--command-center", "Shorthand: --pi-planner")
     .action(
       async (opts: {
         host: string;
@@ -93,8 +97,10 @@ export function createClawMeshCli(): Command {
         mockActuator?: boolean;
         mockSensor?: boolean;
         sensorInterval: number;
-        intelligence?: boolean;
-        intelligenceModel: string;
+        piPlanner?: boolean;
+        piModel: string;
+        thinking: string;
+        plannerInterval: number;
         sensors?: boolean;
         actuators?: boolean;
         fieldNode?: boolean;
@@ -106,7 +112,7 @@ export function createClawMeshCli(): Command {
           opts.actuators = true;
         }
         if (opts.commandCenter) {
-          opts.intelligence = true;
+          opts.piPlanner = true;
         }
         if (opts.sensors) {
           opts.mockSensor = true;
@@ -117,6 +123,27 @@ export function createClawMeshCli(): Command {
 
         const identity = loadOrCreateDeviceIdentity();
         const staticPeers = opts.peer.map(parsePeerSpec);
+        // Load farm context for the planner
+        const farmContext = opts.piPlanner ? loadBhoomiContext() : undefined;
+
+        // Default threshold rules for auto-triggering the planner
+        const defaultThresholds: ThresholdRule[] = [
+          {
+            ruleId: "moisture-critical",
+            metric: "moisture",
+            belowThreshold: 20,
+            cooldownMs: 300_000,
+            promptHint: "Soil moisture has dropped below 20% — evaluate irrigation need",
+          },
+          {
+            ruleId: "moisture-low",
+            metric: "moisture",
+            belowThreshold: 25,
+            cooldownMs: 600_000,
+            promptHint: "Soil moisture is below 25% — monitor and consider scheduling irrigation",
+          },
+        ];
+
         const runtime = new MeshNodeRuntime({
           identity,
           host: opts.host,
@@ -125,8 +152,21 @@ export function createClawMeshCli(): Command {
           capabilities: opts.capability,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,
-          enableIntelligence: !!opts.intelligence,
-          intelligenceModel: opts.intelligenceModel,
+          enablePiSession: !!opts.piPlanner,
+          piSessionModelSpec: opts.piModel,
+          piSessionThinkingLevel: opts.thinking as any,
+          plannerFarmContext: farmContext,
+          plannerThresholds: opts.piPlanner ? defaultThresholds : undefined,
+          plannerProactiveIntervalMs: opts.plannerInterval,
+          onProposalCreated: (proposal) => {
+            console.log(`\n[PROPOSAL] ${proposal.approvalLevel} — ${proposal.summary}`);
+            console.log(`  Target: ${proposal.targetRef}:${proposal.operation}`);
+            console.log(`  Reasoning: ${proposal.reasoning.slice(0, 200)}`);
+            console.log(`  Task ID: ${proposal.taskId}`);
+            if (proposal.status === "awaiting_approval") {
+              console.log(`  → Awaiting human approval. Use: clawmesh approve ${proposal.taskId.slice(0, 8)}`);
+            }
+          },
           log: {
             info: (msg) => console.log(msg),
             warn: (msg) => console.warn(msg),
@@ -153,9 +193,14 @@ export function createClawMeshCli(): Command {
           mockSensor.start();
           console.log(`Mock sensor: enabled (${opts.sensorInterval}ms interval)`);
         }
-        if (opts.intelligence) {
-          console.log(`Intelligence: enabled (${opts.intelligenceModel})`);
-          console.log("  Tools: query_world_model, execute_mesh_command, list_mesh_capabilities");
+        if (opts.piPlanner) {
+          console.log(`Pi Planner: enabled (pi-agent-core)`);
+          console.log(`  Model: ${opts.piModel}`);
+          console.log(`  Thinking: ${opts.thinking}`);
+          console.log(`  Interval: ${opts.plannerInterval}ms`);
+          console.log("  Tools: query_world_model, list_mesh_capabilities, execute_mesh_command, propose_task, list_proposals");
+          console.log("  Farm context: Bhoomi Natural (loaded from farm/bhoomi/)");
+          console.log(`  Thresholds: ${defaultThresholds.length} rules active`);
         }
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);
@@ -300,7 +345,7 @@ export function createClawMeshCli(): Command {
   // ── gateway-connect ─────────────────────────────────────
   program
     .command("gateway-connect [name]")
-    .description("Connect to a remote OpenClaw gateway")
+    .description("Connect to a remote ClawMesh gateway")
     .option("--url <url>", "Gateway WebSocket URL (e.g. ws://192.168.1.39:18789)")
     .option("--password <password>", "Gateway auth password")
     .option("--token <token>", "Gateway auth token")

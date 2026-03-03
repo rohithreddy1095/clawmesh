@@ -76,7 +76,7 @@ export type GatewayConnectResult = {
 };
 
 /**
- * Connect to a remote OpenClaw gateway using the full gateway protocol
+ * Connect to a remote ClawMesh gateway using the full gateway protocol
  * (challenge-response with Ed25519 device identity signing).
  */
 export function connectToGateway(opts: GatewayConnectOptions): Promise<GatewayConnectResult> {

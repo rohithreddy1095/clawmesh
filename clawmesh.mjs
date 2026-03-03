@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 import { createClawMeshCli } from "./src/cli/clawmesh-cli.js";
 
 const program = createClawMeshCli();

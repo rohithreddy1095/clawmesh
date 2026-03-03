@@ -42,20 +42,32 @@ Most AI gateway stacks assume a single machine. That breaks when your capabiliti
 
 ClawMesh lets these discover each other via **mDNS**, establish **Ed25519 mutual trust**, and **route messages** to whichever peer has the right capability — all without a central coordinator.
 
+## Usage & Setup Guides
+
+- [Getting Started Guide](docs/getting-started.md)
+- [Command Center Setup (Mac/PC)](docs/setup-command-center.md)
+- [Field Node Setup (Jetson/Pi)](docs/setup-field-node.md)
+- [Trust & Safety Policy](.pi/skills/mesh-safety.md)
+
 ## Quickstart
 
 ```bash
 # Requirements: Node.js 22+, pnpm
 pnpm install
-pnpm test          # 62 tests across 6 files
+pnpm test          # 118 tests across 15 files
 pnpm typecheck     # tsc --noEmit
 ```
 
 ## Architecture
 
 ```
+src/agents/
+  pi-planner.ts           # Pi-powered intelligence — event-driven LLM planner
+  farm-context-loader.ts  # Loads Bhoomi farm YAML → structured FarmContext
+  types.ts                # Shared types: TaskProposal, ThresholdRule, FarmContext
+
 src/mesh/
-  manager.ts              # Orchestrator: discovery, peer clients, registries
+  node-runtime.ts         # Orchestrator: WebSocket server, peers, planner lifecycle
   discovery.ts            # mDNS polling with peer-discovered/peer-lost events
   capabilities.ts         # Capability registry (channel:*, skill:*)
   routing.ts              # Local-first routing: local caps -> mesh peers -> unavailable
@@ -67,16 +79,14 @@ src/mesh/
   context-propagator.ts   # Broadcast context frames to mesh peers
   world-model.ts          # Ingest and track mesh-wide knowledge
   mock-sensor.ts          # Mock sensor for testing context propagation
+  mock-actuator.ts        # Mock actuator for trust-gated command testing
   server-methods/         # Gateway RPC handlers (peers, trust, forward)
 
 src/infra/
   device-identity.ts      # Ed25519 key generation + deviceId derivation
-  bonjour-discovery.ts    # mDNS/Avahi/dns-sd beacon scanning
 
 src/cli/
   clawmesh-cli.ts         # Commander-based CLI
-
-src/terminal/theme.ts     # Lobster palette theming (chalk)
 ```
 
 ### Routing Decision Flow
@@ -110,14 +120,21 @@ clawmesh world                        # Query the world model
 # Basic node
 clawmesh start --name my-node --port 18789
 
-# Node with mock sensor broadcasting context every 3s
-clawmesh start --name sensor-node --port 18790 --mock-sensor --sensor-interval 3000
+# Field node (sensors + actuators)
+clawmesh start --name jetson-field-01 --port 18789 --field-node --sensor-interval 5000
 
-# Node with mock actuator for trust-gated commands
-clawmesh start --name actuator-node --mock-actuator
+# Command center (Pi planner with Anthropic Claude)
+ANTHROPIC_API_KEY=sk-... clawmesh start --name mac-main --port 18790 \
+  --command-center --peer "<deviceId>=ws://192.168.1.39:18789"
 
-# Connect to a static peer
-clawmesh start --name observer --peer "<deviceId>=ws://192.168.1.39:18790"
+# Command center with Google Gemini
+GOOGLE_API_KEY=... clawmesh start --name mac-main --port 18790 \
+  --pi-planner --pi-model "google/gemini-2.5-flash" \
+  --peer "<deviceId>=ws://192.168.1.39:18789"
+
+# Command center with thinking enabled
+clawmesh start --name mac-main --port 18790 --command-center \
+  --thinking medium --peer "<deviceId>=ws://192.168.1.39:18789"
 ```
 
 ### Connecting to Remote Gateways
@@ -226,7 +243,9 @@ mesh:
 - [x] Wire runnable `clawmesh start` gateway boot path
 - [x] Emergent context propagation (ContextFrame, WorldModel, gossip)
 - [x] Mock sensor for testing context broadcast
-- [ ] Pi-mono LLM planner integration (context -> decision -> command)
+- [x] Pi-mono LLM planner integration (pi-agent-core, multi-provider, event-driven)
+- [x] Task proposal queue with approval levels (L0–L3)
+- [x] Farm context injection from Bhoomi YAML data
 - [ ] Real GPIO sensor integration (moisture, temperature, pressure)
 - [ ] Build output + npm packaging for the `clawmesh` binary
 - [ ] Multi-node end-to-end examples (discovery + trust + forwarding)

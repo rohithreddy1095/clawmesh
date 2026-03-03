@@ -18,7 +18,7 @@ type StoredIdentity = {
 };
 
 function resolveDefaultIdentityPath(): string {
-  const stateDir = process.env.OPENCLAW_STATE_DIR?.trim() || path.join(os.homedir(), ".openclaw");
+  const stateDir = process.env.CLAWMESH_STATE_DIR?.trim() || path.join(os.homedir(), ".clawmesh");
   return path.join(stateDir, "identity", "device.json");
 }
 

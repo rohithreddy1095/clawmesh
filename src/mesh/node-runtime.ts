@@ -21,8 +21,8 @@ import type {
   MeshForwardPayload,
   MeshForwardTrustMetadata,
 } from "./types.js";
-import { createMeshTools } from "../agents/tools/mesh-tools.js";
-import { runIntelligenceAgent } from "../agents/intelligence-runner.js";
+import { PiSession } from "../agents/pi-session.js";
+import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
 
 type RpcRequestFrame = {
@@ -58,12 +58,22 @@ export type MeshNodeRuntimeOptions = {
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
-  /** Enable intelligence mode (starts LLM agent with mesh tools). */
-  enableIntelligence?: boolean;
-  /** LLM model ID for intelligence mode (default: claude-sonnet-4-5-20250929). */
-  intelligenceModel?: string;
-  /** Override the default system prompt for the intelligence agent. */
-  intelligenceSystemPrompt?: string;
+  /** Enable Pi-powered planner (uses @mariozechner/pi-agent-core). */
+  enablePiSession?: boolean;
+  /** Provider/model spec for Pi planner (e.g. "anthropic/claude-sonnet-4-5-20250929"). */
+  piSessionModelSpec?: string;
+  /** Thinking level for Pi planner. */
+  piSessionThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high";
+  /** Farm context for the planner system prompt. */
+  plannerFarmContext?: FarmContext;
+  /** Threshold rules that trigger the planner automatically. */
+  plannerThresholds?: ThresholdRule[];
+  /** How often the planner proactively checks state (ms). 0 = disabled. */
+  plannerProactiveIntervalMs?: number;
+  /** Callback when planner creates a proposal. */
+  onProposalCreated?: (proposal: TaskProposal) => void;
+  /** Callback when planner resolves a proposal. */
+  onProposalResolved?: (proposal: TaskProposal) => void;
   log?: {
     info: (msg: string) => void;
     warn: (msg: string) => void;
@@ -110,6 +120,7 @@ export class MeshNodeRuntime {
   readonly worldModel: WorldModel;
   readonly mockActuator?: MockActuatorController;
   readonly discovery?: MeshDiscovery;
+  readonly piSession?: PiSession;
 
   private readonly opts: MeshNodeRuntimeOptions;
   private readonly host: string;
@@ -123,8 +134,6 @@ export class MeshNodeRuntime {
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   private wss: WebSocketServer | null = null;
-  private piAgentAbort?: AbortController;
-
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
     this.identity = opts.identity;
@@ -245,34 +254,38 @@ export class MeshNodeRuntime {
       `mesh: listening on ws://${this.host}:${this.listenAddress().port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
     );
 
-    // Start mDNS discovery
-    (this as any).discovery = new MeshDiscovery({
-      localDeviceId: this.identity.deviceId,
-      localPort: this.listenAddress().port,
-      displayName: this.displayName,
-    });
-    this.discovery?.start();
-    this.discovery?.on("peer-discovered", (peer) => {
-      this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
-    });
+    // Start mDNS discovery (best-effort — not all platforms support it)
+    try {
+      (this as any).discovery = new MeshDiscovery({
+        localDeviceId: this.identity.deviceId,
+        localPort: this.listenAddress().port,
+        displayName: this.displayName,
+      });
+      this.discovery?.start();
+      this.discovery?.on("peer-discovered", (peer) => {
+        this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
+      });
+    } catch (err) {
+      this.log.warn(`mesh: mDNS discovery unavailable (${err}). Using static peers only.`);
+    }
 
     for (const peer of this.staticPeers) {
       this.connectToPeer(peer);
     }
 
-    // Start intelligence agent if enabled
-    if (this.opts.enableIntelligence) {
-      this.startIntelligenceAgent();
+    // Start Pi planner if enabled
+    if (this.opts.enablePiSession) {
+      this.startPiSessionLoop();
     }
 
     return this.listenAddress();
   }
 
   async stop(): Promise<void> {
-    // Stop intelligence agent
-    if (this.piAgentAbort) {
-      this.piAgentAbort.abort();
-      this.log.info("mesh: intelligence agent stopped");
+    // Stop planner
+    if (this.piSession) {
+      this.piSession.stop();
+      this.log.info("mesh: pi-planner stopped");
     }
 
     if (this.discovery) {
@@ -302,57 +315,33 @@ export class MeshNodeRuntime {
     }
   }
 
-  private startIntelligenceAgent(): void {
-    this.piAgentAbort = new AbortController();
-
-    const systemPrompt =
-      this.opts.intelligenceSystemPrompt ?? this.buildFarmIntelligencePrompt();
-    const tools = createMeshTools(this);
-
-    runIntelligenceAgent({
-      model: this.opts.intelligenceModel ?? "claude-sonnet-4-5-20250929",
-      systemPrompt,
-      tools,
-      signal: this.piAgentAbort.signal,
+  private startPiSessionLoop(): void {
+    const session = new PiSession({
+      runtime: this,
+      modelSpec: this.opts.piSessionModelSpec ?? "anthropic/claude-sonnet-4-5-20250929",
+      thinkingLevel: this.opts.piSessionThinkingLevel ?? "off",
+      farmContext: this.opts.plannerFarmContext,
+      thresholds: this.opts.plannerThresholds,
+      proactiveIntervalMs: this.opts.plannerProactiveIntervalMs ?? 60_000,
+      onProposalCreated: (proposal) => {
+        this.peerRegistry.broadcastEvent("planner.proposal", proposal);
+        this.opts.onProposalCreated?.(proposal);
+      },
+      onProposalResolved: (proposal) => {
+        this.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
+        this.opts.onProposalResolved?.(proposal);
+      },
       log: this.log,
-    }).catch((err) => {
-      this.log.error(`mesh: intelligence agent error: ${err}`);
     });
 
-    this.log.info("mesh: intelligence agent started with mesh tools");
-  }
+    (this as any).piSession = session;
 
-  private buildFarmIntelligencePrompt(): string {
-    const nodeName = this.displayName ?? this.identity.deviceId.slice(0, 12);
-    return `You are the intelligence layer for a ClawMesh farm management system.
-
-# Your Role
-Monitor sensor data from field nodes, reason over farm state, and orchestrate
-irrigation, monitoring, and other farm operations.
-
-# This Node
-- Name: ${nodeName}
-- Device ID: ${this.identity.deviceId.slice(0, 12)}...
-
-# Available Tools
-1. **query_world_model** — View sensor observations, events from all mesh nodes
-2. **execute_mesh_command** — Send commands to field nodes (pumps, sensors, etc.)
-3. **list_mesh_capabilities** — Discover available sensors and actuators
-
-# Decision Framework
-When you observe critical conditions (e.g., low moisture, temperature alerts):
-1. Query world model to understand current state
-2. Check mesh capabilities to find relevant sensors/actuators
-3. Reason about the best action
-4. Execute commands with clear reasoning
-5. Monitor feedback (execution results propagate back as context)
-
-# Farm Operations Examples
-- Moisture below threshold -> start irrigation pump
-- Temperature spike -> alert and activate cooling
-- Human input -> interpret and execute farm tasks
-
-Be proactive, safe, and always explain your reasoning.`;
+    // PiSession.start() is async (creates AgentSession)
+    session.start().then(() => {
+      this.log.info("mesh: pi-session started (createAgentSession SDK)");
+    }).catch((err) => {
+      this.log.error(`mesh: pi-session failed to start: ${err}`);
+    });
   }
 
   listenAddress(): { host: string; port: number } {
@@ -395,6 +384,15 @@ Be proactive, safe, and always explain your reasoning.`;
       },
       onError: (err) => {
         this.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
+      },
+      onEvent: (event, payload) => {
+        if (event === "context.frame") {
+          const frame = payload as ContextFrame;
+          const isNew = this.contextPropagator.handleInbound(frame, peer.deviceId);
+          if (isNew) {
+            this.worldModel.ingest(frame);
+          }
+        }
       },
     });
     this.outboundClients.set(peer.deviceId, client);
@@ -506,40 +504,56 @@ Be proactive, safe, and always explain your reasoning.`;
     // Handle context.frame events from peers
     if (frame.type === "event" && frame.event === "context.frame") {
       const contextFrame = frame.payload as ContextFrame;
-      this.worldModel.ingest(contextFrame);
+      const senderSession = this.peerRegistry.getByConnId(connId);
+      const fromDeviceId = senderSession?.deviceId ?? contextFrame.sourceDeviceId;
+      const isNew = this.contextPropagator.handleInbound(contextFrame, fromDeviceId);
+      if (isNew) {
+        this.worldModel.ingest(contextFrame);
+      }
       return;
     }
 
-    // --- MOCK INTELLIGENCE HANDLER FOR UI TESTING ---
+    // --- INTELLIGENCE HANDLER: route operator intents to planner ---
     if (frame.type === "req" && frame.method === "mesh.message.forward") {
       const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
 
-      // If targeting agent:pi, we intercept it as a local intent parse
+      // If targeting agent:pi, route to the planner loop (if active) or mock fallback
       if (fwdParams.to === "agent:pi" && fwdParams.channel === "clawmesh") {
         const cmd = fwdParams.commandDraft as Record<string, unknown> | undefined;
         const operation = cmd?.operation as Record<string, unknown> | undefined;
         if (operation?.name === "intent:parse") {
           const intentText = (operation.params as Record<string, unknown>)?.text ?? "Unknown intent";
-          this.log.info(`[mock-pi] Received natural language intent: "${intentText}"`);
 
-          // Broadcast as human input
-          this.contextPropagator.broadcastHumanInput({
-            data: { intent: intentText },
-            note: `Operator submitted intent`,
-          });
+          // Route to Pi planner if available, otherwise mock fallback
+          if (this.piSession) {
+            this.log.info(`[pi-planner] Operator intent: "${intentText}"`);
+            this.piSession.handleOperatorIntent(String(intentText));
 
-          // Simulate processing delay for inference broadcast
-          setTimeout(() => {
-            this.contextPropagator.broadcastInference({
-              data: {
-                decision: `Simulated execution of: ${intentText}`,
-                targetRef: "actuator:mock:simulated",
-                operation: "execute",
-              },
-              note: `Intelligence: Parsed intent and determined next best action.`,
+            this.contextPropagator.broadcastHumanInput({
+              data: { intent: intentText },
+              note: `Operator submitted intent via UI`,
             });
-            this.log.info(`[mock-pi] Broadcasted mock inference for intent.`);
-          }, 2000);
+          } else {
+            // Fallback: mock handler for UI testing without LLM
+            this.log.info(`[mock-pi] Received natural language intent: "${intentText}"`);
+
+            this.contextPropagator.broadcastHumanInput({
+              data: { intent: intentText },
+              note: `Operator submitted intent`,
+            });
+
+            setTimeout(() => {
+              this.contextPropagator.broadcastInference({
+                data: {
+                  decision: `Simulated execution of: ${intentText}`,
+                  targetRef: "actuator:mock:simulated",
+                  operation: "execute",
+                },
+                note: `Intelligence: Parsed intent and determined next best action.`,
+              });
+              this.log.info(`[mock-pi] Broadcasted mock inference for intent.`);
+            }, 2000);
+          }
         }
       }
     }

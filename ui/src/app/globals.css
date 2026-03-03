@@ -1,33 +1,59 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-background: #0a0a0a;
-  --color-foreground: #ededed;
+  --color-background: #080b12;
+  --color-foreground: #edf3ff;
   
-  --color-claw-accent: #FF5A2D;
-  --color-claw-accent-bright: #FF7A3D;
-  --color-claw-accent-dim: #D14A22;
+  --color-claw-accent: #ff7844;
+  --color-claw-accent-bright: #ff956b;
+  --color-claw-accent-dim: #d95b2b;
   
-  --color-mesh-active: #2FBF71;
-  --color-mesh-idle: #262626;
-  --color-mesh-alert: #E23D2D;
-  --color-mesh-info: #3D85C6;
-  --color-mesh-warn: #FFB020;
+  --color-mesh-active: #5ad87f;
+  --color-mesh-idle: #1d2432;
+  --color-mesh-alert: #ff5d4d;
+  --color-mesh-info: #45b0cb;
+  --color-mesh-warn: #ffbf5c;
   
-  --color-panel-bg: rgba(20, 20, 20, 0.7);
-  --color-panel-border: rgba(255, 255, 255, 0.1);
+  --color-panel-bg: rgba(13, 18, 30, 0.78);
+  --color-panel-border: rgba(181, 209, 255, 0.12);
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+    --font-ui: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+    --font-code: "IBM Plex Mono", "SFMono-Regular", "SF Mono", "Consolas", monospace;
+  }
+
+  html,
   body {
+    min-height: 100%;
+  }
+
+  body {
+    font-family: var(--font-ui);
     background-color: var(--color-background);
     color: var(--color-foreground);
     @apply antialiased selection:bg-claw-accent selection:text-white;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: var(--font-code);
   }
 }
 
 @layer utilities {
   .glass-panel {
-    @apply bg-panel-bg backdrop-blur-md border border-panel-border rounded-xl shadow-2xl;
+    @apply rounded-3xl border border-panel-border bg-panel-bg/90 shadow-[0_18px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl;
+  }
+
+  .section-label {
+    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-foreground/45;
+  }
+
+  .metric-card {
+    @apply rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 backdrop-blur-sm;
   }
 }

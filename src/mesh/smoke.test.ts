@@ -59,4 +59,22 @@ describe("ClawMesh smoke test", () => {
     const mod = await import("./context-propagator.js");
     expect(mod.ContextPropagator).toBeDefined();
   });
+
+  it("imports PiSession cleanly", async () => {
+    const mod = await import("../agents/pi-session.js");
+    expect(mod.PiSession).toBeDefined();
+    expect(typeof mod.PiSession).toBe("function");
+  });
+
+  it("imports ClawMesh extension factory cleanly", async () => {
+    const mod = await import("../agents/extensions/clawmesh-mesh-extension.js");
+    expect(mod.createClawMeshExtension).toBeDefined();
+    expect(typeof mod.createClawMeshExtension).toBe("function");
+  });
+
+  it("imports farm context loader cleanly", async () => {
+    const mod = await import("../agents/farm-context-loader.js");
+    expect(mod.loadBhoomiContext).toBeDefined();
+    expect(typeof mod.loadBhoomiContext).toBe("function");
+  });
 });

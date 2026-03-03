@@ -34,9 +34,9 @@ describe("MeshNodeRuntime", () => {
   let nodeB: MeshNodeRuntime | null = null;
 
   beforeEach(() => {
-    prevStateDir = process.env.OPENCLAW_STATE_DIR;
+    prevStateDir = process.env.CLAWMESH_STATE_DIR;
     tempStateDir = fs.mkdtempSync(path.join(os.tmpdir(), "clawmesh-runtime-test-"));
-    process.env.OPENCLAW_STATE_DIR = tempStateDir;
+    process.env.CLAWMESH_STATE_DIR = tempStateDir;
   });
 
   afterEach(async () => {
@@ -49,9 +49,9 @@ describe("MeshNodeRuntime", () => {
       nodeB = null;
     }
     if (prevStateDir == null) {
-      delete process.env.OPENCLAW_STATE_DIR;
+      delete process.env.CLAWMESH_STATE_DIR;
     } else {
-      process.env.OPENCLAW_STATE_DIR = prevStateDir;
+      process.env.CLAWMESH_STATE_DIR = prevStateDir;
     }
     fs.rmSync(tempStateDir, { recursive: true, force: true });
   });

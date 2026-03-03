@@ -17,7 +17,7 @@ type TrustedPeersStore = {
 const EMPTY_STORE: TrustedPeersStore = { version: 1, peers: [] };
 
 function resolveStateDir(): string {
-  const override = process.env.CLAWMESH_STATE_DIR?.trim() || process.env.OPENCLAW_STATE_DIR?.trim();
+  const override = process.env.CLAWMESH_STATE_DIR?.trim();
   if (override) {
     return override;
   }

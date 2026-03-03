@@ -28,6 +28,8 @@ export type MeshPeerClientOptions = {
   onDisconnected?: (deviceId: string) => void;
   /** Called on errors. */
   onError?: (err: Error) => void;
+  /** Called when the remote peer sends an event (e.g. context.frame). */
+  onEvent?: (event: string, payload: unknown) => void;
 };
 
 export class MeshPeerClient {
@@ -155,7 +157,11 @@ export class MeshPeerClient {
         this.ws?.close(1008, "mesh.connect rejected");
         return;
       }
-      // After connection is established, handle incoming RPC requests and responses.
+      // After connection is established, handle incoming events, RPC requests and responses.
+      if (parsed.type === "event" && typeof parsed.event === "string") {
+        this.opts.onEvent?.(parsed.event, parsed.payload);
+        return;
+      }
       if (parsed.type === "req") {
         // Peer is invoking a method on us — not handled in the outbound client.
         // Forward to the server-side handler infrastructure if needed.

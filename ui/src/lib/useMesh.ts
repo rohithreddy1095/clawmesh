@@ -3,7 +3,15 @@
 import { useEffect, useRef } from "react";
 import { useMeshStore, ContextFrame, MeshPeer } from "./store";
 
-const WS_URL = "ws://localhost:18789"; // Replace with your mesh node's local address
+const WS_URL = "ws://localhost:18790"; // Local Mac node
+
+type MeshCommandParams = {
+    to: string;
+    targetRef: string;
+    operation: string;
+    operationParams?: Record<string, unknown>;
+    note?: string;
+};
 
 export function useMesh() {
     const wsRef = useRef<WebSocket | null>(null);
@@ -68,7 +76,7 @@ export function useMesh() {
     }, [setConnected, setPeers, addFrame]);
 
     // Command to send mesh forwards
-    const sendCommand = (params: { to: string; targetRef: string; operation: string; operationParams?: any; note?: string }) => {
+    const sendCommand = (params: MeshCommandParams) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         wsRef.current.send(JSON.stringify({

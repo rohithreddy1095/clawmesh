@@ -14,7 +14,7 @@ export type ContextFrame = {
     sourceDeviceId: string;
     sourceDisplayName?: string;
     timestamp: number;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
     trust: {
         evidence_sources: string[];
         evidence_trust_tier: string;
