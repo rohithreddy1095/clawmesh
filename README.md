@@ -62,7 +62,9 @@ pnpm typecheck     # tsc --noEmit
 
 ```
 src/agents/
-  pi-planner.ts           # Pi-powered intelligence — event-driven LLM planner
+  extensions/
+    clawmesh-mesh-extension.ts # Mesh tools, commands, and trust hooks for Pi
+  pi-session.ts           # Pi-powered intelligence — event-driven LLM session
   farm-context-loader.ts  # Loads Bhoomi farm YAML → structured FarmContext
   types.ts                # Shared types: TaskProposal, ThresholdRule, FarmContext
 

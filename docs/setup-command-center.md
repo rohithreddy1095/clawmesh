@@ -63,7 +63,7 @@ Use a different provider (e.g., Google Gemini):
 ```bash
 GOOGLE_API_KEY=... npx tsx clawmesh.mjs start \
   --name mac-main --port 18790 \
-  --pi-session --pi-model "google/gemini-2.5-flash" \
+  --pi-planner --pi-model "google/gemini-2.5-flash" \
   --peer "..."
 ```
 
