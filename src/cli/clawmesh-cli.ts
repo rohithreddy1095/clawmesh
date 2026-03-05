@@ -13,6 +13,7 @@ import { loadGatewayTargets, saveGatewayTarget } from "../mesh/gateway-config.js
 import { rawDataToString } from "../infra/ws.js";
 import { loadBhoomiContext } from "../agents/farm-context-loader.js";
 import type { ThresholdRule } from "../agents/types.js";
+import { MeshTUI } from "../tui/mesh-tui.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -45,7 +46,7 @@ export function createClawMeshCli(): Command {
   program
     .name("clawmesh")
     .description("ClawMesh — mesh-first AI gateway")
-    .version("0.1.0");
+    .version("0.2.0");
 
   // ── identity ─────────────────────────────────────────────
   program
@@ -80,13 +81,14 @@ export function createClawMeshCli(): Command {
     .option("--mock-sensor", "Enable mock sensor (broadcasts periodic moisture readings)")
     .option("--sensor-interval <ms>", "Mock sensor interval in milliseconds", (v) => Number(v), 5000)
     .option("--pi-planner", "Enable Pi-powered planner (event-driven, multi-provider)")
-    .option("--pi-model <provider/model>", "Model spec (e.g. anthropic/claude-sonnet-4-5-20250929)", "anthropic/claude-sonnet-4-5-20250929")
+    .option("--pi-model <provider/model>", "Model spec (e.g. google/gemini-3.1-pro-preview)", "google/gemini-3.1-pro-preview")
     .option("--thinking <level>", "Thinking level (off|minimal|low|medium|high)", "off")
     .option("--planner-interval <ms>", "Proactive planner check interval (ms)", (v) => Number(v), 60000)
     .option("--sensors", "Shorthand: enable mock sensor")
     .option("--actuators", "Shorthand: enable mock actuator")
     .option("--field-node", "Shorthand: --sensors --actuators")
     .option("--command-center", "Shorthand: --pi-planner")
+    .option("--tui", "Launch the interactive terminal dashboard")
     .action(
       async (opts: {
         host: string;
@@ -105,6 +107,7 @@ export function createClawMeshCli(): Command {
         actuators?: boolean;
         fieldNode?: boolean;
         commandCenter?: boolean;
+        tui?: boolean;
       }) => {
         // Expand shorthand flags
         if (opts.fieldNode) {
@@ -144,6 +147,13 @@ export function createClawMeshCli(): Command {
           },
         ];
 
+        // Mutable log object — TUI will redirect these when active
+        const log = {
+          info: (msg: string) => console.log(msg),
+          warn: (msg: string) => console.warn(msg),
+          error: (msg: string) => console.error(msg),
+        };
+
         const runtime = new MeshNodeRuntime({
           identity,
           host: opts.host,
@@ -159,19 +169,15 @@ export function createClawMeshCli(): Command {
           plannerThresholds: opts.piPlanner ? defaultThresholds : undefined,
           plannerProactiveIntervalMs: opts.plannerInterval,
           onProposalCreated: (proposal) => {
-            console.log(`\n[PROPOSAL] ${proposal.approvalLevel} — ${proposal.summary}`);
-            console.log(`  Target: ${proposal.targetRef}:${proposal.operation}`);
-            console.log(`  Reasoning: ${proposal.reasoning.slice(0, 200)}`);
-            console.log(`  Task ID: ${proposal.taskId}`);
+            log.info(`\n[PROPOSAL] ${proposal.approvalLevel} — ${proposal.summary}`);
+            log.info(`  Target: ${proposal.targetRef}:${proposal.operation}`);
+            log.info(`  Reasoning: ${proposal.reasoning.slice(0, 200)}`);
+            log.info(`  Task ID: ${proposal.taskId}`);
             if (proposal.status === "awaiting_approval") {
-              console.log(`  → Awaiting human approval. Use: clawmesh approve ${proposal.taskId.slice(0, 8)}`);
+              log.info(`  → Awaiting human approval. Use: approve ${proposal.taskId.slice(0, 8)}`);
             }
           },
-          log: {
-            info: (msg) => console.log(msg),
-            warn: (msg) => console.warn(msg),
-            error: (msg) => console.error(msg),
-          },
+          log,
         });
 
         await runtime.start();
@@ -207,10 +213,124 @@ export function createClawMeshCli(): Command {
         }
         console.log("Press Ctrl+C to stop.");
 
+        // ── TUI or readline interactive handler ─────────────
+        let tui: MeshTUI | null = null;
+
+        if (opts.tui) {
+          // Launch interactive terminal dashboard
+          tui = new MeshTUI({ runtime });
+          // Redirect runtime logs into the TUI
+          log.info = tui.log.info;
+          log.warn = tui.log.warn;
+          log.error = tui.log.error;
+          tui.start();
+        } else {
+          // Fallback: readline-based stdin handler (existing behavior)
+          const readline = await import("readline");
+          const rl = readline.createInterface({ input: process.stdin, terminal: false });
+          rl.on("line", (line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) return;
+
+            const [cmd, ...args] = trimmed.split(/\s+/);
+
+            if (cmd === "proposals" || cmd === "p") {
+              const piSession = runtime.piSession;
+              if (!piSession) { console.log("Pi planner not active."); return; }
+              const all = piSession.getProposals();
+              if (all.length === 0) { console.log("No proposals."); return; }
+              for (const p of all) {
+                console.log(`  [${p.taskId.slice(0, 8)}] ${p.status.toUpperCase()} L${p.approvalLevel.slice(1)} — ${p.summary}`);
+              }
+            } else if (cmd === "approve" || cmd === "a") {
+              const piSession = runtime.piSession;
+              if (!piSession) { console.log("Pi planner not active."); return; }
+              const prefix = args[0];
+              if (!prefix) { console.log("Usage: approve <taskId-prefix>"); return; }
+              const match = piSession.getProposals({ status: "awaiting_approval" })
+                .find(p => p.taskId.startsWith(prefix));
+              if (!match) { console.log(`No awaiting proposal matching "${prefix}".`); return; }
+              console.log(`Approving: [${match.taskId.slice(0, 8)}] ${match.summary}`);
+              piSession.approveProposal(match.taskId, "operator-cli")
+                .then(result => {
+                  if (result) {
+                    console.log(`Approved: [${result.taskId.slice(0, 8)}] — agent will execute`);
+                  } else {
+                    console.log(`Approval failed (proposal may have changed status).`);
+                  }
+                })
+                .catch(err => console.error(`Approval error: ${err}`));
+            } else if (cmd === "reject" || cmd === "r") {
+              const piSession = runtime.piSession;
+              if (!piSession) { console.log("Pi planner not active."); return; }
+              const prefix = args[0];
+              if (!prefix) { console.log("Usage: reject <taskId-prefix>"); return; }
+              const match = piSession.getProposals({ status: "awaiting_approval" })
+                .find(p => p.taskId.startsWith(prefix));
+              if (!match) { console.log(`No awaiting proposal matching "${prefix}".`); return; }
+              const result = piSession.rejectProposal(match.taskId, "operator-cli");
+              if (result) {
+                console.log(`Rejected: [${result.taskId.slice(0, 8)}] ${result.summary}`);
+              } else {
+                console.log(`Reject failed.`);
+              }
+            } else if (cmd === "world" || cmd === "w") {
+              const frames = runtime.worldModel.getRecentFrames(10);
+              if (frames.length === 0) { console.log("No recent frames."); return; }
+              for (const f of frames) {
+                console.log(`  [${f.kind}] ${f.data.metric}=${f.data.value} (${f.sourceDeviceId?.slice(0, 12)})`);
+              }
+            } else if (cmd === "mode" || cmd === "status" || cmd === "s") {
+              const piSession = runtime.piSession;
+              if (!piSession) { console.log("Pi planner not active."); return; }
+              const mode = piSession.mode;
+              const pending = piSession.getProposals({ status: "awaiting_approval" }).length;
+              const total = piSession.getProposals().length;
+              console.log(`  Mode: ${mode.toUpperCase()}`);
+              console.log(`  Proposals: ${pending} awaiting approval, ${total} total`);
+              if (mode === "observing") {
+                console.log(`  → LLM calls paused. World model still ingesting. Probing periodically.`);
+              } else if (mode === "suspended") {
+                console.log(`  → All LLM calls stopped (permanent error). Use 'resume' to re-enable.`);
+              }
+            } else if (cmd === "resume") {
+              const piSession = runtime.piSession;
+              if (!piSession) { console.log("Pi planner not active."); return; }
+              if (piSession.mode === "active") {
+                console.log("Already in active mode.");
+                return;
+              }
+              const prevMode = piSession.mode;
+              piSession.resume("manual resume via CLI");
+              console.log(`Resumed from ${prevMode} → active. LLM calls re-enabled.`);
+            } else if (cmd === "help" || cmd === "h") {
+              console.log("Commands:");
+              console.log("  proposals (p)        — list all proposals");
+              console.log("  approve (a) <id>     — approve a proposal by ID prefix");
+              console.log("  reject (r) <id>      — reject a proposal by ID prefix");
+              console.log("  world (w)            — show recent world model frames");
+              console.log("  mode / status (s)    — show current session mode");
+              console.log("  resume               — resume from observing/suspended mode");
+              console.log("  help (h)             — show this help");
+              console.log("  <anything else>      — send as operator intent to Pi");
+            } else {
+              // Treat as operator intent for Pi
+              const piSession = runtime.piSession;
+              if (piSession) {
+                console.log(`[operator] Sending to Pi: "${trimmed}"`);
+                piSession.handleOperatorIntent(trimmed);
+              } else {
+                console.log(`Unknown command: ${cmd}. Type "help" for commands.`);
+              }
+            }
+          });
+        }
+
         await new Promise<void>((resolve) => {
           const shutdown = async () => {
             process.off("SIGINT", onSignal);
             process.off("SIGTERM", onSignal);
+            if (tui) tui.stop();
             await runtime.stop();
             resolve();
           };

@@ -22,8 +22,22 @@ import {
   createClawMeshExtension,
   type MeshExtensionState,
 } from "./extensions/clawmesh-mesh-extension.js";
+import { PatternMemory } from "./pattern-memory.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
+
+/**
+ * Operational mode for the PiSession.
+ *
+ * - active:    Normal operation. LLM calls proceed.
+ * - observing: Rate-limited or transient errors detected. World model
+ *              continues ingesting, thresholds fire (queued), but NO
+ *              LLM calls are made. After a cooldown period, a single
+ *              probe call is attempted. If it succeeds → active.
+ * - suspended: Hard block (403 / account disabled / permanent error).
+ *              No LLM calls until manually resumed via `resume()`.
+ */
+export type SessionMode = "active" | "observing" | "suspended";
 
 export type PiSessionOptions = {
   runtime: MeshNodeRuntime;
@@ -39,10 +53,15 @@ export type PiSessionOptions = {
   proactiveIntervalMs?: number;
   /** Max pending proposals. */
   maxPendingProposals?: number;
+  /** Errors before entering observing mode. */
+  errorThreshold?: number;
+  /** Cooldown in observing mode before a probe call (ms). Default: 15 min. */
+  observingCooldownMs?: number;
   /** Callbacks. */
   onProposalCreated?: (proposal: TaskProposal) => void;
   onProposalResolved?: (proposal: TaskProposal) => void;
   onAgentEvent?: (event: AgentEvent) => void;
+  onModeChange?: (mode: SessionMode, reason: string) => void;
   log?: {
     info: (msg: string) => void;
     warn: (msg: string) => void;
@@ -57,16 +76,34 @@ export class PiSession {
   private readonly log: NonNullable<PiSessionOptions["log"]>;
   private readonly farmContext?: FarmContext;
   private readonly extensionState: MeshExtensionState;
+  readonly patternMemory: PatternMemory;
 
   private session!: AgentSession;
-  private pendingTriggers: Array<{ reason: string; frames: ContextFrame[] }> = [];
+  private pendingTriggers: Array<{
+    reason: string;
+    frames: ContextFrame[];
+    conversationId?: string;
+    requestId?: string;
+    type: "operator_intent" | "threshold_breach" | "proactive_check";
+  }> = [];
   private thresholdLastFired = new Map<string, number>();
   private proactiveTimer?: ReturnType<typeof setInterval>;
+  private probeTimer?: ReturnType<typeof setTimeout>;
   private running = false;
   private stopped = false;
   private initialized = false;
   private model: Model<any>;
   private thinkingLevel: ThinkingLevel;
+
+  // ─── Rate-limit / observation mode state ────────────────
+  private _mode: SessionMode = "active";
+  private consecutiveErrors = 0;
+  private lastErrorTime = 0;
+  private suspendReason = "";
+  /** Errors before entering observing mode. */
+  private readonly errorThreshold: number;
+  /** Cooldown before probe in observing mode (ms). */
+  private readonly observingCooldownMs: number;
   private opts: PiSessionOptions;
 
   constructor(opts: PiSessionOptions) {
@@ -80,6 +117,9 @@ export class PiSession {
     this.farmContext = opts.farmContext;
     this.thinkingLevel = opts.thinkingLevel ?? "off";
     this.model = this.resolveModel(opts.modelSpec ?? "anthropic/claude-sonnet-4-5-20250929");
+    this.errorThreshold = opts.errorThreshold ?? 3;
+    this.observingCooldownMs = opts.observingCooldownMs ?? 15 * 60_000; // 15 minutes
+    this.patternMemory = new PatternMemory({ log: this.log });
 
     // Shared state between extension and this session controller
     this.extensionState = {
@@ -96,6 +136,160 @@ export class PiSession {
         opts.onProposalResolved?.(proposal);
       },
     };
+  }
+
+  // ─── Mode management ───────────────────────────────────
+
+  /** Current operational mode. */
+  get mode(): SessionMode {
+    return this._mode;
+  }
+
+  /**
+   * Transition to a new mode. Logs the change and notifies callback.
+   * Only logs/notifies if the mode actually changed.
+   */
+  private setMode(newMode: SessionMode, reason: string): void {
+    const prev = this._mode;
+    if (prev === newMode) return;
+    this._mode = newMode;
+    this.suspendReason = newMode === "suspended" ? reason : "";
+
+    if (newMode === "active") {
+      this.log.info(`[pi-session] MODE: active — ${reason}. LLM calls resumed.`);
+    } else if (newMode === "observing") {
+      const cooldownMin = Math.round(this.observingCooldownMs / 60_000);
+      this.log.warn(
+        `[pi-session] MODE: observing — ${reason}. ` +
+        `LLM calls paused. World model still ingesting. ` +
+        `Will probe in ${cooldownMin} min.`,
+      );
+      this.scheduleProbe();
+    } else {
+      this.log.error(
+        `[pi-session] MODE: suspended — ${reason}. ` +
+        `All LLM calls stopped. Use 'resume' command to re-enable.`,
+      );
+      this.clearProbeTimer();
+    }
+
+    this.opts.onModeChange?.(newMode, reason);
+  }
+
+  /**
+   * Schedule a single probe call after the observing cooldown.
+   * If the probe succeeds → active. If it fails → stay observing, reschedule.
+   */
+  private scheduleProbe(): void {
+    this.clearProbeTimer();
+    this.probeTimer = setTimeout(() => {
+      if (this._mode !== "observing" || this.stopped) return;
+      this.log.info(`[pi-session] Probe: attempting one LLM call to check availability...`);
+      void this.runProbe();
+    }, this.observingCooldownMs);
+  }
+
+  private clearProbeTimer(): void {
+    if (this.probeTimer) {
+      clearTimeout(this.probeTimer);
+      this.probeTimer = undefined;
+    }
+  }
+
+  /**
+   * A lightweight probe — sends a minimal prompt to see if the provider responds.
+   * On success: transition to active and drain any queued triggers.
+   * On failure: stay observing and reschedule.
+   */
+  private async runProbe(): Promise<void> {
+    if (this.running || !this.initialized) {
+      // If a cycle is already running somehow, reschedule
+      this.scheduleProbe();
+      return;
+    }
+    this.running = true;
+    try {
+      await this.session.prompt("Status check. Reply with one word: OK");
+      const msgs = this.session.state.messages;
+      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      const hasContent = lastMsg?.role === "assistant" &&
+        lastMsg.content?.some((c: any) =>
+          (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
+        );
+
+      if (hasContent) {
+        this.consecutiveErrors = 0;
+        this.lastErrorTime = 0;
+        this.setMode("active", "probe succeeded — provider is available");
+        // Drain queued triggers
+        if (this.pendingTriggers.length > 0 && !this.stopped) {
+          setTimeout(() => void this.runCycle(), 1000);
+        }
+      } else {
+        this.handleLLMFailure("probe returned empty content", false);
+      }
+    } catch (err) {
+      this.handleLLMFailure(`probe failed: ${err}`, this.isPermanentError(err));
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /**
+   * Central handler for LLM failures. Decides whether to stay observing or suspend.
+   */
+  private handleLLMFailure(reason: string, permanent: boolean): void {
+    this.consecutiveErrors++;
+    this.lastErrorTime = Date.now();
+
+    if (permanent) {
+      this.setMode("suspended", reason);
+      return;
+    }
+
+    if (this._mode === "active" && this.consecutiveErrors >= this.errorThreshold) {
+      this.setMode("observing", `${this.consecutiveErrors} consecutive errors — ${reason}`);
+    } else if (this._mode === "observing") {
+      // Still observing — reschedule probe
+      this.log.warn(`[pi-session] Probe failed (${reason}). Will retry in ${Math.round(this.observingCooldownMs / 60_000)} min.`);
+      this.scheduleProbe();
+    }
+    // If still active but below threshold, just log
+    if (this._mode === "active") {
+      this.log.warn(`[pi-session] LLM error ${this.consecutiveErrors}/${this.errorThreshold}: ${reason}`);
+    }
+  }
+
+  /**
+   * Check if an error is permanent (403 / account disabled / terms violation).
+   * These should suspend the session entirely.
+   */
+  private isPermanentError(err: unknown): boolean {
+    const msg = String(err).toLowerCase();
+    return (
+      msg.includes("403") ||
+      msg.includes("forbidden") ||
+      msg.includes("disabled") ||
+      msg.includes("terms of service") ||
+      msg.includes("account") ||
+      msg.includes("unauthorized") ||
+      msg.includes("401")
+    );
+  }
+
+  /**
+   * Manually resume from suspended or observing mode.
+   * Resets error counters and returns to active.
+   */
+  resume(reason = "manual resume"): void {
+    this.consecutiveErrors = 0;
+    this.lastErrorTime = 0;
+    this.clearProbeTimer();
+    this.setMode("active", reason);
+    // Drain queued triggers
+    if (this.pendingTriggers.length > 0 && !this.stopped) {
+      setTimeout(() => void this.runCycle(), 1000);
+    }
   }
 
   // ─── Lifecycle ──────────────────────────────────────────
@@ -177,6 +371,7 @@ export class PiSession {
       clearInterval(this.proactiveTimer);
       this.proactiveTimer = undefined;
     }
+    this.clearProbeTimer();
     this.runtime.worldModel.onIngest = undefined;
     if (this.initialized) {
       void this.session.abort();
@@ -186,12 +381,63 @@ export class PiSession {
 
   // ─── External triggers ─────────────────────────────────
 
-  handleOperatorIntent(text: string): void {
+  handleOperatorIntent(text: string, opts?: { conversationId?: string; requestId?: string }): void {
+    const conversationId = opts?.conversationId;
+    const requestId = opts?.requestId;
+
+    if (this._mode !== "active") {
+      this.log.warn(`[pi-session] Operator intent received but mode is '${this._mode}'. Queuing — use 'resume' to re-enable LLM calls.`);
+      this.pendingTriggers.push({
+        reason: `operator_intent: "${text}"`,
+        frames: [],
+        conversationId,
+        requestId,
+        type: "operator_intent",
+      });
+      return;
+    }
+
+    // Broadcast "thinking" status to UI
+    if (conversationId) {
+      this.broadcastAgentResponse({
+        conversationId,
+        requestId,
+        message: "",
+        status: "thinking",
+      });
+    }
+
     this.pendingTriggers.push({
       reason: `operator_intent: "${text}"`,
       frames: [],
+      conversationId,
+      requestId,
+      type: "operator_intent",
     });
     void this.runCycle();
+  }
+
+  /**
+   * Broadcast an agent response frame to UI subscribers and mesh peers.
+   */
+  private broadcastAgentResponse(data: {
+    conversationId?: string;
+    requestId?: string;
+    message: string;
+    status: "complete" | "thinking" | "error";
+    proposals?: string[];
+    citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
+  }): void {
+    // Send only to UI subscribers (not via context propagator to avoid duplicates)
+    this.runtime.broadcastToUI("context.frame", {
+      kind: "agent_response",
+      frameId: `ar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sourceDeviceId: this.runtime.identity.deviceId,
+      sourceDisplayName: this.runtime.displayName,
+      timestamp: Date.now(),
+      data,
+      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+    });
   }
 
   async approveProposal(taskId: string, approvedBy = "operator"): Promise<TaskProposal | null> {
@@ -200,6 +446,27 @@ export class PiSession {
 
     proposal.status = "approved";
     proposal.resolvedBy = approvedBy;
+
+    // Record approval in pattern memory
+    this.patternMemory.recordDecision({
+      approved: true,
+      triggerCondition: proposal.reasoning || proposal.summary,
+      action: {
+        operation: proposal.operation,
+        targetRef: proposal.targetRef,
+        operationParams: proposal.operationParams,
+        summary: proposal.summary,
+      },
+      triggerEventId: proposal.triggerFrameIds?.[0],
+    });
+
+    // Check if pattern should be gossiped
+    this.gossipPatternsIfReady();
+
+    if (this._mode !== "active") {
+      this.log.warn(`[pi-session] Proposal approved but mode is '${this._mode}'. Execution deferred — use 'resume' to re-enable LLM calls.`);
+      return proposal;
+    }
 
     // Tell the agent about the approval
     if (this.initialized && !this.session.isStreaming) {
@@ -218,6 +485,20 @@ export class PiSession {
     proposal.status = "rejected";
     proposal.resolvedAt = Date.now();
     proposal.resolvedBy = rejectedBy;
+
+    // Record rejection in pattern memory
+    this.patternMemory.recordDecision({
+      approved: false,
+      triggerCondition: proposal.reasoning || proposal.summary,
+      action: {
+        operation: proposal.operation,
+        targetRef: proposal.targetRef,
+        operationParams: proposal.operationParams,
+        summary: proposal.summary,
+      },
+      triggerEventId: proposal.triggerFrameIds?.[0],
+    });
+
     this.extensionState.onProposalResolved?.(proposal);
     return proposal;
   }
@@ -235,16 +516,52 @@ export class PiSession {
     return this.session;
   }
 
+  /**
+   * Gossip learned patterns to mesh peers when they cross the confidence threshold.
+   */
+  private gossipPatternsIfReady(): void {
+    const exportable = this.patternMemory.exportPatterns();
+    if (exportable.length === 0) return;
+
+    this.runtime.contextPropagator.broadcast({
+      kind: "capability_update",
+      data: {
+        type: "learned_patterns",
+        patterns: exportable,
+      },
+      trust: {
+        evidence_sources: ["human", "llm"],
+        evidence_trust_tier: "T2_operational_observation",
+      },
+      note: `${exportable.length} learned patterns from operator decisions`,
+    });
+
+    this.log.info(`[pi-session] Gossiped ${exportable.length} learned patterns to mesh`);
+  }
+
   // ─── Context handlers ──────────────────────────────────
 
   private handleIncomingFrame(frame: ContextFrame): void {
-    this.log.info(`pi-session: incoming ${frame.kind} — metric=${frame.data.metric}, value=${frame.data.value}, thresholds=${this.extensionState.thresholds.length}`);
+    // Import learned patterns from remote peers
+    if (frame.kind === "capability_update" && frame.data.type === "learned_patterns") {
+      const patterns = frame.data.patterns as any[];
+      if (Array.isArray(patterns)) {
+        this.patternMemory.importPatterns(patterns, frame.sourceDeviceId);
+      }
+      return;
+    }
+
+    // In observing/suspended mode, only log threshold breaches (not every frame)
+    if (this._mode === "active") {
+      this.log.info(`pi-session: incoming ${frame.kind} — metric=${frame.data.metric}, value=${frame.data.value}, thresholds=${this.extensionState.thresholds.length}`);
+    }
     for (const rule of this.extensionState.thresholds) {
       if (this.checkThresholdRule(rule, frame)) {
-        this.log.info(`pi-session: THRESHOLD BREACH — ${rule.ruleId}: value=${frame.data.value}`);
+        this.log.info(`pi-session: THRESHOLD BREACH — ${rule.ruleId}: value=${frame.data.value}${this._mode !== "active" ? ` (queued — mode=${this._mode})` : ""}`);
         this.pendingTriggers.push({
           reason: `threshold_breach: ${rule.ruleId} — ${rule.promptHint}`,
           frames: [frame],
+          type: "threshold_breach",
         });
       }
     }
@@ -274,11 +591,13 @@ export class PiSession {
   }
 
   private triggerProactiveCheck(): void {
+    if (this._mode !== "active") return; // Silent skip in observing/suspended
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
     this.pendingTriggers.push({
       reason: "proactive_check: periodic farm state review",
       frames: recentFrames,
+      type: "proactive_check",
     });
     void this.runCycle();
   }
@@ -286,8 +605,11 @@ export class PiSession {
   // ─── Planner cycle ─────────────────────────────────────
 
   private async runCycle(): Promise<void> {
-    if (this.running || this.stopped || !this.initialized) {
-      this.log.info(`pi-session: runCycle skipped — running=${this.running}, stopped=${this.stopped}, initialized=${this.initialized}`);
+    if (this.running || this.stopped || !this.initialized) return;
+
+    // Mode gate: only active mode makes LLM calls
+    if (this._mode !== "active") {
+      // Silently accumulate triggers — they'll drain when we go active
       return;
     }
 
@@ -306,8 +628,46 @@ export class PiSession {
       this.pendingTriggers = [];
       if (triggers.length === 0) return;
 
-      const triggerSummary = triggers.map((t) => `- ${t.reason}`).join("\n");
-      const prompt = `[PLANNER CYCLE ${new Date().toISOString()}]
+      // Separate operator intents from system triggers
+      const operatorIntents = triggers.filter(t => t.type === "operator_intent");
+      const systemTriggers = triggers.filter(t => t.type !== "operator_intent");
+
+      let prompt: string;
+      let activeConversationId: string | undefined;
+      let activeRequestId: string | undefined;
+
+      if (operatorIntents.length > 0) {
+        // Use conversational format for operator intents
+        const intent = operatorIntents[0]; // Process first intent conversationally
+        activeConversationId = intent.conversationId;
+        activeRequestId = intent.requestId;
+        const intentText = intent.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, "");
+
+        const systemContext = systemTriggers.length > 0
+          ? `\n\nAdditionally, the following system triggers occurred:\n${systemTriggers.map(t => `- ${t.reason}`).join("\n")}`
+          : "";
+
+        // Include learned patterns as context
+        const allPatterns = this.patternMemory.getAllPatterns();
+        const patternContext = allPatterns.length > 0
+          ? `\n\n[LEARNED PATTERNS from past operator decisions]\n${allPatterns.slice(0, 10).map(p =>
+              `- "${p.triggerCondition}" → ${p.action.operation} on ${p.action.targetRef} ` +
+              `(confidence: ${(p.confidence * 100).toFixed(0)}%, approved ${p.approvalCount}x, rejected ${p.rejectionCount}x)`
+            ).join("\n")}`
+          : "";
+
+        prompt = `[OPERATOR MESSAGE] "${intentText}"${systemContext}${patternContext}
+
+Respond naturally to the operator's message. Use your tools to check current sensor data if relevant. If the operator is asking for information, provide it clearly with sensor citations. If they're requesting an action that requires actuation, use propose_task. Be conversational but concise. If learned patterns are relevant, mention them.`;
+
+        // Queue remaining operator intents for next cycle
+        for (let i = 1; i < operatorIntents.length; i++) {
+          this.pendingTriggers.push(operatorIntents[i]);
+        }
+      } else {
+        // Standard planner cycle for system triggers
+        const triggerSummary = systemTriggers.map((t) => `- ${t.reason}`).join("\n");
+        prompt = `[PLANNER CYCLE ${new Date().toISOString()}]
 Triggers:
 ${triggerSummary}
 
@@ -317,30 +677,102 @@ Review the current mesh state using your tools, then either:
 3. For safe read-only operations (L0), execute them directly
 
 Always explain your reasoning. Never fabricate sensor data.`;
+      }
 
-      // Use the AgentSession's prompt — gets compaction, extension hooks, etc.
       const toolsNow = this.session.getActiveToolNames();
-      const sysPrompt = this.session.state.systemPrompt;
       const msgCount = this.session.state.messages.length;
-      this.log.info(`pi-session: runCycle — sending prompt to LLM (isStreaming=${this.session.isStreaming}, tools=${toolsNow.length}:[${toolsNow.join(",")}], sysPromptLen=${sysPrompt?.length ?? 0}, messages=${msgCount})`);
+      this.log.info(`pi-session: runCycle — sending prompt (tools=${toolsNow.length}, messages=${msgCount})`);
+
       try {
         if (this.session.isStreaming) {
-          // If currently streaming, queue as follow-up
           await this.session.followUp(prompt);
         } else {
           await this.session.prompt(prompt);
         }
-        this.log.info(`pi-session: runCycle — prompt completed`);
+
+        // Check if the LLM actually produced content (vs rate-limit / error)
+        const msgs = this.session.state.messages;
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const hasContent = lastMsg?.role === "assistant" &&
+          lastMsg.content?.some((c: any) =>
+            (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
+          );
+
+        if (hasContent) {
+          // Success — reset error tracking
+          if (this.consecutiveErrors > 0) {
+            this.log.info(`pi-session: LLM responded successfully after ${this.consecutiveErrors} error(s)`);
+          }
+          this.consecutiveErrors = 0;
+          this.lastErrorTime = 0;
+
+          // Extract full assistant text and broadcast as agent_response
+          if (activeConversationId && lastMsg?.role === "assistant") {
+            const textBlocks = lastMsg.content?.filter?.((c: any) => c.type === "text") ?? [];
+            const fullText = textBlocks.map((c: any) => c.text?.trim()).filter(Boolean).join("\n\n");
+
+            // Collect proposal IDs created during this turn
+            const proposalIds: string[] = [];
+            for (const [taskId, proposal] of this.extensionState.proposals.entries()) {
+              if (proposal.createdAt >= Date.now() - 10_000) {
+                proposalIds.push(taskId);
+              }
+            }
+
+            // Build sensor citations from recent world model frames
+            const recentFrames = this.runtime.worldModel.getRecentFrames(10);
+            const citations = recentFrames
+              .filter(f => f.kind === "observation" && f.data.metric)
+              .slice(0, 5)
+              .map(f => ({
+                metric: String(f.data.metric),
+                value: f.data.value,
+                zone: f.data.zone as string | undefined,
+                timestamp: f.timestamp,
+              }));
+
+            if (fullText) {
+              this.broadcastAgentResponse({
+                conversationId: activeConversationId,
+                requestId: activeRequestId,
+                message: fullText,
+                status: "complete",
+                proposals: proposalIds.length > 0 ? proposalIds : undefined,
+                citations: citations.length > 0 ? citations : undefined,
+              });
+            }
+          }
+        } else {
+          // Empty content — likely rate limit or silent error
+          this.handleLLMFailure("LLM returned no content (possible rate limit)", false);
+          if (activeConversationId) {
+            this.broadcastAgentResponse({
+              conversationId: activeConversationId,
+              requestId: activeRequestId,
+              message: "I'm having trouble responding right now. The system may be rate-limited. Please try again shortly.",
+              status: "error",
+            });
+          }
+        }
       } catch (promptErr) {
-        this.log.error(`pi-session: prompt failed: ${promptErr}`);
+        this.handleLLMFailure(`prompt failed: ${promptErr}`, this.isPermanentError(promptErr));
+        if (activeConversationId) {
+          this.broadcastAgentResponse({
+            conversationId: activeConversationId,
+            requestId: activeRequestId,
+            message: `An error occurred while processing your request: ${String(promptErr).slice(0, 200)}`,
+            status: "error",
+          });
+        }
       }
 
     } catch (err) {
       this.log.error(`pi-session: cycle error: ${err}`);
     } finally {
       this.running = false;
-      if (this.pendingTriggers.length > 0 && !this.stopped) {
-        setTimeout(() => void this.runCycle(), 1000);
+      // Only drain queue if still active
+      if (this._mode === "active" && this.pendingTriggers.length > 0 && !this.stopped) {
+        setTimeout(() => void this.runCycle(), 2000);
       }
     }
   }
@@ -348,26 +780,27 @@ Always explain your reasoning. Never fabricate sensor data.`;
   // ─── Session event handler ──────────────────────────────
 
   private handleSessionEvent(event: any): void {
-    // Debug: log all event types with full detail
-    const extra: string[] = [];
-    if (event.stopReason !== undefined) extra.push(`stopReason=${JSON.stringify(event.stopReason)}`);
-    if (event.reason !== undefined) extra.push(`reason=${JSON.stringify(event.reason)}`);
-    if (event.errorMessage !== undefined) extra.push(`errorMessage=${JSON.stringify(event.errorMessage)}`);
-    if (event.error !== undefined) extra.push(`error=${JSON.stringify(String(event.error))}`);
-    this.log.info(`pi-session: event type=${event.type}${extra.length ? ` ${extra.join(", ")}` : ""}`);
-
     switch (event.type) {
+      // Silently skip high-frequency streaming updates
+      case "message_update":
+        return;
+
       case "message_start":
         if (event.message) {
           const m = event.message;
-          this.log.info(`pi-session: message_start role=${m.role}, contentLen=${m.content?.length ?? 0}, model=${m.model ?? "?"}, stopReason=${m.stopReason ?? "?"}`);
+          if (m.role === "assistant" && m.model) {
+            this.log.info(`pi-session: LLM responding (model=${m.model})`);
+          }
         }
         break;
 
       case "message_end":
         if (event.message) {
           const msg = event.message;
-          this.log.info(`pi-session: message_end role=${msg.role}, stopReason=${msg.stopReason ?? "?"}, errorMessage=${msg.errorMessage ?? "none"}, content=${JSON.stringify(msg.content).slice(0, 800)}`);
+          // Log errors explicitly so we catch rate limits
+          if (msg.errorMessage) {
+            this.log.error(`pi-session: message error: ${msg.errorMessage}`);
+          }
           if (msg.role === "assistant") {
             const textContent = msg.content?.filter?.((c: any) => c.type === "text") ?? [];
             for (const block of textContent) {
@@ -379,21 +812,12 @@ Always explain your reasoning. Never fabricate sensor data.`;
                 });
               }
             }
+            const toolCalls = msg.content?.filter?.((c: any) => c.type === "toolCall") ?? [];
+            if (toolCalls.length > 0) {
+              this.log.info(`pi-session: tool calls: ${toolCalls.map((t: any) => t.name).join(", ")}`);
+            }
           }
         }
-        break;
-
-      case "agent_end":
-        // Log the full event to see what it contains
-        this.log.info(`pi-session: agent_end keys=[${Object.keys(event).join(",")}]`);
-        break;
-
-      case "auto_retry_start":
-        this.log.info(`pi-session: auto_retry_start — full event: ${JSON.stringify(event).slice(0, 500)}`);
-        break;
-
-      case "auto_retry_end":
-        this.log.info(`pi-session: auto_retry_end — full event: ${JSON.stringify(event).slice(0, 500)}`);
         break;
 
       case "tool_execution_start":
@@ -406,17 +830,21 @@ Always explain your reasoning. Never fabricate sensor data.`;
         }
         break;
 
+      case "auto_retry_start":
+        this.log.warn(`pi-session: auto-retry starting`);
+        break;
+
       case "auto_compaction_start":
-        this.log.info(`pi-session: auto-compaction triggered (${event.reason})`);
+        this.log.info(`pi-session: auto-compaction triggered`);
         break;
 
       case "auto_compaction_end":
         if (event.result) {
           this.log.info(`pi-session: compaction done`);
-        } else if (event.aborted) {
-          this.log.info(`pi-session: compaction aborted`);
         }
         break;
+
+      // agent_start, agent_end, turn_start, turn_end, auto_retry_end — skip silently
     }
   }
 

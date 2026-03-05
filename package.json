@@ -9,7 +9,7 @@
     "clawmesh": "clawmesh.mjs"
   },
   "scripts": {
-    "start": "tsx clawmesh.mjs",
+    "start": "tsx clawmesh.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

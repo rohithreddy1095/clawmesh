@@ -15,6 +15,9 @@ export class ContextPropagator {
   private seenFrameIds = new Set<string>();
   private maxSeenIds: number;
 
+  /** Optional callback for locally-originated frames (so the world model can ingest them). */
+  onLocalBroadcast?: (frame: ContextFrame) => void;
+
   constructor(
     private deps: {
       identity: DeviceIdentity;
@@ -49,6 +52,10 @@ export class ContextPropagator {
 
     this.markSeen(fullFrame.frameId);
     this.deps.peerRegistry.broadcastEvent("context.frame", fullFrame);
+
+    // Ingest locally so the world model sees our own observations
+    this.onLocalBroadcast?.(fullFrame);
+
     return fullFrame;
   }
 
@@ -144,6 +151,25 @@ export class ContextPropagator {
   }): ContextFrame {
     return this.broadcast({
       kind: "inference",
+      data: params.data,
+      trust: {
+        evidence_sources: ["llm"],
+        evidence_trust_tier: "T0_planning_inference",
+      },
+      note: params.note,
+    });
+  }
+
+  /**
+   * Create an agent response frame (conversational reply) and broadcast it.
+   * Also sends to UI subscribers via the onBroadcast callback.
+   */
+  broadcastAgentResponse(params: {
+    data: Record<string, unknown>;
+    note?: string;
+  }): ContextFrame {
+    return this.broadcast({
+      kind: "agent_response",
       data: params.data,
       trust: {
         evidence_sources: ["llm"],

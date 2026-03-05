@@ -133,6 +133,7 @@ export class MeshNodeRuntime {
 
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
+  private readonly uiSubscribers = new Set<WebSocket>();
   private wss: WebSocketServer | null = null;
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
@@ -165,6 +166,11 @@ export class MeshNodeRuntime {
       maxHistory: 1000,
       log: this.log,
     });
+
+    // Wire locally-originated frames into the world model
+    this.contextPropagator.onLocalBroadcast = (frame) => {
+      this.worldModel.ingest(frame);
+    };
 
     const sharedHandlers: GatewayRequestHandlers = {
       ...createMeshServerHandlers({
@@ -202,7 +208,68 @@ export class MeshNodeRuntime {
       );
     }
 
+    // ─── Chat & UI subscriber handlers ─────────────────────
+    sharedHandlers["chat.subscribe"] = ({ req, respond }) => {
+      const socket = (req as any)._socket as WebSocket | undefined;
+      if (socket) {
+        this.uiSubscribers.add(socket);
+        socket.addEventListener("close", () => {
+          this.uiSubscribers.delete(socket);
+        });
+        this.log.info("mesh: UI client subscribed to chat");
+      }
+      respond(true, { subscribed: true });
+    };
+
+    sharedHandlers["chat.proposal.approve"] = async ({ params, respond }) => {
+      const taskId = params.taskId as string;
+      if (!taskId) {
+        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
+        return;
+      }
+      if (!this.piSession) {
+        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
+        return;
+      }
+      const proposal = await this.piSession.approveProposal(taskId);
+      if (proposal) {
+        respond(true, { proposal });
+      } else {
+        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
+      }
+    };
+
+    sharedHandlers["chat.proposal.reject"] = ({ params, respond }) => {
+      const taskId = params.taskId as string;
+      if (!taskId) {
+        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
+        return;
+      }
+      if (!this.piSession) {
+        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
+        return;
+      }
+      const proposal = this.piSession.rejectProposal(taskId);
+      if (proposal) {
+        respond(true, { proposal });
+      } else {
+        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
+      }
+    };
+
     this.handlers = sharedHandlers;
+  }
+
+  /**
+   * Send an event to all UI WebSocket subscribers (browsers that called chat.subscribe).
+   */
+  broadcastToUI(event: string, payload: unknown): void {
+    const msg = JSON.stringify({ type: "event", event, payload });
+    for (const ws of this.uiSubscribers) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(msg);
+      }
+    }
   }
 
   async start(): Promise<{ host: string; port: number }> {
@@ -238,6 +305,7 @@ export class MeshNodeRuntime {
 
       socket.on("close", () => {
         this.inboundSocketConnIds.delete(socket);
+        this.uiSubscribers.delete(socket);
         const deviceId = this.peerRegistry.unregister(connId);
         if (deviceId) {
           this.capabilityRegistry.removePeer(deviceId);
@@ -325,11 +393,16 @@ export class MeshNodeRuntime {
       proactiveIntervalMs: this.opts.plannerProactiveIntervalMs ?? 60_000,
       onProposalCreated: (proposal) => {
         this.peerRegistry.broadcastEvent("planner.proposal", proposal);
+        this.broadcastToUI("planner.proposal", proposal);
         this.opts.onProposalCreated?.(proposal);
       },
       onProposalResolved: (proposal) => {
         this.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
+        this.broadcastToUI("planner.proposal.resolved", proposal);
         this.opts.onProposalResolved?.(proposal);
+      },
+      onModeChange: (mode, reason) => {
+        this.log.info(`[pi-mode] ${mode.toUpperCase()} — ${reason}`);
       },
       log: this.log,
     });
@@ -523,35 +596,56 @@ export class MeshNodeRuntime {
         const operation = cmd?.operation as Record<string, unknown> | undefined;
         if (operation?.name === "intent:parse") {
           const intentText = (operation.params as Record<string, unknown>)?.text ?? "Unknown intent";
+          const conversationId = ((operation.params as Record<string, unknown>)?.conversationId as string) || randomUUID();
+          const requestId = randomUUID();
 
           // Route to Pi planner if available, otherwise mock fallback
           if (this.piSession) {
-            this.log.info(`[pi-planner] Operator intent: "${intentText}"`);
-            this.piSession.handleOperatorIntent(String(intentText));
+            this.log.info(`[pi-planner] Operator intent: "${intentText}" (conv=${conversationId.slice(0, 8)})`);
 
             this.contextPropagator.broadcastHumanInput({
-              data: { intent: intentText },
+              data: { intent: intentText, conversationId, requestId },
               note: `Operator submitted intent via UI`,
             });
+
+            this.piSession.handleOperatorIntent(String(intentText), { conversationId, requestId });
           } else {
             // Fallback: mock handler for UI testing without LLM
             this.log.info(`[mock-pi] Received natural language intent: "${intentText}"`);
 
             this.contextPropagator.broadcastHumanInput({
-              data: { intent: intentText },
+              data: { intent: intentText, conversationId, requestId },
               note: `Operator submitted intent`,
             });
 
+            // Send thinking status to UI
+            this.broadcastToUI("context.frame", {
+              kind: "agent_response",
+              frameId: randomUUID(),
+              sourceDeviceId: this.identity.deviceId,
+              sourceDisplayName: this.displayName,
+              timestamp: Date.now(),
+              data: { conversationId, requestId, message: "", status: "thinking" },
+              trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+            });
+
             setTimeout(() => {
-              this.contextPropagator.broadcastInference({
+              const responseFrame = {
+                kind: "agent_response" as const,
+                frameId: randomUUID(),
+                sourceDeviceId: this.identity.deviceId,
+                sourceDisplayName: this.displayName,
+                timestamp: Date.now(),
                 data: {
-                  decision: `Simulated execution of: ${intentText}`,
-                  targetRef: "actuator:mock:simulated",
-                  operation: "execute",
+                  conversationId,
+                  requestId,
+                  message: `I received your intent: "${intentText}". This is a simulated response — enable the Pi planner (--pi-planner) for real intelligence.`,
+                  status: "complete",
                 },
-                note: `Intelligence: Parsed intent and determined next best action.`,
-              });
-              this.log.info(`[mock-pi] Broadcasted mock inference for intent.`);
+                trust: { evidence_sources: ["llm" as const], evidence_trust_tier: "T0_planning_inference" as const },
+              };
+              this.broadcastToUI("context.frame", responseFrame);
+              this.log.info(`[mock-pi] Broadcasted mock agent_response for intent.`);
             }, 2000);
           }
         }

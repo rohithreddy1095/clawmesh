@@ -5,7 +5,8 @@ export type ContextFrameKind =
   | "event" // Task completed, state change
   | "human_input" // Operator commands, notes
   | "inference" // LLM-derived conclusions
-  | "capability_update"; // Node capabilities changed
+  | "capability_update" // Node capabilities changed
+  | "agent_response"; // Conversational response from intelligence layer
 
 export type ContextFrame = {
   kind: ContextFrameKind;
