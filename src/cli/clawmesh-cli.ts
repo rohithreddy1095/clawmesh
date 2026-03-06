@@ -20,6 +20,32 @@ function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
+function loadLocalEnvFiles(): void {
+  for (const path of [".env.local", ".env"]) {
+    try {
+      process.loadEnvFile(path);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+}
+
+async function readSecretFromStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    throw new Error("stdin is a TTY; pass the value directly or pipe it with --from-stdin");
+  }
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+
+  return Buffer.concat(chunks).toString("utf8").replace(/\r?\n$/, "");
+}
+
 function parsePeerSpec(spec: string): MeshStaticPeer {
   const trimmed = spec.trim();
   const separator = trimmed.includes("=") ? "=" : "@";
@@ -43,6 +69,8 @@ function parsePeerSpec(spec: string): MeshStaticPeer {
 }
 
 export function createClawMeshCli(): Command {
+  loadLocalEnvFiles();
+
   const program = new Command();
   program
     .name("clawmesh")
@@ -518,14 +546,24 @@ export function createClawMeshCli(): Command {
     .description("Manage stored credentials (API keys, tokens)");
 
   cred
-    .command("set <key> <value>")
+    .command("set <key> [value]")
     .description("Store a credential (e.g. provider/google, channel/telegram)")
     .option("--label <label>", "Human-readable label")
-    .action((key: string, value: string, opts: { label?: string }) => {
+    .option("--from-stdin", "Read the credential value from stdin instead of the command line")
+    .action(async (key: string, value: string | undefined, opts: { label?: string; fromStdin?: boolean }) => {
+      const secret = opts.fromStdin ? await readSecretFromStdin() : value;
+      if (!secret) {
+        console.error("Missing credential value. Pass it as an argument or pipe it with --from-stdin.");
+        process.exit(1);
+      }
+
       const store = new CredentialStore();
-      store.set(key, value, opts.label);
+      store.set(key, secret, opts.label);
       const envVar = CredentialStore.envVarForProvider(key.replace("provider/", ""));
       console.log(`Stored: ${key}`);
+      if (!opts.fromStdin) {
+        console.warn("  Warning: passing secrets as CLI args can leak into shell history. Prefer --from-stdin or env vars.");
+      }
       if (key.startsWith("provider/") && envVar) {
         console.log(`  → Will inject as ${envVar} on next 'clawmesh start'`);
       }
@@ -536,15 +574,22 @@ export function createClawMeshCli(): Command {
 
   cred
     .command("get <key>")
-    .description("Show a stored credential value")
-    .action((key: string) => {
+    .description("Show masked credential metadata; use --reveal to print the full value")
+    .option("--reveal", "Print the full credential value")
+    .action((key: string, opts: { reveal?: boolean }) => {
       const store = new CredentialStore();
       const entry = store.getEntry(key);
       if (!entry) {
         console.log(`Not found: ${key}`);
         return;
       }
-      console.log(entry.value);
+      if (opts.reveal) {
+        console.warn("Warning: printing secrets to stdout can leak them into logs or terminal history.");
+        console.log(entry.value);
+        return;
+      }
+      console.log(`${key}  ${CredentialStore.maskValue(entry.value)}  added ${entry.addedAt.slice(0, 10)}`);
+      console.log("Use --reveal only when you explicitly need the raw value.");
     });
 
   cred

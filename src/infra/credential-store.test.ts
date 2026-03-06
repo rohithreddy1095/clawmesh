@@ -18,8 +18,8 @@ describe("CredentialStore", () => {
   });
 
   it("set + get round-trips a credential", () => {
-    store.set("provider/google", "AIzaSy...", "My Google key");
-    expect(store.get("provider/google")).toBe("AIzaSy...");
+    store.set("provider/google", "test-google-credential-value", "My Google key");
+    expect(store.get("provider/google")).toBe("test-google-credential-value");
     expect(store.getEntry("provider/google")?.label).toBe("My Google key");
   });
 
@@ -38,12 +38,12 @@ describe("CredentialStore", () => {
   });
 
   it("list masks values", () => {
-    store.set("provider/google", "AIzaSyDpDuaUv6lmsdfdQFHdTE2DR1KheVHXi_s");
+    store.set("provider/google", "test-google-credential-value");
     const entries = store.list();
     expect(entries).toHaveLength(1);
     expect(entries[0].key).toBe("provider/google");
-    expect(entries[0].masked).toBe("AIza…Xi_s");
-    expect(entries[0].masked).not.toContain("sdfd");
+    expect(entries[0].masked).toMatch(/^\[redacted len=\d+ sha256=[0-9a-f]{12}\]$/);
+    expect(entries[0].masked).not.toContain("test-google");
   });
 
   it("injectProviderEnvVars sets GEMINI_API_KEY for google", () => {

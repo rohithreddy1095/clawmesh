@@ -15,6 +15,7 @@
  * them up automatically.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -109,9 +110,7 @@ export class CredentialStore {
       key,
       label: entry.label,
       addedAt: entry.addedAt,
-      masked: entry.value.length > 8
-        ? entry.value.slice(0, 4) + "…" + entry.value.slice(-4)
-        : "****",
+      masked: CredentialStore.maskValue(entry.value),
     }));
   }
 
@@ -125,6 +124,19 @@ export class CredentialStore {
   /** Get the env var name for a provider. */
   static envVarForProvider(provider: string): string | undefined {
     return PROVIDER_ENV_MAP[provider];
+  }
+
+  /**
+   * Return a non-reversible display string for a secret.
+   * We avoid showing any raw prefix/suffix characters so list/get output
+   * does not leak partial credential material into logs or screenshots.
+   */
+  static maskValue(value: string): string {
+    const fingerprint = createHash("sha256")
+      .update(value, "utf8")
+      .digest("hex")
+      .slice(0, 12);
+    return `[redacted len=${value.length} sha256=${fingerprint}]`;
   }
 
   /**

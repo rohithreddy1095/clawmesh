@@ -2,3 +2,5 @@ node_modules/
 dist/
 .clawmesh-run/
 backend.log
+.env
+.env.local
