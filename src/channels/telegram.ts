@@ -354,11 +354,15 @@ export class TelegramChannel {
       }
     });
 
-    // Natural language messages → operator intent
-    this.bot.on("message:text", async (ctx) => {
-      const text = ctx.message.text;
-      const chatId = ctx.chat.id;
-      const senderName = ctx.from?.first_name ?? `user:${ctx.from?.id}`;
+    // Natural language messages and channel posts → operator intent
+    const handleTextUpdate = async (ctx: GrammyContext) => {
+      const text = ctx.msg?.text;
+      const chatId = ctx.chat?.id;
+      if (!text || !chatId) return;
+
+      const senderName = ctx.from?.first_name
+        ?? ("title" in ctx.chat && typeof ctx.chat.title === "string" ? ctx.chat.title : undefined)
+        ?? `chat:${chatId}`;
 
       this.log.info(`[telegram] Message from ${senderName} (chat ${chatId}): "${text.slice(0, 100)}"`);
 
@@ -371,7 +375,7 @@ export class TelegramChannel {
           intent: text,
           conversationId: conv.conversationId,
           source: "telegram",
-          senderId: String(ctx.from?.id),
+          senderId: String(ctx.from?.id ?? chatId),
           senderName,
         },
         note: `Telegram message from ${senderName}: "${text.slice(0, 100)}"`,
@@ -380,8 +384,10 @@ export class TelegramChannel {
       // Route to Pi planner
       const pi = this.runtime.piSession;
       if (pi) {
-        // Send typing indicator
-        await ctx.replyWithChatAction("typing");
+        // Channel posts do not support chat actions like "typing".
+        if (ctx.from) {
+          await ctx.replyWithChatAction("typing");
+        }
 
         const requestId = randomUUID();
         pi.handleOperatorIntent(text, {
@@ -403,7 +409,10 @@ export class TelegramChannel {
           await ctx.reply("I received your message, but no planner is active. Start with --pi-planner to enable AI responses.");
         }
       }
-    });
+    };
+
+    this.bot.on("message:text", handleTextUpdate);
+    this.bot.on("channel_post:text", handleTextUpdate);
 
     // Error handler
     this.bot.catch((err) => {
