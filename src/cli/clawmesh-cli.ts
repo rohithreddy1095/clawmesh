@@ -14,6 +14,7 @@ import { rawDataToString } from "../infra/ws.js";
 import { loadBhoomiContext } from "../agents/farm-context-loader.js";
 import type { ThresholdRule } from "../agents/types.js";
 import { MeshTUI } from "../tui/mesh-tui.js";
+import { CredentialStore } from "../infra/credential-store.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -89,6 +90,9 @@ export function createClawMeshCli(): Command {
     .option("--field-node", "Shorthand: --sensors --actuators")
     .option("--command-center", "Shorthand: --pi-planner")
     .option("--tui", "Launch the interactive terminal dashboard")
+    .option("--telegram", "Enable Telegram channel (requires TELEGRAM_BOT_TOKEN env)")
+    .option("--telegram-token <token>", "Telegram Bot API token (or set TELEGRAM_BOT_TOKEN)")
+    .option("--telegram-chat <chatId>", "Allowed Telegram chat ID (repeatable)", collectOption, [])
     .action(
       async (opts: {
         host: string;
@@ -108,6 +112,9 @@ export function createClawMeshCli(): Command {
         fieldNode?: boolean;
         commandCenter?: boolean;
         tui?: boolean;
+        telegram?: boolean;
+        telegramToken?: string;
+        telegramChat: string[];
       }) => {
         // Expand shorthand flags
         if (opts.fieldNode) {
@@ -126,6 +133,14 @@ export function createClawMeshCli(): Command {
 
         const identity = loadOrCreateDeviceIdentity();
         const staticPeers = opts.peer.map(parsePeerSpec);
+
+        // ── Load credential store and inject API keys into env ──
+        const credStore = new CredentialStore();
+        const injectedEnvVars = credStore.injectProviderEnvVars();
+        if (injectedEnvVars.length > 0) {
+          console.log(`Credentials: injected ${injectedEnvVars.join(", ")} from ~/.clawmesh/credentials.json`);
+        }
+
         // Load farm context for the planner
         const farmContext = opts.piPlanner ? loadBhoomiContext() : undefined;
 
@@ -153,6 +168,14 @@ export function createClawMeshCli(): Command {
           warn: (msg: string) => console.warn(msg),
           error: (msg: string) => console.error(msg),
         };
+
+        // Pre-register channel:telegram capability if Telegram is going to be enabled
+        const telegramToken = opts.telegramToken || process.env.TELEGRAM_BOT_TOKEN || credStore.getChannelToken("telegram");
+        if (opts.telegram || telegramToken) {
+          if (!opts.capability.includes("channel:telegram")) {
+            opts.capability.push("channel:telegram");
+          }
+        }
 
         const runtime = new MeshNodeRuntime({
           identity,
@@ -208,6 +231,31 @@ export function createClawMeshCli(): Command {
           console.log("  Farm context: Bhoomi Natural (loaded from farm/bhoomi/)");
           console.log(`  Thresholds: ${defaultThresholds.length} rules active`);
         }
+
+        // ── Telegram channel ──────────────────────────────
+        let telegramChannel: import("../channels/telegram.js").TelegramChannel | null = null;
+
+        if (opts.telegram || opts.telegramToken || process.env.TELEGRAM_BOT_TOKEN || credStore.getChannelToken("telegram")) {
+          const token = opts.telegramToken || process.env.TELEGRAM_BOT_TOKEN || credStore.getChannelToken("telegram");
+          if (!token) {
+            console.error("Telegram enabled but no token provided. Set TELEGRAM_BOT_TOKEN or use --telegram-token.");
+            process.exit(1);
+          }
+
+          const { TelegramChannel } = await import("../channels/telegram.js");
+          const allowedChatIds = opts.telegramChat.map(Number).filter(n => !isNaN(n));
+
+          telegramChannel = new TelegramChannel({
+            token,
+            runtime,
+            allowedChatIds,
+            log,
+          });
+
+          await telegramChannel.start();
+          console.log(`Telegram: enabled (${allowedChatIds.length > 0 ? `${allowedChatIds.length} allowed chats` : "all chats"})`);
+        }
+
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);
         }
@@ -331,6 +379,7 @@ export function createClawMeshCli(): Command {
             process.off("SIGINT", onSignal);
             process.off("SIGTERM", onSignal);
             if (tui) tui.stop();
+            if (telegramChannel) await telegramChannel.stop();
             await runtime.stop();
             resolve();
           };
@@ -459,6 +508,74 @@ export function createClawMeshCli(): Command {
         console.log(`Peer removed: ${deviceId}`);
       } else {
         console.log(`Peer not found: ${deviceId}`);
+      }
+    });
+
+  // ── credentials ─────────────────────────────────────────
+  const cred = program
+    .command("credential")
+    .alias("cred")
+    .description("Manage stored credentials (API keys, tokens)");
+
+  cred
+    .command("set <key> <value>")
+    .description("Store a credential (e.g. provider/google, channel/telegram)")
+    .option("--label <label>", "Human-readable label")
+    .action((key: string, value: string, opts: { label?: string }) => {
+      const store = new CredentialStore();
+      store.set(key, value, opts.label);
+      const envVar = CredentialStore.envVarForProvider(key.replace("provider/", ""));
+      console.log(`Stored: ${key}`);
+      if (key.startsWith("provider/") && envVar) {
+        console.log(`  → Will inject as ${envVar} on next 'clawmesh start'`);
+      }
+      if (key.startsWith("channel/")) {
+        console.log(`  → Will be used by '${key.replace("channel/", "")}' channel on next start`);
+      }
+    });
+
+  cred
+    .command("get <key>")
+    .description("Show a stored credential value")
+    .action((key: string) => {
+      const store = new CredentialStore();
+      const entry = store.getEntry(key);
+      if (!entry) {
+        console.log(`Not found: ${key}`);
+        return;
+      }
+      console.log(entry.value);
+    });
+
+  cred
+    .command("list")
+    .description("List all stored credentials (values masked)")
+    .action(() => {
+      const store = new CredentialStore();
+      const entries = store.list();
+      if (entries.length === 0) {
+        console.log("No stored credentials.");
+        console.log("Use: clawmesh credential set provider/google <api-key>");
+        return;
+      }
+      for (const e of entries) {
+        const label = e.label ? ` (${e.label})` : "";
+        const envVar = CredentialStore.envVarForProvider(e.key.replace("provider/", ""));
+        const envHint = envVar ? ` → ${envVar}` : "";
+        console.log(`  ${e.key}${label}  ${e.masked}  added ${e.addedAt.slice(0, 10)}${envHint}`);
+      }
+    });
+
+  cred
+    .command("delete <key>")
+    .alias("rm")
+    .description("Delete a stored credential")
+    .action((key: string) => {
+      const store = new CredentialStore();
+      if (store.delete(key)) {
+        console.log(`Deleted: ${key}`);
+      } else {
+        console.log(`Not found: ${key}`);
       }
     });
 
