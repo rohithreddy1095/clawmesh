@@ -1,0 +1,374 @@
+schema_version: "0.1"
+status: "placeholder"
+note: "Approximate positions for 3D rendering. Replace with measured values after field survey."
+needs_field_validation: true
+
+coordinate_system:
+  type: "farm_local_meters"
+  origin_label: "Pump house NE corner (assumed)"
+  axes:
+    x: "East"
+    y: "Up"
+    z: "South"
+  geo_anchor:
+    lat: null               # ≈ 29.37°N Shamli (approximate, not measured)
+    lon: null               # ≈ 77.30°E Shamli (approximate, not measured)
+    bearing_deg: null       # rotation from farm-X to true east
+  farm_bounds:
+    x_min: 0
+    x_max: 200              # ~10 acres ≈ 200m × 200m (rough square assumption)
+    z_min: 0
+    z_max: 200
+
+zones:
+  - zone_id: "z-water-infra"
+    polygon: [[0,0], [20,0], [20,25], [0,25]]
+    elevation_base: 0
+    color: "#3B82F6"         # blue
+    opacity: 0.25
+
+  - zone_id: "z-food-forest-core"
+    polygon: [[25,30], [160,30], [160,150], [25,150]]
+    elevation_base: 0
+    layer_heights:
+      canopy_top: 12
+      subcanopy_top: 6
+      shrub_top: 2.5
+      ground_top: 0.5
+    color: "#22C55E"         # green
+    opacity: 0.15
+
+  - zone_id: "z-flower-production"
+    polygon: [[25,155], [100,155], [100,190], [25,190]]
+    elevation_base: 0
+    layer_heights:
+      shrub_top: 1.5
+      ground_top: 0.3
+    color: "#F59E0B"         # amber
+    opacity: 0.2
+
+  - zone_id: "z-rice-or-seasonal-grain"
+    polygon: [[105,155], [180,155], [180,190], [105,190]]
+    elevation_base: 0
+    layer_heights:
+      ground_top: 1.0
+    color: "#84CC16"         # lime
+    opacity: 0.2
+
+  - zone_id: "z-compost-inputs"
+    polygon: [[165,30], [195,30], [195,70], [165,70]]
+    elevation_base: 0
+    color: "#A16207"         # brown
+    opacity: 0.25
+
+  - zone_id: "z-nursery-grafting-trials"
+    polygon: [[165,75], [195,75], [195,120], [165,120]]
+    elevation_base: 0
+    layer_heights:
+      shrub_top: 2.0
+      ground_top: 0.5
+    color: "#8B5CF6"         # purple
+    opacity: 0.2
+
+  - zone_id: "z-harvest-packing"
+    polygon: [[165,125], [195,125], [195,150], [165,150]]
+    elevation_base: 0
+    color: "#EC4899"         # pink
+    opacity: 0.25
+
+  - zone_id: "z-beekeeping-pollinators"
+    polygon: [[140,5], [170,5], [170,25], [140,25]]
+    elevation_base: 0
+    color: "#FBBF24"         # yellow
+    opacity: 0.2
+
+assets:
+  - asset_id: "pump-main-01"
+    type: "pump"
+    position: [8, 0, 10]
+    model_hint: "pump_submersible"
+    zone_id: "z-water-infra"
+
+  - asset_id: "tank-01"
+    type: "tank_overhead"
+    position: [12, 0, 15]
+    dimensions:
+      diameter_m: 3
+      height_m: 2.5
+    zone_id: "z-water-infra"
+
+  - asset_id: "filter-01"
+    type: "filter"
+    position: [10, 0, 12]
+    zone_id: "z-water-infra"
+
+  - asset_id: "manifold-01"
+    type: "manifold"
+    position: [15, 0, 20]
+    zone_id: "z-water-infra"
+
+  - asset_id: "valve-zone-core-01"
+    type: "valve"
+    position: [25, -0.3, 90]
+    zone_id: "z-food-forest-core"
+    mesh_capability: "actuator:valve:valve-zone-core-01"
+
+  - asset_id: "valve-zone-flower-01"
+    type: "valve"
+    position: [25, -0.3, 170]
+    zone_id: "z-flower-production"
+    mesh_capability: "actuator:valve:valve-zone-flower-01"
+
+  - asset_id: "valve-zone-rice-01"
+    type: "valve"
+    position: [105, -0.3, 170]
+    zone_id: "z-rice-or-seasonal-grain"
+    mesh_capability: "actuator:valve:valve-zone-rice-01"
+
+  - asset_id: "valve-zone-nursery-01"
+    type: "valve"
+    position: [165, -0.3, 95]
+    zone_id: "z-nursery-grafting-trials"
+    mesh_capability: "actuator:valve:valve-zone-nursery-01"
+
+sensors:
+  - sensor_id: "soil-moisture-core-01"
+    type: "soil_moisture"
+    position: [70, -0.15, 90]
+    zone_id: "z-food-forest-core"
+    mesh_capability: "sensor:soil-moisture:z-food-forest-core"
+    model_hint: "probe_soil"
+
+  - sensor_id: "soil-moisture-core-02"
+    type: "soil_moisture"
+    position: [120, -0.15, 70]
+    zone_id: "z-food-forest-core"
+    mesh_capability: "sensor:soil-moisture:z-food-forest-core-02"
+    model_hint: "probe_soil"
+
+  - sensor_id: "soil-moisture-flower-01"
+    type: "soil_moisture"
+    position: [60, -0.15, 170]
+    zone_id: "z-flower-production"
+    mesh_capability: "sensor:soil-moisture:z-flower-production"
+    model_hint: "probe_soil"
+
+  - sensor_id: "soil-temp-core-01"
+    type: "soil_temperature"
+    position: [90, -0.1, 110]
+    zone_id: "z-food-forest-core"
+    mesh_capability: "sensor:soil-temp:z-food-forest-core"
+    model_hint: "probe_soil"
+
+  - sensor_id: "weather-station-01"
+    type: "weather_station"
+    position: [10, 3, 5]
+    zone_id: "z-water-infra"
+    mesh_capability: "sensor:air-temp:site"
+    model_hint: "pole_weather"
+
+  - sensor_id: "tank-level-01"
+    type: "tank_level"
+    position: [12, 2, 15]
+    zone_id: "z-water-infra"
+    mesh_capability: "sensor:tank-level:tank-01"
+    model_hint: "ultrasonic_level"
+
+  - sensor_id: "flow-main-01"
+    type: "flow_meter"
+    position: [15, -0.3, 20]
+    zone_id: "z-water-infra"
+    mesh_capability: "sensor:flow:mainline-01"
+    model_hint: "flow_inline"
+
+water_lines:
+  - line_id: "mainline-01"
+    from_asset: "pump-main-01"
+    to_asset: "manifold-01"
+    waypoints: [[8, -0.3, 10], [8, -0.3, 20], [15, -0.3, 20]]
+    pipe_diameter_mm: 63
+    material: "HDPE"
+    buried: true
+    color: "#3B82F6"
+
+  - line_id: "subline-to-core"
+    from_asset: "manifold-01"
+    to_asset: "valve-zone-core-01"
+    waypoints: [[15, -0.3, 20], [15, -0.3, 90], [25, -0.3, 90]]
+    pipe_diameter_mm: 40
+    material: "HDPE"
+    buried: true
+    color: "#60A5FA"
+
+  - line_id: "subline-to-flower"
+    from_asset: "manifold-01"
+    to_asset: "valve-zone-flower-01"
+    waypoints: [[15, -0.3, 20], [15, -0.3, 170], [25, -0.3, 170]]
+    pipe_diameter_mm: 32
+    material: "HDPE"
+    buried: true
+    color: "#60A5FA"
+
+  - line_id: "subline-to-rice"
+    from_asset: "manifold-01"
+    to_asset: "valve-zone-rice-01"
+    waypoints: [[15, -0.3, 20], [15, -0.3, 170], [105, -0.3, 170]]
+    pipe_diameter_mm: 32
+    material: "HDPE"
+    buried: true
+    color: "#60A5FA"
+
+  - line_id: "subline-to-nursery"
+    from_asset: "manifold-01"
+    to_asset: "valve-zone-nursery-01"
+    waypoints: [[15, -0.3, 20], [100, -0.3, 20], [100, -0.3, 95], [165, -0.3, 95]]
+    pipe_diameter_mm: 32
+    material: "HDPE"
+    buried: true
+    color: "#60A5FA"
+
+  - line_id: "drip-core-row-01"
+    from_asset: "valve-zone-core-01"
+    to_zone: "z-food-forest-core"
+    waypoints: [[25, 0, 90], [155, 0, 90]]
+    pipe_diameter_mm: 16
+    material: "LLDPE_drip"
+    buried: false
+    color: "#92400E"
+    drip_spacing_cm: 30
+    drip_flow_lph: 2
+
+  - line_id: "drip-core-row-02"
+    from_asset: "valve-zone-core-01"
+    to_zone: "z-food-forest-core"
+    waypoints: [[25, 0, 110], [155, 0, 110]]
+    pipe_diameter_mm: 16
+    material: "LLDPE_drip"
+    buried: false
+    color: "#92400E"
+    drip_spacing_cm: 30
+    drip_flow_lph: 2
+
+  - line_id: "drip-core-row-03"
+    from_asset: "valve-zone-core-01"
+    to_zone: "z-food-forest-core"
+    waypoints: [[25, 0, 130], [155, 0, 130]]
+    pipe_diameter_mm: 16
+    material: "LLDPE_drip"
+    buried: false
+    color: "#92400E"
+    drip_spacing_cm: 30
+    drip_flow_lph: 2
+
+crop_clusters:
+  - cluster_id: "mango-block-01"
+    zone_id: "z-food-forest-core"
+    layer: "canopy"
+    species: "Mango"
+    varieties: ["Dasheri", "Langra", "Chausa"]
+    centroid: [60, 0, 60]
+    radius_m: 20
+    tree_count_approx: 25
+    avg_height_m: 10
+    model_hint: "tree_canopy_broad"
+
+  - cluster_id: "litchi-block-01"
+    zone_id: "z-food-forest-core"
+    layer: "canopy"
+    species: "Litchi"
+    varieties: ["Shahi"]
+    centroid: [110, 0, 55]
+    radius_m: 15
+    tree_count_approx: 15
+    avg_height_m: 8
+    model_hint: "tree_canopy_round"
+
+  - cluster_id: "papaya-banana-01"
+    zone_id: "z-food-forest-core"
+    layer: "subcanopy"
+    species: "Papaya + Banana"
+    varieties: ["Papaya", "Elaichi Banana"]
+    centroid: [90, 0, 100]
+    radius_m: 25
+    tree_count_approx: 40
+    avg_height_m: 4
+    model_hint: "tree_subcanopy_palm"
+
+  - cluster_id: "avocado-jackfruit-01"
+    zone_id: "z-food-forest-core"
+    layer: "subcanopy"
+    species: "Avocado + Jackfruit"
+    centroid: [50, 0, 120]
+    radius_m: 15
+    tree_count_approx: 12
+    avg_height_m: 5
+    model_hint: "tree_subcanopy_broad"
+
+  - cluster_id: "gladiolus-strip-01"
+    zone_id: "z-flower-production"
+    layer: "shrub"
+    species: "Gladiolus"
+    centroid: [55, 0, 170]
+    radius_m: 30
+    plant_count_approx: 2000
+    avg_height_m: 1.2
+    model_hint: "flower_strip"
+
+  - cluster_id: "tuberose-strip-01"
+    zone_id: "z-flower-production"
+    layer: "shrub"
+    species: "Tuberose"
+    centroid: [70, 0, 185]
+    radius_m: 20
+    plant_count_approx: 1500
+    avg_height_m: 0.8
+    model_hint: "flower_strip"
+
+  - cluster_id: "turmeric-ground-01"
+    zone_id: "z-food-forest-core"
+    layer: "ground"
+    species: "Turmeric"
+    centroid: [80, 0, 135]
+    radius_m: 15
+    avg_height_m: 0.4
+    model_hint: "ground_cover_spice"
+
+  - cluster_id: "pineapple-ground-01"
+    zone_id: "z-food-forest-core"
+    layer: "ground"
+    species: "Pineapple"
+    varieties: ["Victoria Queen"]
+    centroid: [120, 0, 140]
+    radius_m: 10
+    avg_height_m: 0.5
+    model_hint: "ground_cover_pineapple"
+
+  - cluster_id: "guava-block-01"
+    zone_id: "z-food-forest-core"
+    layer: "subcanopy"
+    species: "Guava"
+    centroid: [140, 0, 90]
+    radius_m: 12
+    tree_count_approx: 10
+    avg_height_m: 4
+    model_hint: "tree_subcanopy_round"
+
+  - cluster_id: "peach-pear-01"
+    zone_id: "z-food-forest-core"
+    layer: "subcanopy"
+    species: "Peach + Pear"
+    centroid: [45, 0, 80]
+    radius_m: 10
+    tree_count_approx: 8
+    avg_height_m: 4
+    model_hint: "tree_subcanopy_round"
+
+  - cluster_id: "chiku-block-01"
+    zone_id: "z-food-forest-core"
+    layer: "subcanopy"
+    species: "Chiku (Sapodilla)"
+    centroid: [130, 0, 120]
+    radius_m: 8
+    tree_count_approx: 6
+    avg_height_m: 5
+    model_hint: "tree_subcanopy_round"
