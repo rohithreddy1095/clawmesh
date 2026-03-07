@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Activity, Map as MapIcon, Network, TerminalSquare } from "lucide-react";
+import { Activity, Map as MapIcon, Network, TerminalSquare, TreePine } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
     { icon: Network, label: "Topology", href: "/" },
+    { icon: TreePine, label: "3D Farm Twin", href: "/twin3d" },
     { icon: MapIcon, label: "Digital Twin", href: "/twin" },
     { icon: TerminalSquare, label: "Command Center", href: "/command" },
     { icon: Activity, label: "Telemetry", href: "/telemetry" },
