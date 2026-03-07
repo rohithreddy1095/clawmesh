@@ -1,7 +1,7 @@
 /**
  * ClawMesh Telegram Channel — mesh-native channel adapter.
  *
- * This is NOT a port of OpenClaw's 100+ file Telegram plugin system.
+ * This is a thin mesh-native bridge, not a heavyweight plugin system.
  * It's a thin bridge between a Telegram bot (via grammy) and the ClawMesh
  * mesh. Messages become context frames, agent responses become replies.
  *
@@ -472,14 +472,18 @@ export class TelegramChannel {
       if (!chatId) return; // Not a Telegram conversation
 
       // Format and send the response
-      void this.sendAgentResponse(chatId, message, responseData);
+      this.sendAgentResponse(chatId, message, responseData).catch(err => {
+        this.log.error(`[telegram] sendAgentResponse unhandled error: ${err}`);
+      });
     }
 
     // New proposal → send notification with inline buttons
     if (event === "planner.proposal") {
       const proposal = data as unknown as TaskProposal;
       if (proposal.status === "awaiting_approval") {
-        void this.sendProposalNotification(proposal);
+        this.sendProposalNotification(proposal).catch(err => {
+          this.log.error(`[telegram] sendProposalNotification error: ${err}`);
+        });
       }
     }
 
@@ -521,8 +525,10 @@ export class TelegramChannel {
 
       // Telegram has a 4096 char limit — chunk if needed
       const chunks = this.chunkMessage(text, 4000);
+      this.log.info(`[telegram] Sending response to chat ${chatId}: ${chunks.length} chunk(s), ${text.length} chars`);
       for (const chunk of chunks) {
-        await this.bot.api.sendMessage(chatId, chunk);
+        const result = await this.bot.api.sendMessage(chatId, chunk);
+        this.log.info(`[telegram] Sent message ${result.message_id} to chat ${chatId}`);
       }
     } catch (err) {
       this.log.error(`[telegram] Failed to send response to chat ${chatId}: ${err}`);

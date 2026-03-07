@@ -1,6 +1,6 @@
 # ClawMesh Architecture Vision: Emergent Intelligence Mesh
 
-ClawMesh represents a fundamental evolution from a traditional centralized gateway (like OpenClaw) into a sovereign, intelligent mesh network where knowledge is emergent rather than statically synchronized.
+ClawMesh represents a fundamentally different approach to distributed AI — a sovereign, intelligent mesh network where knowledge is emergent rather than statically synchronized.
 
 ## The Core Vision
 ClawMesh is not about syncing files across machines or statically watching directories. It is about **emergent context and distributed execution**. 
@@ -11,7 +11,7 @@ The mesh builds itself dynamically as nodes interact, observe, and compute.
 
 ## Core Pillars
 1. **The Mesh IS the Gateway**
-   Nodes discover each other natively via a `_clawmesh._tcp` Bonjour service, leaving the legacy OpenClaw hierarchy behind.
+   Nodes discover each other natively via a `_clawmesh._tcp` Bonjour service — no central coordinator, no hierarchy.
 
 2. **Liquid Execution & Emergent Context**
    Context is not explicitly "pushed" via git or file watchers. Instead, context is built from live operations, sensor readings, and human inputs happening on any node.
