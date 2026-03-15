@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawMesh Architecture Analysis — Deep Dive & Improvement Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+    --bg: #faf8f6;
+    --surface: #ffffff;
+    --surface2: #f3f0ed;
+    --surface-elevated: #fffcfa;
+    --surface-recessed: #f0ece8;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-bright: rgba(0, 0, 0, 0.14);
+    --text: #1e1a16;
+    --text-dim: #8a7e72;
+    --text-mid: #5c5249;
+
+    --deep-blue: #1e3a5f;
+    --deep-blue-dim: rgba(30, 58, 95, 0.08);
+    --gold: #b8860b;
+    --gold-dim: rgba(184, 134, 11, 0.08);
+    --teal: #0d6e6e;
+    --teal-dim: rgba(13, 110, 110, 0.07);
+    --terracotta: #b44c1a;
+    --terracotta-dim: rgba(180, 76, 26, 0.07);
+    --sage: #4d7a2e;
+    --sage-dim: rgba(77, 122, 46, 0.07);
+    --cranberry: #9f1239;
+    --cranberry-dim: rgba(159, 18, 57, 0.06);
+    --slate: #475569;
+    --slate-dim: rgba(71, 85, 105, 0.06);
+
+    --strength: var(--sage);
+    --strength-dim: var(--sage-dim);
+    --issue: var(--terracotta);
+    --issue-dim: var(--terracotta-dim);
+    --improve: var(--deep-blue);
+    --improve-dim: var(--deep-blue-dim);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131110;
+      --surface: #1c1917;
+      --surface2: #262220;
+      --surface-elevated: #2a2623;
+      --surface-recessed: #171412;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --text: #ece5dd;
+      --text-dim: #a09487;
+      --text-mid: #c4b9ac;
+
+      --deep-blue: #7db4e8;
+      --deep-blue-dim: rgba(125, 180, 232, 0.12);
+      --gold: #e8b94a;
+      --gold-dim: rgba(232, 185, 74, 0.1);
+      --teal: #5cc5c5;
+      --teal-dim: rgba(92, 197, 197, 0.1);
+      --terracotta: #f09060;
+      --terracotta-dim: rgba(240, 144, 96, 0.1);
+      --sage: #a3d96e;
+      --sage-dim: rgba(163, 217, 110, 0.1);
+      --cranberry: #f87171;
+      --cranberry-dim: rgba(248, 113, 113, 0.1);
+      --slate: #94a3b8;
+      --slate-dim: rgba(148, 163, 184, 0.1);
+
+      --strength: var(--sage);
+      --strength-dim: var(--sage-dim);
+      --issue: var(--terracotta);
+      --issue-dim: var(--terracotta-dim);
+      --improve: var(--deep-blue);
+      --improve-dim: var(--deep-blue-dim);
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 0%, var(--deep-blue-dim) 0%, transparent 50%),
+      radial-gradient(ellipse at 85% 100%, var(--gold-dim) 0%, transparent 40%);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ═══ ANIMATION ═══ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeScale {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .anim {
+    opacity: 0;
+    animation: fadeUp 0.5s ease forwards;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+  }
+  .anim-scale {
+    opacity: 0;
+    animation: fadeScale 0.4s ease forwards;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .anim, .anim-scale { opacity: 1; animation: none; }
+  }
+
+  /* ═══ LAYOUT ═══ */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  /* ═══ HERO ═══ */
+  .hero {
+    text-align: center;
+    padding: 60px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 16px;
+  }
+  .hero .subtitle {
+    font-size: 1.15rem;
+    color: var(--text-dim);
+    max-width: 700px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+  .hero .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .hero .stat {
+    text-align: center;
+  }
+  .hero .stat-val {
+    font-family: var(--font-mono);
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--deep-blue);
+    display: block;
+  }
+  .hero .stat-label {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  /* ═══ SECTION ═══ */
+  .section {
+    margin-bottom: 56px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .section-num {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--deep-blue);
+    background: var(--deep-blue-dim);
+    border-radius: 6px;
+    padding: 4px 10px;
+    letter-spacing: 0.05em;
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 400;
+    color: var(--text);
+  }
+  .section-intro {
+    color: var(--text-mid);
+    font-size: 1rem;
+    max-width: 800px;
+    margin-bottom: 24px;
+    line-height: 1.7;
+  }
+
+  /* ═══ CARDS ═══ */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+  .card-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: var(--border-bright);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+  .card--hero {
+    background: var(--surface-elevated);
+    border-color: var(--border-bright);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03);
+  }
+  .card--recessed {
+    background: var(--surface-recessed);
+    border-color: var(--border);
+  }
+  .card-accent {
+    position: absolute;
+    top: 0;
+    left: 24px;
+    right: 24px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+  }
+  .card h3 {
+    font-family: var(--font-body);
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  .card p, .card li {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+    line-height: 1.65;
+  }
+  .card ul {
+    list-style: none;
+    margin-top: 8px;
+  }
+  .card ul li {
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .card ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  /* ═══ TAG / BADGE ═══ */
+  .tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+    vertical-align: middle;
+  }
+  .tag--strength { color: var(--strength); background: var(--strength-dim); }
+  .tag--issue { color: var(--issue); background: var(--issue-dim); }
+  .tag--improve { color: var(--improve); background: var(--improve-dim); }
+  .tag--gold { color: var(--gold); background: var(--gold-dim); }
+  .tag--teal { color: var(--teal); background: var(--teal-dim); }
+  .tag--slate { color: var(--slate); background: var(--slate-dim); }
+
+  /* ═══ SEVERITY INDICATOR ═══ */
+  .severity {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 10px;
+  }
+  .severity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-bright);
+  }
+  .severity-dot.active { background: var(--issue); }
+  .severity-dot.active.med { background: var(--gold); }
+  .severity-dot.active.low { background: var(--teal); }
+
+  /* ═══ LAYER DIAGRAM ═══ */
+  .layers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 32px;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 16px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    transition: background 0.2s;
+  }
+  .layer:hover {
+    background: var(--surface-elevated);
+  }
+  .layer-name {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--deep-blue);
+  }
+  .layer-desc {
+    font-size: 0.88rem;
+    color: var(--text-mid);
+  }
+  .layer-files {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* ═══ FLOW ARROWS ═══ */
+  .flow-arrow {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0;
+  }
+  .flow-arrow svg {
+    width: 24px;
+    height: 24px;
+    opacity: 0.3;
+  }
+
+  /* ═══ TABLE ═══ */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  th {
+    background: var(--surface2);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-bright);
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-mid);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) { background: var(--surface-recessed); }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  /* ═══ CALLOUT ═══ */
+  .callout {
+    border-left: 4px solid var(--deep-blue);
+    background: var(--deep-blue-dim);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 24px 0;
+    font-size: 0.92rem;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+  .callout strong { color: var(--text); }
+
+  /* ═══ PHASE TIMELINE ═══ */
+  .timeline {
+    position: relative;
+    padding-left: 40px;
+    margin-top: 16px;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-bright);
+    border-radius: 1px;
+  }
+  .timeline-item {
+    position: relative;
+    padding-bottom: 32px;
+  }
+  .timeline-item:last-child { padding-bottom: 0; }
+  .timeline-dot {
+    position: absolute;
+    left: -32px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid var(--deep-blue);
+    background: var(--bg);
+  }
+  .timeline-phase {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--deep-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .timeline-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .timeline-desc {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+    line-height: 1.65;
+  }
+  .timeline-items {
+    list-style: none;
+    margin-top: 8px;
+  }
+  .timeline-items li {
+    font-size: 0.88rem;
+    color: var(--text-mid);
+    padding-left: 16px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .timeline-items li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+  }
+
+  /* ═══ DETAILS/SUMMARY ═══ */
+  details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    margin-top: 12px;
+  }
+  summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text);
+    user-select: none;
+  }
+  summary:hover { background: var(--surface-elevated); border-radius: 8px; }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  details .detail-content {
+    padding: 16px;
+    font-size: 0.88rem;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+  details .detail-content code {
+    font-size: 0.8rem;
+  }
+
+  /* ═══ VERDICT BAR ═══ */
+  .verdict {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 24px;
+  }
+  .verdict-card {
+    text-align: center;
+    padding: 24px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .verdict-val {
+    font-family: var(--font-display);
+    font-size: 2.2rem;
+    color: var(--text);
+    display: block;
+    line-height: 1.1;
+  }
+  .verdict-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 6px;
+  }
+
+  /* ═══ CONNECTION DIAGRAM ═══ */
+  .conn-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 32px 16px;
+    flex-wrap: wrap;
+  }
+  .conn-node {
+    background: var(--surface);
+    border: 2px solid var(--border-bright);
+    border-radius: 10px;
+    padding: 14px 20px;
+    text-align: center;
+    min-width: 120px;
+  }
+  .conn-node-name {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--deep-blue);
+  }
+  .conn-node-detail {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .conn-arrow {
+    font-size: 1.2rem;
+    color: var(--text-dim);
+  }
+
+  /* ═══ NAV ═══ */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 32px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav a {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    transition: background 0.2s, color 0.2s;
+  }
+  .nav a:hover {
+    background: var(--deep-blue-dim);
+    color: var(--deep-blue);
+  }
+
+  /* ═══ RESPONSIVE ═══ */
+  @media (max-width: 768px) {
+    .container { padding: 24px 16px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .card-grid-3 { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 1fr; }
+    .verdict { grid-template-columns: 1fr; }
+    .hero .stats-row { gap: 20px; }
+    .nav { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="#overview">Overview</a>
+  <a href="#layers">Architecture Layers</a>
+  <a href="#strengths">Strengths</a>
+  <a href="#issues">Issues</a>
+  <a href="#data-flow">Data Flow</a>
+  <a href="#file-map">File Map</a>
+  <a href="#improvements">Improvements</a>
+  <a href="#roadmap">Roadmap</a>
+</nav>
+
+<div class="container">
+
+  <!-- ═══════════════ HERO ═══════════════ -->
+  <header class="hero anim" style="--i: 0">
+    <h1>ClawMesh Architecture<br>Deep Analysis</h1>
+    <p class="subtitle">A comprehensive review of the distributed AI mesh architecture — what works brilliantly, what needs hardening, and a phased plan to evolve the foundation.</p>
+    <div class="stats-row">
+      <div class="stat anim-scale" style="--i: 1">
+        <span class="stat-val">9,186</span>
+        <span class="stat-label">Lines of Source</span>
+      </div>
+      <div class="stat anim-scale" style="--i: 2">
+        <span class="stat-val">54</span>
+        <span class="stat-label">Source Files</span>
+      </div>
+      <div class="stat anim-scale" style="--i: 3">
+        <span class="stat-val">135</span>
+        <span class="stat-label">Tests</span>
+      </div>
+      <div class="stat anim-scale" style="--i: 4">
+        <span class="stat-val">6</span>
+        <span class="stat-label">Architecture Layers</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════ OVERVIEW ═══════════════ -->
+  <section id="overview" class="section">
+    <div class="section-header anim" style="--i: 5">
+      <span class="section-num">01</span>
+      <h2 class="section-title">Executive Summary</h2>
+    </div>
+
+    <div class="callout anim" style="--i: 6">
+      <strong>Verdict:</strong> ClawMesh has a <em>genuinely novel architecture</em> — emergent context gossip, capability-based routing, and layered trust with LLM actuation blocking are ideas you don't find in typical distributed systems. The core design is sound and well-tested. The primary risks are in the <strong>MeshNodeRuntime god object</strong>, the lack of an <strong>event bus</strong> for decoupling, and missing <strong>operational primitives</strong> (structured logging, health checks, context sync). None of these are foundational rewrites — they're targeted refactors that preserve the architecture's strengths while making it production-ready.
+    </div>
+
+    <div class="verdict anim" style="--i: 7">
+      <div class="verdict-card">
+        <span class="verdict-val" style="color: var(--sage)">Strong</span>
+        <span class="verdict-label">Core Design</span>
+      </div>
+      <div class="verdict-card">
+        <span class="verdict-val" style="color: var(--gold)">Moderate</span>
+        <span class="verdict-label">Coupling Risk</span>
+      </div>
+      <div class="verdict-card">
+        <span class="verdict-val" style="color: var(--terracotta)">Needs Work</span>
+        <span class="verdict-label">Ops Readiness</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ LAYERS ═══════════════ -->
+  <section id="layers" class="section">
+    <div class="section-header anim" style="--i: 8">
+      <span class="section-num">02</span>
+      <h2 class="section-title">Architecture Layers</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 9">ClawMesh is organized into six cleanly separated layers. Each layer has a clear responsibility boundary — a genuine strength of the design.</p>
+
+    <div class="layers">
+      <div class="layer anim" style="--i: 10; border-left: 4px solid var(--terracotta)">
+        <span class="layer-name">Channels</span>
+        <div>
+          <div class="layer-desc">External communication bridges — Telegram, TUI, Web UI, CLI readline. Each is a thin adapter that converts external messages into mesh context frames and renders mesh responses back.</div>
+          <div class="layer-files">telegram.ts · mesh-tui.ts · ui/src/lib/useMesh.ts</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+
+      <div class="layer anim" style="--i: 11; border-left: 4px solid var(--deep-blue)">
+        <span class="layer-name">Intelligence</span>
+        <div>
+          <div class="layer-desc">LLM-powered reasoning layer. PiSession wraps the Pi SDK AgentSession with mesh extension tools (query_world_model, propose_task, list_capabilities). PatternMemory learns from operator decisions and gossips patterns to peers.</div>
+          <div class="layer-files">pi-session.ts (914L) · pattern-memory.ts · clawmesh-mesh-extension.ts · farm-context-loader.ts</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+
+      <div class="layer anim" style="--i: 12; border-left: 4px solid var(--gold)">
+        <span class="layer-name">Orchestration</span>
+        <div>
+          <div class="layer-desc">MeshNodeRuntime — the central coordinator. Manages WebSocket server, peer connections, RPC dispatch, context routing, PI session lifecycle, and UI broadcasting. <span class="tag tag--issue">GOD OBJECT</span></div>
+          <div class="layer-files">node-runtime.ts (754L) · peer-server.ts · peer-client.ts</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+
+      <div class="layer anim" style="--i: 13; border-left: 4px solid var(--teal)">
+        <span class="layer-name">Mesh Protocol</span>
+        <div>
+          <div class="layer-desc">P2P networking primitives. Capability registry, context propagation (gossip with hop limit), world model (ingest + deduplicate), routing (local-first → mesh → unavailable), and message forwarding.</div>
+          <div class="layer-files">capabilities.ts · context-propagator.ts · world-model.ts · routing.ts · forwarding.ts · command-envelope.ts</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+
+      <div class="layer anim" style="--i: 14; border-left: 4px solid var(--sage)">
+        <span class="layer-name">Trust & Security</span>
+        <div>
+          <div class="layer-desc">Ed25519 device identity, cryptographic handshake with mutual authentication, file-based trust store, T0–T3 trust tiers, L0–L3 approval levels, and the critical rule: LLM-only evidence can <em>never</em> trigger actuation.</div>
+          <div class="layer-files">device-identity.ts · handshake.ts · peer-trust.ts · trust-policy.ts</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+
+      <div class="layer anim" style="--i: 15; border-left: 4px solid var(--cranberry)">
+        <span class="layer-name">Infrastructure</span>
+        <div>
+          <div class="layer-desc">Persistent state — device keys (~/.clawmesh/identity/), credentials (mode 600), trusted peers, gateway targets, pattern memory. Also mDNS discovery via Bonjour/ciao.</div>
+          <div class="layer-files">device-identity.ts · credential-store.ts · peer-trust.ts · discovery.ts · gateway-config.ts</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ STRENGTHS ═══════════════ -->
+  <section id="strengths" class="section">
+    <div class="section-header anim" style="--i: 16">
+      <span class="section-num">03</span>
+      <h2 class="section-title">What Works Brilliantly</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 17">These are genuine architectural innovations, not just "it compiles." Several of these patterns are novel enough to be published.</p>
+
+    <div class="card-grid anim" style="--i: 18">
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">NOVEL</span>
+        <h3>Emergent Context Gossip</h3>
+        <p>Context frames propagate organically across the mesh with hop-limited gossip (max 3 hops). Nodes build local world models from frames they receive — no central database, no file sync. The <code>ContextPropagator</code> handles dedup, re-propagation, and seen-frame trimming elegantly.</p>
+        <ul>
+          <li>Bounded propagation prevents network storms</li>
+          <li>Local world models are eventually consistent</li>
+          <li>New frame types add without protocol changes</li>
+        </ul>
+      </div>
+
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">CRITICAL SAFETY</span>
+        <h3>Trust-Gated Actuation</h3>
+        <p>The trust policy (<code>evaluateMeshForwardTrust</code>) is a pure function — easy to test, impossible to bypass. The critical rule: <strong>LLM-only evidence sources are hard-blocked from triggering any physical actuation</strong>. Period. This is enforced at both sender-side and receiver-side.</p>
+        <ul>
+          <li>T0–T3 evidence tiers are cleanly ordered</li>
+          <li>L0–L3 approval levels map to real operational needs</li>
+          <li>Sender-side validation catches violations before transmission</li>
+        </ul>
+      </div>
+
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">ELEGANT</span>
+        <h3>Capability-Based Routing</h3>
+        <p><code>resolveMeshRoute()</code> is only 15 lines but captures the core insight: local-first → mesh peers → unavailable. No configuration files, no plugin registries — just advertised capabilities and capability queries.</p>
+        <ul>
+          <li>Zero-config when capabilities match</li>
+          <li>Prefix-based capability resolution for hierarchies</li>
+          <li>Clean separation from transport layer</li>
+        </ul>
+      </div>
+
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">INNOVATIVE</span>
+        <h3>Pattern Learning & Gossip</h3>
+        <p><code>PatternMemory</code> learns from operator approve/reject decisions, builds confidence scores, and when patterns mature (3+ approvals, 2+ distinct triggers), gossips them to other mesh nodes. Imported patterns start at 60% confidence — elegant trust degradation.</p>
+        <ul>
+          <li>Operator decisions become collective intelligence</li>
+          <li>Confidence-gated gossip prevents noise</li>
+          <li>Persisted to disk, survives restarts</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">SOLID</span>
+        <h3>Cryptographic Identity</h3>
+        <p>Ed25519 key generation → SHA256 fingerprint as deviceId → signed handshake with 5-minute clock drift tolerance → mutual authentication. Clean, well-tested, no external PKI dependency.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--sage)"></div>
+        <span class="tag tag--strength">ROBUST</span>
+        <h3>PiSession Mode Management</h3>
+        <p>Three-mode state machine (active → observing → suspended) with automatic probe-and-recover. Rate limits don't crash the system — they degrade gracefully with queued triggers draining on recovery.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ISSUES ═══════════════ -->
+  <section id="issues" class="section">
+    <div class="section-header anim" style="--i: 19">
+      <span class="section-num">04</span>
+      <h2 class="section-title">Architectural Issues</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 20">These are structural weaknesses that compound over time. None require a rewrite — all are targeted refactors that preserve the architecture's core strengths.</p>
+
+    <div class="card-grid anim" style="--i: 21">
+      <!-- Issue 1 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--terracotta)"></div>
+        <div class="severity">
+          <div class="severity-dot active"></div>
+          <div class="severity-dot active"></div>
+          <div class="severity-dot active"></div>
+        </div>
+        <h3>MeshNodeRuntime God Object</h3>
+        <p><code>node-runtime.ts</code> (754 lines) is responsible for: WebSocket server lifecycle, peer connection management, RPC dispatch, context frame routing, PI session lifecycle, UI subscriber management, intent routing logic, and mock actuation. This violates single-responsibility and makes the system hard to extend.</p>
+        <details>
+          <summary>Where the coupling hurts</summary>
+          <div class="detail-content">
+            The <code>handleInboundMessage()</code> method at line 356 has embedded intelligence routing — it directly checks for <code>agent:pi</code> targets and routes intents to the planner. This should be a registered handler, not hardcoded in the message dispatcher. The constructor builds ~150 lines of handler setup that should be in separate modules. The <code>broadcastToUI()</code> method couples the runtime to UI protocol details.
+          </div>
+        </details>
+      </div>
+
+      <!-- Issue 2 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--terracotta)"></div>
+        <div class="severity">
+          <div class="severity-dot active"></div>
+          <div class="severity-dot active"></div>
+          <div class="severity-dot active"></div>
+        </div>
+        <h3>No Event Bus / Message Broker</h3>
+        <p>Components communicate through direct method calls and single-callback hooks. <code>WorldModel.onIngest</code> is a single callback — only one listener allowed. PiSession directly calls <code>runtime.broadcastToUI()</code> and <code>runtime.contextPropagator.broadcast()</code>. This tight coupling makes it impossible to add new consumers without modifying existing code.</p>
+        <details>
+          <summary>Impact analysis</summary>
+          <div class="detail-content">
+            Adding a new channel (e.g., Discord) requires touching <code>node-runtime.ts</code> to add subscriber logic. Adding a second planner requires replacing the single <code>onIngest</code> callback. Logging context flow requires instrumenting each call site individually. An EventEmitter-based bus would allow N consumers per event type with zero modification to producers.
+          </div>
+        </details>
+      </div>
+
+      <!-- Issue 3 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--gold)"></div>
+        <div class="severity">
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>No Context Sync / Catch-Up</h3>
+        <p>When a new node joins the mesh, it starts with an empty world model and only receives <em>new</em> frames going forward. There's no mechanism for a joining node to request historical context from peers. In a farm scenario, a Jetson rebooting loses all knowledge until new sensor readings arrive.</p>
+        <details>
+          <summary>What's needed</summary>
+          <div class="detail-content">
+            A <code>context.sync</code> RPC method where a joining node requests recent frames from a peer. The peer responds with its last N frames (or frames since a timestamp). The world model deduplicates by frameId, so replaying frames is safe. This is the classic "anti-entropy" pattern in gossip protocols — notably missing here.
+          </div>
+        </details>
+      </div>
+
+      <!-- Issue 4 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--gold)"></div>
+        <div class="severity">
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>World Model Lacks Intelligence</h3>
+        <p><code>WorldModel</code> is append-only with simple composite keying. The <code>makeKey()</code> for non-observation frames uses <code>JSON.stringify(data)</code> — brittle and creates unique keys for every slightly different frame. No TTL/expiration, no relevance scoring, no aggregation for LLM context windows.</p>
+        <details>
+          <summary>Specific issues</summary>
+          <div class="detail-content">
+            <code>getRecentFrames(limit)</code> returns the last N frames regardless of relevance — the LLM gets the same priority for a routine moisture reading and a critical pump failure. The <code>seenFrameIds</code> trimming uses a fixed window that doesn't consider frame importance. No summarization exists for compacting long histories into LLM-digestible overviews. The key normalization means <code>event</code> frames with slight data variations create separate entries instead of updating existing ones.
+          </div>
+        </details>
+      </div>
+
+      <!-- Issue 5 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--gold)"></div>
+        <div class="severity">
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>PeerRegistry Transport Coupling</h3>
+        <p><code>PeerSession</code> stores raw <code>WebSocket</code> references. The registry directly calls <code>socket.send()</code>. This makes testing harder (need real WebSockets or complex mocks) and prevents alternative transports (TCP, QUIC, unix sockets) without rewriting the registry.</p>
+        <details>
+          <summary>Abstraction path</summary>
+          <div class="detail-content">
+            Define a <code>Transport</code> interface: <code>{ send(data: string): void; close(): void; readyState: number }</code>. <code>PeerSession</code> holds a <code>Transport</code> instead of <code>WebSocket</code>. The WebSocket adapter implements it. Tests use a <code>MockTransport</code>. This is a ~50 line change that dramatically improves testability.
+          </div>
+        </details>
+      </div>
+
+      <!-- Issue 6 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--gold)"></div>
+        <div class="severity">
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>Capability Registry Too Simple</h3>
+        <p>Flat string-based capabilities with no versioning, no deprecation, no capability negotiation. <code>findPeerWithChannel()</code> returns the <em>first</em> matching peer — no load balancing, no health-aware routing, no preference scoring. No way to express capability parameters (e.g., sensor accuracy, actuator range).</p>
+      </div>
+
+      <!-- Issue 7 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--gold)"></div>
+        <div class="severity">
+          <div class="severity-dot active med"></div>
+          <div class="severity-dot"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>Pattern Memory Merge is Fragile</h3>
+        <p><code>importPatterns()</code> uses <code>Math.max()</code> for approval/rejection counts — this doesn't handle divergent histories. If node A approves 3 times and node B rejects 2 times independently, the merged result is 3 approvals, 0 rejections (wrong). Pattern key normalization uses <code>toLowerCase() + regex</code> — no structural similarity.</p>
+      </div>
+
+      <!-- Issue 8 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--teal)"></div>
+        <div class="severity">
+          <div class="severity-dot active low"></div>
+          <div class="severity-dot active low"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>Trigger Queue Has No Priority</h3>
+        <p><code>PiSession.pendingTriggers</code> is a plain array. Operator intents and threshold breaches go into the same queue with FIFO ordering. No deduplication of similar triggers (same sensor breaching repeatedly). No priority — a routine proactive check could block a critical alert from reaching the LLM.</p>
+      </div>
+
+      <!-- Issue 9 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--teal)"></div>
+        <div class="severity">
+          <div class="severity-dot active low"></div>
+          <div class="severity-dot active low"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>Discovery → Connection Gap</h3>
+        <p>mDNS discovery emits <code>peer-discovered</code> events, but <code>MeshNodeRuntime</code> only logs the event — it doesn't auto-connect. A discovered peer still needs manual <code>--peer</code> specification or explicit trust+connect. The discovery pipeline is incomplete.</p>
+      </div>
+
+      <!-- Issue 10 -->
+      <div class="card">
+        <div class="card-accent" style="background: var(--teal)"></div>
+        <div class="severity">
+          <div class="severity-dot active low"></div>
+          <div class="severity-dot"></div>
+          <div class="severity-dot"></div>
+        </div>
+        <h3>No Structured Logging or Telemetry</h3>
+        <p>All logging is <code>console.log</code> with ad-hoc string formatting. No log levels beyond the injected <code>info/warn/error</code>. No structured JSON logs for aggregation. No metrics (frame counts, latency, RPC durations). No health check endpoint for monitoring.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ DATA FLOW ═══════════════ -->
+  <section id="data-flow" class="section">
+    <div class="section-header anim" style="--i: 22">
+      <span class="section-num">05</span>
+      <h2 class="section-title">Critical Data Flows</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 23">Understanding these three flows is essential. They represent the system's core value: sensor data → emergent intelligence → gated actuation.</p>
+
+    <h3 style="font-size: 1.05rem; margin: 24px 0 12px; color: var(--text)">Flow 1: Sensor → Context Gossip → World Model</h3>
+    <div class="conn-diagram anim" style="--i: 24">
+      <div class="conn-node" style="border-color: var(--sage)">
+        <div class="conn-node-name">MockSensor</div>
+        <div class="conn-node-detail">soil_moisture: 15.2%</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--teal)">
+        <div class="conn-node-name">ContextPropagator</div>
+        <div class="conn-node-detail">broadcastObservation()</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--deep-blue)">
+        <div class="conn-node-name">PeerRegistry</div>
+        <div class="conn-node-detail">broadcastEvent()</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--gold)">
+        <div class="conn-node-name">Remote Peer</div>
+        <div class="conn-node-detail">handleInbound()</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--terracotta)">
+        <div class="conn-node-name">WorldModel</div>
+        <div class="conn-node-detail">ingest() + dedup</div>
+      </div>
+    </div>
+
+    <h3 style="font-size: 1.05rem; margin: 24px 0 12px; color: var(--text)">Flow 2: Operator Intent → LLM Reasoning → Proposal</h3>
+    <div class="conn-diagram anim" style="--i: 25">
+      <div class="conn-node" style="border-color: var(--terracotta)">
+        <div class="conn-node-name">Telegram / UI</div>
+        <div class="conn-node-detail">"irrigate zone-1"</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--gold)">
+        <div class="conn-node-name">NodeRuntime</div>
+        <div class="conn-node-detail">handleInboundMessage</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--deep-blue)">
+        <div class="conn-node-name">PiSession</div>
+        <div class="conn-node-detail">handleOperatorIntent()</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--teal)">
+        <div class="conn-node-name">AgentSession</div>
+        <div class="conn-node-detail">prompt() + tools</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--sage)">
+        <div class="conn-node-name">propose_task</div>
+        <div class="conn-node-detail">L2 → awaiting_approval</div>
+      </div>
+    </div>
+
+    <h3 style="font-size: 1.05rem; margin: 24px 0 12px; color: var(--text)">Flow 3: Approval → Trust Check → Actuation</h3>
+    <div class="conn-diagram anim" style="--i: 26">
+      <div class="conn-node" style="border-color: var(--sage)">
+        <div class="conn-node-name">Operator</div>
+        <div class="conn-node-detail">approve "start-pump"</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--deep-blue)">
+        <div class="conn-node-name">PiSession</div>
+        <div class="conn-node-detail">approveProposal()</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--terracotta)">
+        <div class="conn-node-name">TrustPolicy</div>
+        <div class="conn-node-detail">evaluate: T3 + human ✓</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--gold)">
+        <div class="conn-node-name">forwarding</div>
+        <div class="conn-node-detail">mesh.message.forward</div>
+      </div>
+      <span class="conn-arrow">→</span>
+      <div class="conn-node" style="border-color: var(--teal)">
+        <div class="conn-node-name">Actuator</div>
+        <div class="conn-node-detail">pump:P1 → start</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FILE MAP ═══════════════ -->
+  <section id="file-map" class="section">
+    <div class="section-header anim" style="--i: 27">
+      <span class="section-num">06</span>
+      <h2 class="section-title">Source File Map</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 28">Every file, its purpose, line count, and key functions. Sorted by architectural importance.</p>
+
+    <div class="table-wrap anim" style="--i: 29">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Lines</th>
+            <th>Role</th>
+            <th>Key Exports</th>
+            <th>Health</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>mesh/node-runtime.ts</code></td>
+            <td>754</td>
+            <td>Central orchestrator — lifecycle, WS server, peers, RPC</td>
+            <td><code>MeshNodeRuntime</code></td>
+            <td><span class="tag tag--issue">Refactor</span></td>
+          </tr>
+          <tr>
+            <td><code>agents/pi-session.ts</code></td>
+            <td>914</td>
+            <td>LLM session — mode management, trigger cycle, probes</td>
+            <td><code>PiSession</code></td>
+            <td><span class="tag tag--gold">Large but OK</span></td>
+          </tr>
+          <tr>
+            <td><code>cli/clawmesh-cli.ts</code></td>
+            <td>822</td>
+            <td>All CLI commands in one file</td>
+            <td><code>createClawMeshCli()</code></td>
+            <td><span class="tag tag--slate">Monolithic</span></td>
+          </tr>
+          <tr>
+            <td><code>channels/telegram.ts</code></td>
+            <td>701</td>
+            <td>Telegram bot bridge — messages, proposals, alerts</td>
+            <td><code>TelegramChannel</code></td>
+            <td><span class="tag tag--strength">Good</span></td>
+          </tr>
+          <tr>
+            <td><code>tui/mesh-tui.ts</code></td>
+            <td>599</td>
+            <td>Interactive terminal dashboard</td>
+            <td><code>MeshTUI</code></td>
+            <td><span class="tag tag--strength">Good</span></td>
+          </tr>
+          <tr>
+            <td><code>agents/extensions/...</code></td>
+            <td>350</td>
+            <td>Mesh tools for Pi SDK (5 tools, 4 commands, 2 hooks)</td>
+            <td><code>createClawMeshExtension()</code></td>
+            <td><span class="tag tag--strength">Excellent</span></td>
+          </tr>
+          <tr>
+            <td><code>agents/pattern-memory.ts</code></td>
+            <td>255</td>
+            <td>Learn from approve/reject, gossip patterns</td>
+            <td><code>PatternMemory</code></td>
+            <td><span class="tag tag--gold">Needs merge fix</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/peer-client.ts</code></td>
+            <td>232</td>
+            <td>Outbound WS connection with reconnect backoff</td>
+            <td><code>MeshPeerClient</code></td>
+            <td><span class="tag tag--strength">Solid</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/peer-registry.ts</code></td>
+            <td>176</td>
+            <td>Peer sessions, RPC invoke/response, broadcast</td>
+            <td><code>PeerRegistry</code></td>
+            <td><span class="tag tag--gold">Needs transport abstraction</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/context-propagator.ts</code></td>
+            <td>181</td>
+            <td>Gossip protocol — broadcast, re-propagate, dedup</td>
+            <td><code>ContextPropagator</code></td>
+            <td><span class="tag tag--strength">Excellent</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/world-model.ts</code></td>
+            <td>127</td>
+            <td>Ingest + query context frames</td>
+            <td><code>WorldModel</code></td>
+            <td><span class="tag tag--issue">Needs intelligence</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/command-envelope.ts</code></td>
+            <td>172</td>
+            <td>Wire format + validation for command payloads</td>
+            <td><code>createClawMeshCommandEnvelope</code></td>
+            <td><span class="tag tag--strength">Excellent</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/trust-policy.ts</code></td>
+            <td>116</td>
+            <td>Pure function trust evaluation</td>
+            <td><code>evaluateMeshForwardTrust</code></td>
+            <td><span class="tag tag--strength">Excellent</span></td>
+          </tr>
+          <tr>
+            <td><code>infra/device-identity.ts</code></td>
+            <td>183</td>
+            <td>Ed25519 keygen, sign, verify, fingerprint</td>
+            <td><code>loadOrCreateDeviceIdentity</code></td>
+            <td><span class="tag tag--strength">Solid</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/capabilities.ts</code></td>
+            <td>~80</td>
+            <td>Per-peer capability tracking and queries</td>
+            <td><code>MeshCapabilityRegistry</code></td>
+            <td><span class="tag tag--gold">Too simple</span></td>
+          </tr>
+          <tr>
+            <td><code>mesh/routing.ts</code></td>
+            <td>~30</td>
+            <td>Local-first → mesh → unavailable resolution</td>
+            <td><code>resolveMeshRoute</code></td>
+            <td><span class="tag tag--strength">Clean</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════ IMPROVEMENTS ═══════════════ -->
+  <section id="improvements" class="section">
+    <div class="section-header anim" style="--i: 30">
+      <span class="section-num">07</span>
+      <h2 class="section-title">Recommended Improvements</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 31">Ordered by impact-to-effort ratio. Each improvement is additive — they don't require rewriting existing working code.</p>
+
+    <div class="card-grid anim" style="--i: 32">
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">HIGH IMPACT</span>
+        <h3>1. Extract MeshEventBus</h3>
+        <p>Create a typed <code>EventEmitter</code>-based event bus that all components publish to and subscribe from. Replace direct method calls (<code>runtime.broadcastToUI</code>, <code>WorldModel.onIngest</code>) with events.</p>
+        <ul>
+          <li><strong>Events:</strong> <code>context.frame.ingested</code>, <code>peer.connected</code>, <code>proposal.created</code>, <code>operator.intent</code></li>
+          <li><strong>Effort:</strong> ~200 lines new code, ~100 lines refactored</li>
+          <li><strong>Unlocks:</strong> N consumers per event, logging middleware, replay for testing</li>
+        </ul>
+      </div>
+
+      <div class="card card--hero">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">HIGH IMPACT</span>
+        <h3>2. Decompose MeshNodeRuntime</h3>
+        <p>Split into focused modules: <code>MeshServer</code> (WS lifecycle), <code>RpcDispatcher</code> (method routing), <code>IntentRouter</code> (intelligence routing), <code>UIBroadcaster</code> (subscriber management). Runtime becomes a thin facade wiring them together.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~4 new files, move-not-rewrite</li>
+          <li><strong>Unlocks:</strong> Independent testing, clearer ownership</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">MEDIUM IMPACT</span>
+        <h3>3. Context Sync Protocol</h3>
+        <p>Add <code>context.sync</code> RPC: joining node sends <code>{ since: timestamp }</code>, peer responds with frames since that time. WorldModel already deduplicates by frameId, so replay is safe.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~80 lines (RPC handler + client call on connect)</li>
+          <li><strong>Unlocks:</strong> Resilient to node reboots, late-joining nodes get context</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">MEDIUM IMPACT</span>
+        <h3>4. Intelligent World Model</h3>
+        <p>Add frame importance scoring (critical alerts > routine readings), TTL-based expiration, and a <code>summarize()</code> method that produces LLM-digestible overviews of the last N minutes/hours.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~150 lines enhancement</li>
+          <li><strong>Unlocks:</strong> Better LLM context, bounded memory, relevance-based queries</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">MEDIUM IMPACT</span>
+        <h3>5. Transport Abstraction</h3>
+        <p>Define <code>Transport { send(data: string): void; close(): void; readyState: number }</code>. PeerSession holds Transport instead of WebSocket. Create <code>MockTransport</code> for testing.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~50 lines interface + adapter</li>
+          <li><strong>Unlocks:</strong> Testability, future QUIC/TCP/unix socket support</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--improve">MEDIUM IMPACT</span>
+        <h3>6. Priority Trigger Queue</h3>
+        <p>Replace <code>pendingTriggers[]</code> with a typed priority queue: operator intents > critical thresholds > normal thresholds > proactive checks. Deduplicate by metric+zone within a time window.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~100 lines</li>
+          <li><strong>Unlocks:</strong> Critical alerts never blocked, reduced LLM calls</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--teal">OPERATIONAL</span>
+        <h3>7. Structured Logging</h3>
+        <p>Replace the <code>{ info, warn, error }</code> logger interface with structured JSON output. Add correlation IDs per peer/session. Add a <code>/health</code> RPC method that returns uptime, peer count, world model size, and planner mode.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~100 lines + interface change</li>
+          <li><strong>Unlocks:</strong> Log aggregation, alerting, operational visibility</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--teal">OPERATIONAL</span>
+        <h3>8. Discovery → Auto-Connect</h3>
+        <p>When mDNS discovers a peer that's already in the trust store, automatically connect. This closes the gap between "discovered" and "connected" — the user shouldn't need to manually specify <code>--peer</code> for trusted local devices.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~30 lines in node-runtime.ts</li>
+          <li><strong>Unlocks:</strong> True zero-config for trusted peers on LAN</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--teal">OPERATIONAL</span>
+        <h3>9. Pattern Memory CRDT Merge</h3>
+        <p>Replace <code>Math.max()</code> merge with additive counters: each node tracks its own approvals/rejections. On merge, sum across all sources. This is a simple grow-only counter CRDT that correctly handles concurrent decisions.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~80 lines refactor</li>
+          <li><strong>Unlocks:</strong> Correct distributed learning</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-accent" style="background: var(--deep-blue)"></div>
+        <span class="tag tag--teal">FUTURE</span>
+        <h3>10. Capability Negotiation</h3>
+        <p>Evolve flat strings to structured capability objects with version, parameters, health status, and load metrics. Route based on health-aware scoring instead of first-match.</p>
+        <ul>
+          <li><strong>Effort:</strong> ~200 lines</li>
+          <li><strong>Unlocks:</strong> Load balancing, failover, capability deprecation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ROADMAP ═══════════════ -->
+  <section id="roadmap" class="section">
+    <div class="section-header anim" style="--i: 33">
+      <span class="section-num">08</span>
+      <h2 class="section-title">Implementation Roadmap</h2>
+    </div>
+    <p class="section-intro anim" style="--i: 34">Three phases. Each phase builds on the previous. All changes are additive — the system stays functional throughout.</p>
+
+    <div class="timeline anim" style="--i: 35">
+      <div class="timeline-item">
+        <div class="timeline-dot" style="border-color: var(--terracotta)"></div>
+        <div class="timeline-phase" style="color: var(--terracotta)">Phase 1 — Foundation Hardening</div>
+        <div class="timeline-title">Decouple the core (est. 2-3 days)</div>
+        <div class="timeline-desc">Break the tight coupling that makes every change risky. The event bus is the keystone — everything else gets easier once it exists.</div>
+        <ul class="timeline-items">
+          <li>Extract MeshEventBus with typed events</li>
+          <li>Decompose MeshNodeRuntime into focused modules</li>
+          <li>Add transport abstraction to PeerRegistry</li>
+          <li>Add context sync/catch-up protocol</li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot" style="border-color: var(--deep-blue)"></div>
+        <div class="timeline-phase" style="color: var(--deep-blue)">Phase 2 — Intelligence Layer</div>
+        <div class="timeline-title">Make the mesh smarter (est. 2-3 days)</div>
+        <div class="timeline-desc">Improve how the system reasons about its world and learns from operator decisions.</div>
+        <ul class="timeline-items">
+          <li>Add relevance-scored world model queries</li>
+          <li>Implement priority trigger queue with dedup</li>
+          <li>Fix pattern memory merge with CRDT counters</li>
+          <li>Add world model summarization for LLM context</li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot" style="border-color: var(--sage)"></div>
+        <div class="timeline-phase" style="color: var(--sage)">Phase 3 — Operational Excellence</div>
+        <div class="timeline-title">Production readiness (est. 2-3 days)</div>
+        <div class="timeline-desc">The infrastructure that makes ClawMesh deployable and monitorable in a real farm environment.</div>
+        <ul class="timeline-items">
+          <li>Structured JSON logging with correlation IDs</li>
+          <li>Health check RPC endpoint</li>
+          <li>Discovery → auto-connect for trusted peers</li>
+          <li>Capability negotiation with health-aware routing</li>
+          <li>Trust audit trail and decision logging</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i: 36" style="margin-top: 32px">
+      <strong>Key insight:</strong> The architecture's strengths (gossip protocol, trust policy, capability routing) are <em>already novel and working</em>. The improvements aren't about fixing broken things — they're about making a good architecture <em>production-grade</em>. The core design decisions were right. The refactors are about separating concerns, adding observability, and handling edge cases that only matter at scale.
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
