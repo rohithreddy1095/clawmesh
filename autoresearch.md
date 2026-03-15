@@ -106,4 +106,11 @@ All files under `src/` are in scope. Specifically:
 22. ✅ **Trust Audit Trail** — decision recording, queryable, statistics with rejection breakdowns (11 tests)
 23. ✅ **System Flow Tests** — end-to-end scenarios validating full architecture integration (8 tests)
 
-### Results: 135 → 430 tests (+219%), 38 → 51 source modules (+34%), 17 → 40 test files (+135%)
+24. ✅ **ws.ts tests** — rawDataToString for all input types (8 tests)
+25. ✅ **TLS fingerprint tests** — normalization edge cases (8 tests)
+26. ✅ **TUI ANSI helpers tests** — strip, dw, pad, trunc, fit, colors (22 tests)
+27. ✅ **Expanded trust policy tests** — edge cases for all trust tiers and verification (9 tests)
+28. ✅ **Expanded command envelope tests** — validation and resolution edge cases (7 tests)
+29. ✅ **Architecture edge case tests** — boundary conditions across all new modules (21 tests)
+
+### Results: 135 → 505 tests (+274%), 38 → 51 source modules (+34%), 17 → 44 test files (+159%)
