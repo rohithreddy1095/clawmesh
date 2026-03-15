@@ -103,4 +103,7 @@ All files under `src/` are in scope. Specifically:
 20. ✅ **Structured Capabilities** — parseCapabilityString, matchCapability, scoreCapability (19 tests)
 21. ✅ **DeviceIdentity test suite** — keygen, sign/verify, base64url, deviceId derivation (13 tests)
 
-### Results: 135 → 411 tests (+205%), 38 → 50 source modules (+32%), 17 → 38 test files (+124%)
+22. ✅ **Trust Audit Trail** — decision recording, queryable, statistics with rejection breakdowns (11 tests)
+23. ✅ **System Flow Tests** — end-to-end scenarios validating full architecture integration (8 tests)
+
+### Results: 135 → 430 tests (+219%), 38 → 51 source modules (+34%), 17 → 40 test files (+135%)
