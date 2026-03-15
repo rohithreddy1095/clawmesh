@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawMesh — Distributed AI Mesh</title>
+<!-- Terminal Mono preset — monospace everything, green accents on near-black, faint dot grid -->
+<!-- surf unavailable, using CSS gradient fallback for backgrounds -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-body: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --bg: #0a0e14;
+    --surface: #12161e;
+    --surface2: #1a1f2a;
+    --surface-elevated: #222836;
+    --border: rgba(80, 250, 123, 0.06);
+    --border-bright: rgba(80, 250, 123, 0.12);
+    --text: #c8d6e5;
+    --text-dim: #5a6a7a;
+    --accent: #50fa7b;
+    --accent-dim: rgba(80, 250, 123, 0.08);
+    --code-bg: #060a10;
+    --code-text: #c8d6e5;
+    --amber: #fbbf24;
+    --amber-dim: rgba(251, 191, 36, 0.10);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.10);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96, 165, 250, 0.10);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34, 211, 238, 0.10);
+    --rose: #fb7185;
+    --rose-dim: rgba(251, 113, 133, 0.10);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167, 139, 250, 0.10);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface2: #eaecf0;
+      --surface-elevated: #f8f9fa;
+      --border: rgba(0, 80, 40, 0.08);
+      --border-bright: rgba(0, 80, 40, 0.16);
+      --text: #1a2332;
+      --text-dim: #5a6a7a;
+      --accent: #0d7a3e;
+      --accent-dim: rgba(13, 122, 62, 0.08);
+      --code-bg: #1a2332;
+      --code-text: #c8d6e5;
+      --amber: #d97706;
+      --amber-dim: rgba(217, 119, 6, 0.08);
+      --red: #dc2626;
+      --red-dim: rgba(220, 38, 38, 0.08);
+      --blue: #2563eb;
+      --blue-dim: rgba(37, 99, 235, 0.08);
+      --cyan: #0891b2;
+      --cyan-dim: rgba(8, 145, 178, 0.08);
+      --rose: #e11d48;
+      --rose-dim: rgba(225, 29, 72, 0.08);
+      --purple: #7c3aed;
+      --purple-dim: rgba(124, 58, 237, 0.08);
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .slide {
+    height: 100dvh;
+    scroll-snap-align: start;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+    isolation: isolate;
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slide.visible { opacity: 1; transform: none; }
+  .slide .reveal {
+    opacity: 0; transform: translateY(20px);
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slide.visible .reveal { opacity: 1; transform: none; }
+  .slide.visible .reveal:nth-child(1) { transition-delay: 0.1s; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: 0.2s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: 0.3s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: 0.4s; }
+  .slide.visible .reveal:nth-child(5) { transition-delay: 0.5s; }
+  .slide.visible .reveal:nth-child(6) { transition-delay: 0.6s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .slide .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  }
+
+  /* Dot grid background */
+  .slide::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, var(--border-bright) 1px, transparent 1px);
+    background-size: 32px 32px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* NAV CHROME */
+  .deck-progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 100; transition: width 0.3s ease; pointer-events: none; }
+  .deck-dots {
+    position: fixed; right: clamp(12px, 2vw, 24px); top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 6px; z-index: 100; padding: 6px;
+    background: color-mix(in srgb, var(--bg) 70%, transparent 30%);
+    border-radius: 16px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .deck-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); opacity: 0.3;
+    border: none; padding: 0; cursor: pointer; transition: opacity 0.2s, transform 0.2s;
+  }
+  .deck-dot:hover { opacity: 0.6; }
+  .deck-dot.active { opacity: 1; transform: scale(1.8); background: var(--accent); }
+  .deck-counter {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px);
+    font-size: 11px; color: var(--text-dim); z-index: 100; font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .deck-hints {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-dim); opacity: 0.5; z-index: 100;
+    transition: opacity 0.5s ease; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .deck-hints.faded { opacity: 0; pointer-events: none; }
+
+  /* TYPOGRAPHY */
+  .slide__display {
+    font-size: clamp(48px, 10vw, 100px); font-weight: 400; letter-spacing: -2px; line-height: 0.95; text-wrap: balance;
+  }
+  .slide__heading {
+    font-size: clamp(24px, 4.5vw, 42px); font-weight: 500; letter-spacing: -0.5px; line-height: 1.15; text-wrap: balance;
+  }
+  .slide__body { font-size: clamp(14px, 1.8vw, 20px); line-height: 1.7; color: var(--text-dim); }
+  .slide__subtitle { font-size: clamp(12px, 1.5vw, 16px); color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+  .slide__label {
+    font-size: clamp(10px, 1.1vw, 12px); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 2px; color: var(--accent); margin-bottom: 12px;
+  }
+
+  /* TITLE */
+  .slide--title { justify-content: center; align-items: center; text-align: center; }
+  .slide--title { background-image: radial-gradient(ellipse at 50% 40%, var(--accent-dim) 0%, transparent 50%); }
+  .slide--title .slide__display { color: var(--accent); }
+  .slide--title .claw-ascii {
+    font-size: clamp(10px, 1.2vw, 14px); color: var(--accent); opacity: 0.15;
+    line-height: 1.2; white-space: pre; margin-bottom: clamp(16px, 3vh, 32px);
+  }
+
+  /* DIVIDER */
+  .slide--divider { justify-content: center; }
+  .slide--divider .slide__number {
+    font-size: clamp(100px, 22vw, 240px); font-weight: 200; line-height: 0.85;
+    opacity: 0.04; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -55%); pointer-events: none; color: var(--accent);
+  }
+
+  /* CONTENT */
+  .slide--content .slide__inner {
+    display: grid; grid-template-columns: 3fr 2fr; gap: clamp(24px, 4vw, 60px);
+    align-items: center; width: 100%; position: relative; z-index: 1;
+  }
+  .slide--content-r .slide__inner { grid-template-columns: 2fr 3fr; }
+  .slide__bullets { list-style: none; padding: 0; }
+  .slide__bullets li {
+    padding: 8px 0 8px 20px; position: relative;
+    font-size: clamp(14px, 1.8vw, 20px); line-height: 1.6; color: var(--text-dim);
+  }
+  .slide__bullets li::before {
+    content: '>'; position: absolute; left: 0; top: 8px; color: var(--accent); font-weight: 600;
+  }
+  .slide__aside { display: flex; align-items: center; justify-content: center; min-height: 160px; position: relative; z-index: 1; }
+
+  /* SPLIT */
+  .slide--split { padding: 0; }
+  .slide--split .slide__panels { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+  .slide--split .slide__panel {
+    padding: clamp(40px, 6vh, 80px) clamp(28px, 3.5vw, 50px);
+    display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 1;
+  }
+  .slide--split .slide__panel--primary { background: var(--surface); }
+  .slide--split .slide__panel--secondary { background: var(--surface2); }
+
+  /* DIAGRAM */
+  .slide--diagram { padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 60px); }
+  .slide--diagram .slide__heading { margin-bottom: clamp(8px, 1.5vh, 16px); position: relative; z-index: 1; }
+  .mermaid-wrap {
+    position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; overflow: auto; flex: 1; min-height: 0;
+    display: flex; justify-content: center; align-items: center; cursor: grab;
+  }
+  .mermaid-wrap.is-panning { cursor: grabbing; user-select: none; }
+  .zoom-controls {
+    position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; z-index: 10;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px;
+  }
+  .zoom-controls button {
+    width: 26px; height: 26px; border: none; background: transparent; color: var(--text-dim);
+    font-size: 13px; cursor: pointer; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s;
+  }
+  .zoom-controls button:hover { background: var(--border); color: var(--text); }
+  .mermaid .nodeLabel { color: var(--text) !important; }
+  .mermaid .edgeLabel { color: var(--text-dim) !important; background-color: var(--surface) !important; }
+  .mermaid .edgeLabel rect { fill: var(--surface) !important; }
+  .slide--diagram .mermaid svg { width: 100% !important; height: auto !important; max-width: 100% !important; }
+  .slide--diagram .mermaid .nodeLabel { font-size: 16px !important; }
+  .slide--diagram .mermaid .edgeLabel { font-size: 13px !important; }
+  .slide--diagram .mermaid .node rect, .slide--diagram .mermaid .node circle, .slide--diagram .mermaid .node polygon { stroke-width: 2px; }
+  .slide--diagram .mermaid .edge-pattern-solid { stroke-width: 2px; }
+
+  /* DASHBOARD */
+  .slide--dashboard .slide__kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(140px, 18vw, 200px), 1fr));
+    gap: clamp(10px, 1.5vw, 20px); position: relative; z-index: 1;
+  }
+  .slide__kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: clamp(14px, 2.5vh, 28px) clamp(14px, 2vw, 22px); min-width: 0; overflow: hidden;
+  }
+  .slide__kpi-val {
+    font-size: clamp(28px, 5vw, 52px); font-weight: 300; letter-spacing: -1px; line-height: 1.1;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .slide__kpi-label {
+    font-size: clamp(9px, 1vw, 11px); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--text-dim); margin-top: 6px;
+  }
+  .slide__kpi-desc { font-size: clamp(10px, 1.1vw, 12px); color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+
+  /* TABLE */
+  .slide--table { padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 60px); }
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; flex: 1; min-height: 0; position: relative; z-index: 1;
+  }
+  .table-scroll { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    background: var(--surface2); font-size: clamp(9px, 1.2vw, 12px); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim);
+    text-align: left; padding: clamp(10px, 1.5vh, 14px) clamp(12px, 1.5vw, 20px);
+    border-bottom: 2px solid var(--border-bright); white-space: nowrap;
+  }
+  .data-table td {
+    padding: clamp(10px, 1.5vh, 14px) clamp(12px, 1.5vw, 20px);
+    border-bottom: 1px solid var(--border); font-size: clamp(12px, 1.5vw, 16px); vertical-align: top;
+  }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:nth-child(even) { background: var(--surface2); }
+  .data-table tbody tr { transition: background 0.15s; }
+  .data-table tbody tr:hover { background: var(--accent-dim); }
+  .data-table code {
+    font-size: 0.85em; background: var(--accent-dim); color: var(--accent);
+    padding: 1px 5px; border-radius: 3px;
+  }
+
+  /* QUOTE */
+  .slide--quote {
+    justify-content: center; align-items: center; text-align: center;
+    padding: clamp(60px, 10vh, 120px) clamp(60px, 12vw, 180px);
+  }
+  .slide__quote-mark {
+    font-size: clamp(60px, 12vw, 140px); line-height: 0.5; opacity: 0.04;
+    pointer-events: none; margin-bottom: -16px; color: var(--accent);
+  }
+  .slide--quote blockquote {
+    font-size: clamp(20px, 3.5vw, 38px); font-weight: 300; line-height: 1.4;
+    font-style: normal; position: relative; z-index: 1;
+  }
+  .slide--quote cite {
+    font-size: clamp(10px, 1.2vw, 13px); font-style: normal;
+    margin-top: clamp(16px, 3vh, 32px); display: block; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+
+  /* BLEED */
+  .slide--bleed { padding: 0; justify-content: flex-end; }
+  .slide__bg { position: absolute; inset: 0; z-index: 0; }
+  .slide__bg--gradient {
+    background: linear-gradient(135deg, #0a1a10 0%, #0a0e14 40%, #12161e 100%);
+  }
+  .slide__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 40%, transparent 100%);
+    z-index: 1;
+  }
+  .slide--bleed .slide__content {
+    position: relative; z-index: 2;
+    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+  }
+  .slide--bleed .slide__heading { color: #fff; }
+  .slide--bleed .slide__subtitle { color: rgba(255,255,255,0.6); }
+
+  /* PIPELINE */
+  .pipeline {
+    display: flex; align-items: stretch; gap: 0; flex: 1; min-height: 0;
+    margin-top: clamp(12px, 2vh, 20px); position: relative; z-index: 1;
+  }
+  .pipeline__step {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-top: 3px solid var(--accent); border-radius: 8px;
+    padding: clamp(12px, 2vh, 24px) clamp(10px, 1.2vw, 18px);
+    display: flex; flex-direction: column; min-width: 0; overflow-wrap: break-word;
+  }
+  .pipeline__num { font-size: clamp(9px, 1vw, 12px); font-weight: 600; color: var(--accent); letter-spacing: 1px; }
+  .pipeline__name { font-size: clamp(14px, 1.8vw, 20px); font-weight: 600; margin: clamp(4px, 0.6vh, 8px) 0; }
+  .pipeline__desc { font-size: clamp(10px, 1.1vw, 13px); color: var(--text-dim); line-height: 1.5; flex: 1; }
+  .pipeline__arrow {
+    display: flex; align-items: center; padding: 0 clamp(2px, 0.3vw, 5px);
+    color: var(--accent); flex-shrink: 0; opacity: 0.4;
+  }
+  .pipeline__arrow svg { width: 18px; height: 18px; }
+
+  /* TAGS */
+  .tag {
+    font-size: clamp(9px, 1vw, 11px); font-weight: 500; padding: 2px 7px;
+    border-radius: 4px; display: inline-block; margin: 2px;
+  }
+  .tag--accent { background: var(--accent-dim); color: var(--accent); }
+  .tag--blue { background: var(--blue-dim); color: var(--blue); }
+  .tag--cyan { background: var(--cyan-dim); color: var(--cyan); }
+  .tag--amber { background: var(--amber-dim); color: var(--amber); }
+  .tag--rose { background: var(--rose-dim); color: var(--rose); }
+  .tag--purple { background: var(--purple-dim); color: var(--purple); }
+
+  /* SVG DECOR */
+  .slide__decor { position: absolute; pointer-events: none; z-index: 0; }
+
+  /* RESPONSIVE */
+  @media (max-height: 700px) {
+    .slide { padding: clamp(24px, 4vh, 40px) clamp(32px, 6vw, 80px); }
+    .slide__display { font-size: clamp(36px, 8vw, 72px); }
+    .slide--divider .slide__number { font-size: clamp(80px, 16vw, 160px); }
+  }
+  @media (max-height: 600px) {
+    .slide__decor { display: none; }
+    .slide--quote { padding: clamp(32px, 6vh, 60px) clamp(40px, 8vw, 100px); }
+    .slide__quote-mark { display: none; }
+  }
+  @media (max-height: 500px) {
+    .slide { padding: clamp(16px, 3vh, 24px) clamp(24px, 5vw, 48px); }
+    .deck-dots { display: none; }
+    .slide__display { font-size: clamp(28px, 7vw, 48px); }
+  }
+  @media (max-width: 768px) {
+    .slide--content .slide__inner, .slide--content-r .slide__inner { grid-template-columns: 1fr; }
+    .slide--content .slide__aside { display: none; }
+    .slide--split .slide__panels { grid-template-columns: 1fr; }
+    .slide--dashboard .slide__kpis { grid-template-columns: repeat(2, 1fr); }
+    .pipeline { flex-direction: column; }
+    .pipeline__arrow { justify-content: center; padding: 4px 0; transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- SLIDE 1: TITLE -->
+  <section class="slide slide--title">
+    <svg class="slide__decor" style="top:0;right:0;" width="120" height="120" viewBox="0 0 120 120">
+      <line x1="120" y1="0" x2="120" y2="40" stroke="var(--accent)" stroke-width="1.5" opacity="0.12"/>
+      <line x1="80" y1="0" x2="120" y2="0" stroke="var(--accent)" stroke-width="1.5" opacity="0.12"/>
+    </svg>
+    <svg class="slide__decor" style="bottom:0;left:0;" width="120" height="120" viewBox="0 0 120 120">
+      <line x1="0" y1="80" x2="0" y2="120" stroke="var(--accent)" stroke-width="1.5" opacity="0.12"/>
+      <line x1="0" y1="120" x2="40" y2="120" stroke="var(--accent)" stroke-width="1.5" opacity="0.12"/>
+    </svg>
+    <div class="reveal">
+      <p class="slide__subtitle" style="margin-bottom:clamp(12px,2vh,24px);">distributed intelligence mesh</p>
+    </div>
+    <h1 class="slide__display reveal">ClawMesh</h1>
+    <div class="reveal">
+      <p class="slide__subtitle" style="margin-top:clamp(12px,2vh,24px);">independent claws that join into one intelligent network</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 2: DIVIDER — The Problem -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 80% 60%, var(--accent-dim) 0%, transparent 40%);">
+    <span class="slide__number">01</span>
+    <div>
+      <h2 class="slide__heading reveal">The Problem</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">why single-machine AI breaks</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 3: CONTENT — The problem -->
+  <section class="slide slide--content" style="background-image:radial-gradient(ellipse at 15% 80%, var(--red-dim) 0%, transparent 40%);">
+    <div class="slide__inner">
+      <div>
+        <p class="slide__label reveal" style="color:var(--red);">distributed reality</p>
+        <h2 class="slide__heading reveal">Your Capabilities Are Scattered</h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong style="color:var(--text)">Laptop</strong> has API keys and control surface</li>
+          <li class="reveal"><strong style="color:var(--text)">Jetson/Pi</strong> has hardware sensors and edge inference</li>
+          <li class="reveal"><strong style="color:var(--text)">Desktop</strong> has GPUs and local models</li>
+          <li class="reveal"><strong style="color:var(--text)">Server</strong> has private network access</li>
+          <li class="reveal">No single machine can do everything</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 180 180" width="180" height="180">
+          <circle cx="90" cy="40" r="16" fill="none" stroke="var(--blue)" stroke-width="1.5" opacity="0.5"/>
+          <text x="90" y="44" text-anchor="middle" font-size="8" fill="var(--blue)" opacity="0.7">MAC</text>
+          <circle cx="40" cy="120" r="16" fill="none" stroke="var(--amber)" stroke-width="1.5" opacity="0.5"/>
+          <text x="40" y="124" text-anchor="middle" font-size="7" fill="var(--amber)" opacity="0.7">JETSON</text>
+          <circle cx="140" cy="120" r="16" fill="none" stroke="var(--cyan)" stroke-width="1.5" opacity="0.5"/>
+          <text x="140" y="124" text-anchor="middle" font-size="8" fill="var(--cyan)" opacity="0.7">GPU</text>
+          <circle cx="90" cy="150" r="16" fill="none" stroke="var(--purple)" stroke-width="1.5" opacity="0.5"/>
+          <text x="90" y="154" text-anchor="middle" font-size="7" fill="var(--purple)" opacity="0.7">SERVER</text>
+          <line x1="90" y1="56" x2="40" y2="104" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="4 4" opacity="0.2"/>
+          <line x1="90" y1="56" x2="140" y2="104" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="4 4" opacity="0.2"/>
+          <line x1="40" y1="136" x2="90" y2="134" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="4 4" opacity="0.2"/>
+          <line x1="140" y1="136" x2="90" y2="134" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="4 4" opacity="0.2"/>
+          <text x="90" y="96" text-anchor="middle" font-size="10" fill="var(--red)" opacity="0.6">?</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 4: QUOTE -->
+  <section class="slide slide--quote" style="background-image:radial-gradient(ellipse at 50% 50%, var(--accent-dim) 0%, transparent 35%);">
+    <div class="slide__quote-mark reveal">&ldquo;</div>
+    <blockquote class="reveal">
+      Context is not explicitly pushed. It is built from live operations, sensor readings, and human inputs happening on any node.
+    </blockquote>
+    <cite class="reveal">&mdash; ClawMesh Architecture Vision</cite>
+  </section>
+
+  <!-- SLIDE 5: DIVIDER — Architecture -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 30% 40%, var(--accent-dim) 0%, transparent 40%);">
+    <span class="slide__number">02</span>
+    <div>
+      <h2 class="slide__heading reveal">Architecture</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">how the mesh works</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 6: DIAGRAM — Topology -->
+  <section class="slide slide--diagram">
+    <h2 class="slide__heading reveal">System Topology</h2>
+    <div class="mermaid-wrap reveal" style="flex:1; min-height:0;">
+      <div class="zoom-controls">
+        <button onclick="zoomDiagram(this,1.2)" title="Zoom in">+</button>
+        <button onclick="zoomDiagram(this,0.8)" title="Zoom out">&minus;</button>
+        <button onclick="resetZoom(this)" title="Reset">&#8634;</button>
+        <button onclick="openDiagramFullscreen(this)" title="Full size">&#x26F6;</button>
+      </div>
+      <pre class="mermaid">
+graph TD
+    SEN["Sensors"] -->|observe| CTX["Context Frames"]
+    CTX -->|gossip| WM["World Model"]
+    WM -->|reason| PI["Pi Planner"]
+    PI -->|propose| OP["Operator"]
+    OP -->|approve| PI
+    PI -->|execute| FWD["Forwarding"]
+    FWD -->|route| ACT["Actuators"]
+    PI <-->|learn| PM["Pattern Memory"]
+
+    classDef green fill:#50fa7b11,stroke:#50fa7b,stroke-width:2px
+    classDef blue fill:#60a5fa11,stroke:#60a5fa,stroke-width:2px
+    classDef amber fill:#fbbf2411,stroke:#fbbf24,stroke-width:2px
+    classDef cyan fill:#22d3ee11,stroke:#22d3ee,stroke-width:2px
+
+    class SEN,ACT green
+    class CTX,WM cyan
+    class PI,PM amber
+    class FWD,OP blue
+      </pre>
+    </div>
+  </section>
+
+  <!-- SLIDE 7: DIVIDER — Mesh Protocol -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 70% 50%, var(--cyan-dim) 0%, transparent 40%);">
+    <span class="slide__number">03</span>
+    <div>
+      <h2 class="slide__heading reveal">Mesh Protocol</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">discovery · trust · routing</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 8: SPLIT — Discovery & Trust | Routing -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--primary">
+        <p class="slide__label reveal" style="color:var(--cyan);">peer connectivity</p>
+        <h2 class="slide__heading reveal" style="font-size:clamp(20px,3vw,32px);">Discovery & Trust</h2>
+        <ul class="slide__bullets" style="margin-top:14px;">
+          <li class="reveal"><code style="font-size:0.85em;background:var(--cyan-dim);color:var(--cyan);padding:1px 5px;border-radius:3px;">_clawmesh._tcp</code> mDNS service scan</li>
+          <li class="reveal">Ed25519 signed handshake payloads</li>
+          <li class="reveal">File-backed trust store with atomic writes</li>
+          <li class="reveal">Discovered peers ignored until explicitly trusted</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--secondary">
+        <p class="slide__label reveal" style="color:var(--accent);">capability routing</p>
+        <h2 class="slide__heading reveal" style="font-size:clamp(20px,3vw,32px);">Local-First</h2>
+        <ul class="slide__bullets" style="margin-top:14px;">
+          <li class="reveal">Dynamic capability registry</li>
+          <li class="reveal"><code style="font-size:0.85em;background:var(--accent-dim);color:var(--accent);padding:1px 5px;border-radius:3px;">channel:*</code> <code style="font-size:0.85em;background:var(--accent-dim);color:var(--accent);padding:1px 5px;border-radius:3px;">skill:*</code> <code style="font-size:0.85em;background:var(--accent-dim);color:var(--accent);padding:1px 5px;border-radius:3px;">actuator:*</code></li>
+          <li class="reveal">Route by advertised caps, not plugins</li>
+          <li class="reveal">RPC-based message forwarding</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 9: PIPELINE — Routing flow -->
+  <section class="slide" style="background-image:radial-gradient(ellipse at 50% 70%, var(--cyan-dim) 0%, transparent 40%);">
+    <p class="slide__label reveal">routing decision</p>
+    <h2 class="slide__heading reveal">resolveMeshRoute()</h2>
+    <div class="pipeline reveal">
+      <div class="pipeline__step" style="border-top-color:var(--cyan);">
+        <div class="pipeline__num" style="color:var(--cyan);">01</div>
+        <div class="pipeline__name">Local Check</div>
+        <div class="pipeline__desc">localCaps.has(cap)?</div>
+        <div style="margin-top:auto;"><span class="tag tag--accent">→ local</span></div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--blue);">
+        <div class="pipeline__num" style="color:var(--blue);">02</div>
+        <div class="pipeline__name">Mesh Scan</div>
+        <div class="pipeline__desc">registry.findPeer(cap)?</div>
+        <div style="margin-top:auto;"><span class="tag tag--blue">→ mesh peer</span></div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--red);">
+        <div class="pipeline__num" style="color:var(--red);">03</div>
+        <div class="pipeline__name">Unavailable</div>
+        <div class="pipeline__desc">No peer found</div>
+        <div style="margin-top:auto;"><span class="tag tag--rose">→ error</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 10: DIVIDER — Context Engine -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 25% 55%, var(--accent-dim) 0%, transparent 40%);">
+    <span class="slide__number">04</span>
+    <div>
+      <h2 class="slide__heading reveal">Context Engine</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">emergent intelligence via gossip</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 11: CONTENT (right-heavy) — Context -->
+  <section class="slide slide--content slide--content-r" style="background-image:radial-gradient(ellipse at 80% 80%, var(--accent-dim) 0%, transparent 40%);">
+    <div class="slide__inner">
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 200 200" width="200" height="200">
+          <circle cx="100" cy="100" r="70" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.1"/>
+          <circle cx="100" cy="100" r="45" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.08" stroke-dasharray="3 3"/>
+          <circle cx="60" cy="70" r="5" fill="var(--cyan)" opacity="0.6"/>
+          <circle cx="140" cy="75" r="5" fill="var(--amber)" opacity="0.6"/>
+          <circle cx="80" cy="140" r="5" fill="var(--accent)" opacity="0.6"/>
+          <circle cx="130" cy="130" r="5" fill="var(--blue)" opacity="0.6"/>
+          <line x1="60" y1="70" x2="140" y2="75" stroke="var(--accent)" stroke-width="0.5" opacity="0.2"/>
+          <line x1="140" y1="75" x2="130" y2="130" stroke="var(--accent)" stroke-width="0.5" opacity="0.2"/>
+          <line x1="130" y1="130" x2="80" y2="140" stroke="var(--accent)" stroke-width="0.5" opacity="0.2"/>
+          <line x1="80" y1="140" x2="60" y2="70" stroke="var(--accent)" stroke-width="0.5" opacity="0.2"/>
+          <text x="100" y="104" text-anchor="middle" font-size="9" fill="var(--accent)" opacity="0.4">GOSSIP</text>
+        </svg>
+      </div>
+      <div>
+        <p class="slide__label reveal">propagation</p>
+        <h2 class="slide__heading reveal">No File Sync. Just Gossip.</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">Sensor observations become <strong style="color:var(--text)">ContextFrames</strong></li>
+          <li class="reveal">Frames broadcast via WebSocket gossip</li>
+          <li class="reveal">Each node maintains a <strong style="color:var(--text)">WorldModel</strong></li>
+          <li class="reveal">Planner LLM reasons over mesh-wide context</li>
+          <li class="reveal">No manual coordination needed</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 12: DASHBOARD — Frame types -->
+  <section class="slide slide--dashboard" style="background-image:radial-gradient(ellipse at 60% 30%, var(--accent-dim) 0%, transparent 40%);">
+    <p class="slide__label reveal">context frame types</p>
+    <h2 class="slide__heading reveal" style="margin-bottom:clamp(12px,2vh,24px);">Six Kinds of Knowledge</h2>
+    <div class="slide__kpis">
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--cyan);">OBS</div>
+        <div class="slide__kpi-label">observation</div>
+        <div class="slide__kpi-desc">Sensor readings, measurements</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--blue);">EVT</div>
+        <div class="slide__kpi-label">event</div>
+        <div class="slide__kpi-desc">Task completed, state change</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--amber);">HUM</div>
+        <div class="slide__kpi-label">human input</div>
+        <div class="slide__kpi-desc">Operator commands, notes</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--accent);">INF</div>
+        <div class="slide__kpi-label">inference</div>
+        <div class="slide__kpi-desc">LLM-derived conclusions</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--purple);">AGT</div>
+        <div class="slide__kpi-label">agent response</div>
+        <div class="slide__kpi-desc">Planner reasoning + citations</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--rose);">CAP</div>
+        <div class="slide__kpi-label">capability update</div>
+        <div class="slide__kpi-desc">Node capabilities changed</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 13: DIVIDER — Intelligence -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 65% 45%, var(--amber-dim) 0%, transparent 40%);">
+    <span class="slide__number">05</span>
+    <div>
+      <h2 class="slide__heading reveal">Intelligence</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">pi-powered planning + pattern learning</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 14: SPLIT — Planner | Pattern Memory -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--primary">
+        <p class="slide__label reveal" style="color:var(--amber);">planner</p>
+        <h2 class="slide__heading reveal" style="font-size:clamp(20px,3vw,32px);">Pi-Powered LLM</h2>
+        <ul class="slide__bullets" style="margin-top:14px;">
+          <li class="reveal">Multi-provider AgentSession</li>
+          <li class="reveal">Reasons over mesh WorldModel</li>
+          <li class="reveal">Creates TaskProposals with levels</li>
+          <li class="reveal">Forwards execution to capable peers</li>
+          <li class="reveal">Farm domain knowledge injection</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--secondary">
+        <p class="slide__label reveal" style="color:var(--accent);">learning</p>
+        <h2 class="slide__heading reveal" style="font-size:clamp(20px,3vw,32px);">Pattern Memory</h2>
+        <ul class="slide__bullets" style="margin-top:14px;">
+          <li class="reveal">Captures approve/reject decisions</li>
+          <li class="reveal">Correlates to trigger conditions</li>
+          <li class="reveal">Patterns mature over repetition</li>
+          <li class="reveal">Mature patterns gossip to mesh</li>
+          <li class="reveal">Persisted to ~/.clawmesh/</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 15: DIVIDER — Trust -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 75% 55%, var(--rose-dim) 0%, transparent 40%);">
+    <span class="slide__number">06</span>
+    <div>
+      <h2 class="slide__heading reveal">Trust & Safety</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">layered evidence + LLM hard-blocking</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 16: TABLE — Trust tiers + approval levels -->
+  <section class="slide slide--table" style="background-image:radial-gradient(ellipse at 30% 80%, var(--rose-dim) 0%, transparent 40%);">
+    <p class="slide__label reveal" style="color:var(--rose);">safety model</p>
+    <h2 class="slide__heading reveal">Evidence Tiers & Approval Levels</h2>
+    <div class="table-wrap reveal" style="flex:1; min-height:0; margin-top:clamp(8px,1.5vh,16px);">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Tier</th><th>Name</th><th>Level</th><th>Execution</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag tag--cyan">T0</span></td><td>Planning inference</td><td><span class="tag tag--accent">L0</span> Safe read-only</td><td>Auto-execute</td></tr>
+            <tr><td><span class="tag tag--blue">T1</span></td><td>Unverified observation</td><td><span class="tag tag--cyan">L1</span> Bounded auto</td><td>Within defined limits</td></tr>
+            <tr><td><span class="tag tag--amber">T2</span></td><td>Operational observation</td><td><span class="tag tag--amber">L2</span> Human confirm</td><td>Awaits operator approval</td></tr>
+            <tr><td><span class="tag tag--accent">T3</span></td><td>Verified action</td><td><span class="tag tag--rose">L3</span> On-site verify</td><td>Physical presence required</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="reveal" style="margin-top:clamp(8px,1.5vh,16px);font-size:clamp(11px,1.3vw,14px);color:var(--rose);position:relative;z-index:1;">
+      ⚠ LLM-only evidence is <strong>hard-blocked</strong> from physical actuation. Requires sensor or human evidence.
+    </p>
+  </section>
+
+  <!-- SLIDE 17: DIVIDER — Channels -->
+  <section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 35% 50%, var(--blue-dim) 0%, transparent 40%);">
+    <span class="slide__number">07</span>
+    <div>
+      <h2 class="slide__heading reveal">Channels</h2>
+      <p class="slide__subtitle reveal" style="margin-top:10px;">five ways to interact with the mesh</p>
+    </div>
+  </section>
+
+  <!-- SLIDE 18: DASHBOARD — Channels -->
+  <section class="slide slide--dashboard" style="background-image:radial-gradient(ellipse at 70% 70%, var(--blue-dim) 0%, transparent 40%);">
+    <h2 class="slide__heading reveal" style="margin-bottom:clamp(12px,2vh,24px);">Interaction Channels</h2>
+    <div class="slide__kpis">
+      <div class="slide__kpi reveal" style="border-top:3px solid var(--blue);">
+        <div class="slide__kpi-val" style="color:var(--blue);font-size:clamp(18px,3vw,32px);">Telegram</div>
+        <div class="slide__kpi-desc">Long-polling bot, inline approve/reject, alert forwarding</div>
+      </div>
+      <div class="slide__kpi reveal" style="border-top:3px solid var(--accent);">
+        <div class="slide__kpi-val" style="color:var(--accent);font-size:clamp(18px,3vw,32px);">TUI</div>
+        <div class="slide__kpi-desc">Full-screen dashboard: peers, gossip, proposals, input</div>
+      </div>
+      <div class="slide__kpi reveal" style="border-top:3px solid var(--cyan);">
+        <div class="slide__kpi-val" style="color:var(--cyan);font-size:clamp(18px,3vw,32px);">Web UI</div>
+        <div class="slide__kpi-desc">Next.js: digital twin, command center, telemetry</div>
+      </div>
+      <div class="slide__kpi reveal" style="border-top:3px solid var(--amber);">
+        <div class="slide__kpi-val" style="color:var(--amber);font-size:clamp(18px,3vw,32px);">CLI</div>
+        <div class="slide__kpi-desc">Identity, trust, credentials, one-shot commands</div>
+      </div>
+      <div class="slide__kpi reveal" style="border-top:3px solid var(--purple);">
+        <div class="slide__kpi-val" style="color:var(--purple);font-size:clamp(18px,3vw,32px);">Readline</div>
+        <div class="slide__kpi-desc">Interactive stdin: proposals, world, natural language</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 19: PIPELINE — End-to-end flow -->
+  <section class="slide" style="background-image:radial-gradient(ellipse at 50% 30%, var(--accent-dim) 0%, transparent 40%);">
+    <p class="slide__label reveal">end-to-end</p>
+    <h2 class="slide__heading reveal">Sensor → Intelligence → Execution</h2>
+    <div class="pipeline reveal">
+      <div class="pipeline__step" style="border-top-color:var(--cyan);">
+        <div class="pipeline__num" style="color:var(--cyan);">01</div>
+        <div class="pipeline__name">Detect</div>
+        <div class="pipeline__desc">Jetson reads moisture 15.2%</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--accent);">
+        <div class="pipeline__num" style="color:var(--accent);">02</div>
+        <div class="pipeline__name">Gossip</div>
+        <div class="pipeline__desc">ContextFrame broadcasts</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--amber);">
+        <div class="pipeline__num" style="color:var(--amber);">03</div>
+        <div class="pipeline__name">Reason</div>
+        <div class="pipeline__desc">Mac planner analyzes</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--blue);">
+        <div class="pipeline__num" style="color:var(--blue);">04</div>
+        <div class="pipeline__name">Approve</div>
+        <div class="pipeline__desc">Operator confirms L2</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step" style="border-top-color:var(--rose);">
+        <div class="pipeline__num" style="color:var(--rose);">05</div>
+        <div class="pipeline__name">Execute</div>
+        <div class="pipeline__desc">Jetson starts pump</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 20: DASHBOARD — Stats -->
+  <section class="slide slide--dashboard" style="background-image:radial-gradient(ellipse at 40% 60%, var(--accent-dim) 0%, transparent 40%);">
+    <p class="slide__label reveal">project health</p>
+    <h2 class="slide__heading reveal" style="margin-bottom:clamp(12px,2vh,24px);">By the Numbers</h2>
+    <div class="slide__kpis">
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--accent);">9.2k</div>
+        <div class="slide__kpi-label">Lines of Code</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--cyan);">55</div>
+        <div class="slide__kpi-label">Source Files</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--blue);">135</div>
+        <div class="slide__kpi-label">Tests</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--amber);">17</div>
+        <div class="slide__kpi-label">Test Files</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--accent);">5</div>
+        <div class="slide__kpi-label">Channels</div>
+      </div>
+      <div class="slide__kpi reveal">
+        <div class="slide__kpi-val" style="color:var(--rose);">4</div>
+        <div class="slide__kpi-label">Trust Tiers</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 21: CONTENT — Design Principles -->
+  <section class="slide slide--content" style="background-image:radial-gradient(ellipse at 20% 30%, var(--accent-dim) 0%, transparent 40%);">
+    <div class="slide__inner">
+      <div>
+        <p class="slide__label reveal">philosophy</p>
+        <h2 class="slide__heading reveal">Design Principles</h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><span class="tag tag--accent">Mesh-first</span> Peer connectivity as primitive</li>
+          <li class="reveal"><span class="tag tag--cyan">Capability-driven</span> Route by caps, not plugins</li>
+          <li class="reveal"><span class="tag tag--rose">Trust before traffic</span> Explicit peer trust</li>
+          <li class="reveal"><span class="tag tag--blue">Local-first</span> Prefer local over mesh</li>
+          <li class="reveal"><span class="tag tag--amber">Emergent</span> Context gossip builds awareness</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 160 160" width="160" height="160">
+          <polygon points="80,10 150,50 150,120 80,160 10,120 10,50" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <polygon points="80,30 130,58 130,108 80,138 30,108 30,58" fill="none" stroke="var(--accent)" stroke-width="0.5" opacity="0.1" stroke-dasharray="3 3"/>
+          <circle cx="80" cy="84" r="4" fill="var(--accent)" opacity="0.4"/>
+          <text x="80" y="88" text-anchor="middle" font-size="7" fill="var(--accent)" opacity="0.3">MESH</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 22: FULL-BLEED — Next Steps -->
+  <section class="slide slide--bleed">
+    <div class="slide__bg slide__bg--gradient"></div>
+    <div class="slide__scrim"></div>
+    <div class="slide__content">
+      <p class="slide__label reveal" style="color:var(--accent);">roadmap</p>
+      <h2 class="slide__heading reveal" style="color:#fff;">What's Next</h2>
+      <ul class="slide__bullets reveal" style="margin-top:16px;">
+        <li style="color:rgba(255,255,255,0.7);">Real GPIO sensor integration (moisture, temp, pressure)</li>
+        <li style="color:rgba(255,255,255,0.7);">npm packaging for the <code style="font-size:0.85em;background:rgba(80,250,123,0.15);color:var(--accent);padding:1px 5px;border-radius:3px;">clawmesh</code> binary</li>
+        <li style="color:rgba(255,255,255,0.7);">Multi-node end-to-end examples</li>
+        <li style="color:rgba(255,255,255,0.7);">Capability announcement protocol refinement</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    themeVariables: {
+      primaryColor: isDark ? '#1a1f2a' : '#ecfdf5',
+      primaryBorderColor: isDark ? '#50fa7b' : '#0d7a3e',
+      primaryTextColor: isDark ? '#c8d6e5' : '#1a2332',
+      secondaryColor: isDark ? '#12161e' : '#eff6ff',
+      secondaryBorderColor: isDark ? '#60a5fa' : '#2563eb',
+      secondaryTextColor: isDark ? '#c8d6e5' : '#1a2332',
+      tertiaryColor: isDark ? '#1a1810' : '#fef9c3',
+      tertiaryBorderColor: isDark ? '#fbbf24' : '#d97706',
+      tertiaryTextColor: isDark ? '#c8d6e5' : '#1a2332',
+      lineColor: isDark ? '#5a6a7a' : '#94a3b8',
+      fontSize: '16px',
+      fontFamily: "'JetBrains Mono', monospace",
+      noteBkgColor: isDark ? '#1a1f2a' : '#fef9c3',
+      noteTextColor: isDark ? '#c8d6e5' : '#1a2332',
+      noteBorderColor: isDark ? '#fbbf24' : '#d97706',
+    }
+  });
+  function autoFit() {
+    document.querySelectorAll('.mermaid svg').forEach(svg => {
+      svg.removeAttribute('height');
+      svg.style.width = '100%';
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      svg.parentElement.style.width = '100%';
+    });
+    document.querySelectorAll('.slide__kpi-val').forEach(el => {
+      if (el.scrollWidth > el.clientWidth) {
+        const s = el.clientWidth / el.scrollWidth;
+        el.style.transform = 'scale(' + s + ')';
+        el.style.transformOrigin = 'left top';
+      }
+    });
+    document.querySelectorAll('.slide--quote blockquote').forEach(el => {
+      const len = el.textContent.trim().length;
+      if (len > 100) {
+        const scale = Math.max(0.5, 100 / len);
+        const fs = parseFloat(getComputedStyle(el).fontSize);
+        el.style.fontSize = Math.max(16, Math.round(fs * scale)) + 'px';
+      }
+    });
+  }
+  mermaid.run().then(() => { autoFit(); new SlideEngine(); });
+</script>
+
+<script>
+  var INITIAL_ZOOM=1;
+  function zoomDiagram(b,f){var w=b.closest('.mermaid-wrap');var t=w.querySelector('.mermaid');var c=parseFloat(t.dataset.zoom||INITIAL_ZOOM);var n=Math.min(Math.max(c*f,0.5),5);t.dataset.zoom=n;t.style.zoom=n;}
+  function resetZoom(b){var w=b.closest('.mermaid-wrap');var t=w.querySelector('.mermaid');t.dataset.zoom=INITIAL_ZOOM;t.style.zoom=INITIAL_ZOOM;}
+  function openDiagramFullscreen(b){openMermaidInNewTab(b.closest('.mermaid-wrap'));}
+  function openMermaidInNewTab(w){var svg=w.querySelector('.mermaid svg');if(!svg)return;var clone=svg.cloneNode(true);clone.style.zoom='';clone.style.transform='';var bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0a0e14';var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Diagram</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:'+bg+';padding:40px;box-sizing:border-box}svg{max-width:100%;max-height:90vh;height:auto}</style></head><body>'+clone.outerHTML+'</body></html>';window.open(URL.createObjectURL(new Blob([html],{type:'text/html'})),'_blank');}
+  document.querySelectorAll('.mermaid-wrap').forEach(function(w){w.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();var t=w.querySelector('.mermaid');var c=parseFloat(t.dataset.zoom||INITIAL_ZOOM);var f=e.deltaY<0?1.1:0.9;var n=Math.min(Math.max(c*f,0.5),5);t.dataset.zoom=n;t.style.zoom=n;},{passive:false});var sX,sY,sL,sT,sTime,didPan;w.addEventListener('mousedown',function(e){if(e.target.closest('.zoom-controls'))return;w.classList.add('is-panning');sX=e.clientX;sY=e.clientY;sL=w.scrollLeft;sT=w.scrollTop;sTime=Date.now();didPan=false;});window.addEventListener('mousemove',function(e){if(!w.classList.contains('is-panning'))return;var dx=e.clientX-sX,dy=e.clientY-sY;if(Math.abs(dx)>5||Math.abs(dy)>5)didPan=true;w.scrollLeft=sL-dx;w.scrollTop=sT-dy;});window.addEventListener('mouseup',function(){if(!w.classList.contains('is-panning'))return;w.classList.remove('is-panning');if(!didPan&&Date.now()-sTime<300)openMermaidInNewTab(w);});});
+
+  function SlideEngine(){
+    this.deck=document.querySelector('.deck');
+    this.slides=[].slice.call(document.querySelectorAll('.slide'));
+    this.current=0;this.total=this.slides.length;
+    this.buildChrome();this.bindEvents();this.observe();this.update();
+  }
+  SlideEngine.prototype.buildChrome=function(){
+    var bar=document.createElement('div');bar.className='deck-progress';document.body.appendChild(bar);this.bar=bar;
+    var dots=document.createElement('div');dots.className='deck-dots';var self=this;
+    this.slides.forEach(function(_,i){var d=document.createElement('button');d.className='deck-dot';d.title='Slide '+(i+1);d.onclick=function(){self.goTo(i);};dots.appendChild(d);});
+    document.body.appendChild(dots);this.dots=[].slice.call(dots.children);
+    var ctr=document.createElement('div');ctr.className='deck-counter';document.body.appendChild(ctr);this.counter=ctr;
+    var hints=document.createElement('div');hints.className='deck-hints';hints.textContent='\u2190 \u2192 or scroll to navigate';document.body.appendChild(hints);this.hints=hints;
+    this.hintTimer=setTimeout(function(){hints.classList.add('faded');},4000);
+  };
+  SlideEngine.prototype.bindEvents=function(){
+    var self=this;
+    document.addEventListener('keydown',function(e){
+      if(e.target.closest('.mermaid-wrap,.table-scroll,.code-scroll,input,textarea,[contenteditable]'))return;
+      if(['ArrowDown','ArrowRight',' ','PageDown'].indexOf(e.key)>-1){e.preventDefault();self.next();}
+      else if(['ArrowUp','ArrowLeft','PageUp'].indexOf(e.key)>-1){e.preventDefault();self.prev();}
+      else if(e.key==='Home'){e.preventDefault();self.goTo(0);}
+      else if(e.key==='End'){e.preventDefault();self.goTo(self.total-1);}
+      self.fadeHints();
+    });
+    var tY;
+    this.deck.addEventListener('touchstart',function(e){tY=e.touches[0].clientY;},{passive:true});
+    this.deck.addEventListener('touchend',function(e){var dy=tY-e.changedTouches[0].clientY;if(Math.abs(dy)>50){dy>0?self.next():self.prev();}});
+  };
+  SlideEngine.prototype.observe=function(){
+    var self=this;
+    var obs=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('visible');self.current=self.slides.indexOf(entry.target);self.update();}});},{threshold:0.5});
+    this.slides.forEach(function(s){obs.observe(s);});
+  };
+  SlideEngine.prototype.goTo=function(i){this.slides[Math.max(0,Math.min(i,this.total-1))].scrollIntoView({behavior:'smooth'});};
+  SlideEngine.prototype.next=function(){if(this.current<this.total-1)this.goTo(this.current+1);};
+  SlideEngine.prototype.prev=function(){if(this.current>0)this.goTo(this.current-1);};
+  SlideEngine.prototype.update=function(){
+    this.bar.style.width=((this.current+1)/this.total*100)+'%';
+    var c=this.current;this.dots.forEach(function(d,i){d.classList.toggle('active',i===c);});
+    this.counter.textContent=(this.current+1)+' / '+this.total;
+  };
+  SlideEngine.prototype.fadeHints=function(){clearTimeout(this.hintTimer);this.hints.classList.add('faded');};
+</script>
+
+</body>
+</html>
