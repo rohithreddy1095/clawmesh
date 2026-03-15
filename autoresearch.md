@@ -92,4 +92,15 @@ All files under `src/` are in scope. Specifically:
 11. ✅ **Context Sync RPC Handler** — Server-side context.sync with filters, 5 tests
 12. ✅ **Integration Wiring** — Event bus, health check, context sync wired into node-runtime, 11 integration tests
 
-### Results: 135 → 312 tests (+131%), 38 → 47 source modules (+24%), 17 → 29 test files (+71%)
+### Additional Improvements
+13. ✅ **ContextPropagator test suite** — broadcast, handleInbound, dedup, hop limiting, gossip routing (13 tests)
+14. ✅ **MockSensor test suite** — drying pattern, status transitions, stop/idempotent (7 tests)
+15. ✅ **MockActuator test suite** — start/stop/set, channel filtering, history trimming (12 tests)
+16. ✅ **FarmContextLoader test suite** — real YAML data loading, zones, assets, safety rules (8 tests)
+17. ✅ **GatewayConfig test suite** — CRUD, corrupt JSON, invalid entry filtering (8 tests)
+18. ✅ **IntentRouter extraction** — extractIntentFromForward, routeIntent with planner/mock (10 tests)
+19. ✅ **UIBroadcaster extraction** — subscriber management, auto-cleanup, send failure (9 tests)
+20. ✅ **Structured Capabilities** — parseCapabilityString, matchCapability, scoreCapability (19 tests)
+21. ✅ **DeviceIdentity test suite** — keygen, sign/verify, base64url, deviceId derivation (13 tests)
+
+### Results: 135 → 411 tests (+205%), 38 → 50 source modules (+32%), 17 → 38 test files (+124%)
