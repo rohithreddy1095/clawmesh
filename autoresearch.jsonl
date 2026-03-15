@@ -1,2 +1,3 @@
 {"type":"config","name":"ClawMesh Architecture Hardening — decompose god object, add event bus, improve testability","metricName":"test_count","metricUnit":"","bestDirection":"higher"}
 {"run":1,"commit":"c812d3b","metric":135,"metrics":{"god_object_lines":754,"source_modules":38,"test_files":17},"status":"keep","description":"Baseline: 135 tests, node-runtime 754 lines, 38 source modules, 17 test files","timestamp":1773604983726,"segment":0}
+{"run":2,"commit":"7f087de","metric":151,"metrics":{"god_object_lines":754,"source_modules":39,"test_files":18},"status":"keep","description":"Phase 1.1: Extract MeshEventBus — typed event emitter with 16 new tests covering all event types, unsubscribe, once, edge cases","timestamp":1773605070496,"segment":0}
