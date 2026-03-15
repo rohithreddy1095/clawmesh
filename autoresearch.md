@@ -73,4 +73,23 @@ All files under `src/` are in scope. Specifically:
 12. Capability negotiation with health-aware routing
 
 ## What's Been Tried
-_Nothing yet — starting from baseline._
+
+### Phase 1: Foundation Hardening ✅
+1. ✅ **MeshEventBus** — Typed EventEmitter with 12 event types, cleanup returns, once(), 16 tests
+2. ✅ **Transport Abstraction** — Transport interface, WebSocketTransport adapter, MockTransport, 11 tests
+3. ✅ **Context Sync Protocol** — Anti-entropy sync handler, client, calculateSyncSince, 15 tests
+4. ✅ **RPC Dispatcher** — Extracted from node-runtime, method routing, parse/validate, 22 tests
+
+### Phase 2: Intelligence Layer ✅
+5. ✅ **Intelligent WorldModel** — Relevance scoring, TTL eviction, zone-grouped summarize(), 21 tests
+6. ✅ **Priority TriggerQueue** — Priority ordering, dedup by metric+zone, max size eviction, 21 tests
+7. ✅ **CRDT PatternMemory** — Per-source counters, grow-only CRDT merge, 16 tests
+
+### Phase 3: Operational Excellence ✅
+8. ✅ **Structured MeshLogger** — JSON/human output, levels, correlation IDs, child loggers, 15 tests
+9. ✅ **Health Check RPC** — computeHealthCheck, degraded detection, mesh.health handler, 13 tests
+10. ✅ **Auto-Connect Manager** — Discovery→trust→connect pipeline, rate limiting, 11 tests
+11. ✅ **Context Sync RPC Handler** — Server-side context.sync with filters, 5 tests
+12. ✅ **Integration Wiring** — Event bus, health check, context sync wired into node-runtime, 11 integration tests
+
+### Results: 135 → 312 tests (+131%), 38 → 47 source modules (+24%), 17 → 29 test files (+71%)
