@@ -7,7 +7,7 @@
 - **Wire health check into node-runtime**: Register the mesh.health RPC handler. ~5 lines of wiring.
 - **Wire context sync into peer-client**: On peer connection, send context.sync request. ~20 lines.
 - **Structured logger adoption**: Replace console.log calls across the codebase with MeshLogger instances.
-- **Trust audit trail**: Log every trust evaluation decision to a persistent audit log for compliance/debugging.
+- ✅ **Trust audit trail**: Done — TrustAuditTrail with recording, query, stats.
 - **Capability versioning**: Evolve flat capability strings to structured objects with version, params, health.
 - **World model summarize() in planner**: Use model.summarize() in the before_agent_start hook to produce better LLM context.
 - **Pattern decay**: Add time-based confidence decay to patterns that haven't been reinforced recently.
