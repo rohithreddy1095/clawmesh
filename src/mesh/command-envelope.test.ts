@@ -87,5 +87,74 @@ describe("clawmesh command envelope", () => {
       expect(result.code).toBe("TRUST_ENVELOPE_MISMATCH");
     }
   });
-});
 
+  // ─── Additional validation tests ─────────
+
+  it("validates a correct standalone envelope", () => {
+    const envelope = createClawMeshCommandEnvelope({
+      target: { kind: "capability", ref: "actuator:pump:P1" },
+      operation: { name: "start" },
+      trust: {
+        action_type: "actuation",
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "human",
+      },
+    });
+    expect(validateClawMeshCommandEnvelope(envelope)).toBe(true);
+  });
+
+  it("rejects envelope with wrong version", () => {
+    expect(validateClawMeshCommandEnvelope({ version: 2, kind: "clawmesh.command" })).toBe(false);
+  });
+
+  it("rejects envelope with wrong kind", () => {
+    expect(validateClawMeshCommandEnvelope({ version: 1, kind: "other" })).toBe(false);
+  });
+
+  it("rejects non-object input", () => {
+    expect(validateClawMeshCommandEnvelope(null)).toBe(false);
+    expect(validateClawMeshCommandEnvelope(42)).toBe(false);
+    expect(validateClawMeshCommandEnvelope("string")).toBe(false);
+  });
+
+  it("resolveMeshForwardTrustMetadata passes when no command", () => {
+    const result = resolveMeshForwardTrustMetadata({
+      channel: "clawmesh",
+      to: "test",
+      originGatewayId: "gw",
+      idempotencyKey: "k",
+      trust: { action_type: "communication" },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.trust?.action_type).toBe("communication");
+    }
+  });
+
+  it("resolveMeshForwardTrustMetadata rejects invalid envelope", () => {
+    const result = resolveMeshForwardTrustMetadata({
+      channel: "clawmesh",
+      to: "test",
+      originGatewayId: "gw",
+      idempotencyKey: "k",
+      command: { version: 99 } as any,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("createClawMeshCommandEnvelope uses provided commandId", () => {
+    const envelope = createClawMeshCommandEnvelope({
+      commandId: "custom-id-123",
+      target: { kind: "capability", ref: "x" },
+      operation: { name: "y" },
+      trust: {
+        action_type: "communication",
+        evidence_trust_tier: "T0_planning_inference",
+        minimum_trust_tier: "T0_planning_inference",
+        verification_required: "none",
+      },
+    });
+    expect(envelope.commandId).toBe("custom-id-123");
+  });
+});

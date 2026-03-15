@@ -15,6 +15,9 @@ import { WorldModel } from "./world-model.js";
 import { createMeshServerHandlers } from "./peer-server.js";
 import { createMeshForwardHandlers } from "./server-methods/forward.js";
 import { createMeshPeersHandlers } from "./server-methods/peers.js";
+import { createContextSyncHandlers } from "./server-methods/context-sync.js";
+import { createHealthCheckHandlers } from "./health-check.js";
+import { MeshEventBus } from "./event-bus.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -118,9 +121,11 @@ export class MeshNodeRuntime {
   readonly capabilityRegistry = new MeshCapabilityRegistry();
   readonly contextPropagator: ContextPropagator;
   readonly worldModel: WorldModel;
+  readonly eventBus: MeshEventBus;
   readonly mockActuator?: MockActuatorController;
   readonly discovery?: MeshDiscovery;
   readonly piSession?: PiSession;
+  readonly startedAtMs: number = Date.now();
 
   private readonly opts: MeshNodeRuntimeOptions;
   private readonly host: string;
@@ -155,6 +160,8 @@ export class MeshNodeRuntime {
       }
     }
 
+    this.eventBus = new MeshEventBus();
+
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
@@ -167,9 +174,10 @@ export class MeshNodeRuntime {
       log: this.log,
     });
 
-    // Wire locally-originated frames into the world model
+    // Wire locally-originated frames into the world model + event bus
     this.contextPropagator.onLocalBroadcast = (frame) => {
       this.worldModel.ingest(frame);
+      this.eventBus.emit("context.frame.broadcast", { frame });
     };
 
     const sharedHandlers: GatewayRequestHandlers = {
@@ -182,6 +190,7 @@ export class MeshNodeRuntime {
           if (session.capabilities.length > 0) {
             this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
           }
+          this.eventBus.emit("peer.connected", { session });
         },
       }),
       ...createMeshPeersHandlers({
@@ -207,6 +216,23 @@ export class MeshNodeRuntime {
         }),
       );
     }
+
+    // ─── Context Sync & Health Check handlers ───────────────
+    Object.assign(
+      sharedHandlers,
+      createContextSyncHandlers({ worldModel: this.worldModel }),
+      createHealthCheckHandlers({
+        nodeId: this.identity.deviceId,
+        displayName: this.displayName,
+        startedAtMs: this.startedAtMs,
+        version: "0.2.0",
+        localCapabilities: this.capabilities,
+        peerRegistry: this.peerRegistry,
+        capabilityRegistry: this.capabilityRegistry,
+        worldModel: this.worldModel,
+        getPlannerMode: () => this.piSession?.mode,
+      }),
+    );
 
     // ─── Chat & UI subscriber handlers ─────────────────────
     sharedHandlers["chat.subscribe"] = ({ req, respond }) => {
@@ -464,6 +490,7 @@ export class MeshNodeRuntime {
           const isNew = this.contextPropagator.handleInbound(frame, peer.deviceId);
           if (isNew) {
             this.worldModel.ingest(frame);
+            this.eventBus.emit("context.frame.ingested", { frame });
           }
         }
       },
@@ -582,6 +609,7 @@ export class MeshNodeRuntime {
       const isNew = this.contextPropagator.handleInbound(contextFrame, fromDeviceId);
       if (isNew) {
         this.worldModel.ingest(contextFrame);
+        this.eventBus.emit("context.frame.ingested", { frame: contextFrame });
       }
       return;
     }

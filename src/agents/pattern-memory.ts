@@ -13,6 +13,13 @@ import { homedir } from "node:os";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
+/**
+ * Per-source counters for CRDT merge.
+ * Each device tracks its own approval/rejection counts.
+ * On merge, sum across all sources for correct distributed totals.
+ */
+export type SourceCounters = Record<string, { approvals: number; rejections: number }>;
+
 export type LearnedPattern = {
   /** Unique pattern ID. */
   patternId: string;
@@ -31,10 +38,12 @@ export type LearnedPattern = {
     operationParams?: Record<string, unknown>;
     summary: string;
   };
-  /** How many times this pattern was approved. */
+  /** How many times this pattern was approved (aggregate across all sources). */
   approvalCount: number;
-  /** How many times this pattern was rejected. */
+  /** How many times this pattern was rejected (aggregate across all sources). */
   rejectionCount: number;
+  /** Per-source counters for CRDT merge (grow-only counters per device). */
+  sourceCounters?: SourceCounters;
   /** Distinct trigger event IDs that led to this pattern firing. */
   distinctTriggerEvents: string[];
   /** Confidence score: approvals / (approvals + rejections). */
@@ -52,20 +61,60 @@ type PatternStore = {
   patterns: LearnedPattern[];
 };
 
+// ─── CRDT Helpers ───────────────────────────────────────────────────
+
+/**
+ * Merge two source counter maps using per-source max (grow-only counter CRDT).
+ */
+export function mergeSourceCounters(local: SourceCounters, remote: SourceCounters): SourceCounters {
+  const merged: SourceCounters = { ...local };
+  for (const [source, remoteCounts] of Object.entries(remote)) {
+    const localCounts = merged[source];
+    if (localCounts) {
+      merged[source] = {
+        approvals: Math.max(localCounts.approvals, remoteCounts.approvals),
+        rejections: Math.max(localCounts.rejections, remoteCounts.rejections),
+      };
+    } else {
+      merged[source] = { ...remoteCounts };
+    }
+  }
+  return merged;
+}
+
+/**
+ * Sum all per-source counters into aggregate totals.
+ */
+export function aggregateSourceCounters(counters: SourceCounters): {
+  approvals: number;
+  rejections: number;
+} {
+  let approvals = 0;
+  let rejections = 0;
+  for (const counts of Object.values(counters)) {
+    approvals += counts.approvals;
+    rejections += counts.rejections;
+  }
+  return { approvals, rejections };
+}
+
 // ─── PatternMemory ──────────────────────────────────────────────────
 
 export class PatternMemory {
   private patterns = new Map<string, LearnedPattern>();
   private readonly persistPath: string;
   private readonly log: { info: (msg: string) => void };
+  private readonly localDeviceId: string;
 
   constructor(opts?: {
     persistPath?: string;
+    localDeviceId?: string;
     log?: { info: (msg: string) => void };
   }) {
     this.persistPath =
       opts?.persistPath ??
       join(homedir(), ".clawmesh", "mesh", "patterns.json");
+    this.localDeviceId = opts?.localDeviceId ?? "local";
     this.log = opts?.log ?? { info: console.log };
     this.load();
   }
@@ -100,6 +149,7 @@ export class PatternMemory {
         action: params.action,
         approvalCount: 0,
         rejectionCount: 0,
+        sourceCounters: {},
         distinctTriggerEvents: [],
         confidence: 0,
         firstSeenAt: Date.now(),
@@ -107,11 +157,22 @@ export class PatternMemory {
       };
     }
 
-    if (params.approved) {
-      pattern.approvalCount++;
-    } else {
-      pattern.rejectionCount++;
+    // Update per-source CRDT counters
+    const localId = this.localDeviceId;
+    if (!pattern.sourceCounters) pattern.sourceCounters = {};
+    if (!pattern.sourceCounters[localId]) {
+      pattern.sourceCounters[localId] = { approvals: 0, rejections: 0 };
     }
+    if (params.approved) {
+      pattern.sourceCounters[localId].approvals++;
+    } else {
+      pattern.sourceCounters[localId].rejections++;
+    }
+
+    // Recompute aggregates from all source counters
+    const { approvals, rejections } = aggregateSourceCounters(pattern.sourceCounters);
+    pattern.approvalCount = approvals;
+    pattern.rejectionCount = rejections;
 
     if (params.triggerEventId && !pattern.distinctTriggerEvents.includes(params.triggerEventId)) {
       pattern.distinctTriggerEvents.push(params.triggerEventId);
@@ -169,7 +230,12 @@ export class PatternMemory {
   }
 
   /**
-   * Import patterns from a remote node. Imported patterns start at lower confidence.
+   * Import patterns from a remote node using CRDT merge.
+   *
+   * Merge strategy (grow-only counters per source):
+   *   - For each source in remote.sourceCounters, take max(local, remote)
+   *   - Recompute aggregates from merged source counters
+   *   - This correctly handles concurrent decisions across nodes
    */
   importPatterns(patterns: LearnedPattern[], sourceDeviceId: string): number {
     let imported = 0;
@@ -177,19 +243,35 @@ export class PatternMemory {
       const key = remote.patternId;
       const existing = this.patterns.get(key);
       if (existing) {
-        // Merge: take the higher counts but don't let remote override local decisions
-        if (remote.lastUpdatedAt > existing.lastUpdatedAt) {
-          existing.approvalCount = Math.max(existing.approvalCount, remote.approvalCount);
-          existing.rejectionCount = Math.max(existing.rejectionCount, remote.rejectionCount);
-          const total = existing.approvalCount + existing.rejectionCount;
-          existing.confidence = total > 0 ? existing.approvalCount / total : 0;
-          existing.lastUpdatedAt = Date.now();
+        // CRDT merge: merge per-source counters using max()
+        const mergedCounters = mergeSourceCounters(
+          existing.sourceCounters ?? {},
+          remote.sourceCounters ?? {},
+        );
+        existing.sourceCounters = mergedCounters;
+
+        // Recompute aggregates from merged counters
+        const { approvals, rejections } = aggregateSourceCounters(mergedCounters);
+        existing.approvalCount = approvals;
+        existing.rejectionCount = rejections;
+        const total = approvals + rejections;
+        existing.confidence = total > 0 ? approvals / total : 0;
+        existing.lastUpdatedAt = Date.now();
+
+        // Merge distinct trigger events
+        for (const eventId of remote.distinctTriggerEvents) {
+          if (!existing.distinctTriggerEvents.includes(eventId)) {
+            existing.distinctTriggerEvents.push(eventId);
+          }
+        }
+        if (existing.distinctTriggerEvents.length > 20) {
+          existing.distinctTriggerEvents = existing.distinctTriggerEvents.slice(-20);
         }
       } else {
-        // New pattern from remote — start at 60% of their confidence
+        // New pattern from remote — import with source counters
         this.patterns.set(key, {
           ...remote,
-          confidence: remote.confidence * 0.6,
+          sourceCounters: remote.sourceCounters ?? {},
           sourceDeviceId,
           lastUpdatedAt: Date.now(),
         });

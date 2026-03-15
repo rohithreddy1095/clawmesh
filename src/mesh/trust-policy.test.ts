@@ -93,5 +93,117 @@ describe("mesh trust policy", () => {
     );
     expect(compareMeshTrustTiers("T0_planning_inference", "T0_planning_inference")).toBe(0);
   });
+
+  // ─── Additional edge cases ────────────────
+
+  it("allows non-actuation communication without trust metadata", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "communication",
+      },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("allows non-actuation observation without trust metadata", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "observation",
+      },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects actuation with missing required trust fields", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "actuation",
+        // Missing: evidence_trust_tier, minimum_trust_tier, verification_required
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("TRUST_METADATA_REQUIRED");
+    }
+  });
+
+  it("rejects invalid trust tier values", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        evidence_trust_tier: "INVALID_TIER" as any,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("INVALID_TRUST_POLICY");
+    }
+  });
+
+  it("rejects invalid verification_required values", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        verification_required: "quantum_entangled" as any,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("INVALID_TRUST_POLICY");
+    }
+  });
+
+  it("allows actuation with mixed evidence sources (sensor + human)", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor", "human"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("allows actuation with device_or_human verification satisfied", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor", "device"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "device_or_human",
+        verification_satisfied: true,
+      },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("allows actuation with exact tier match (T2 meets T2 minimum)", () => {
+    const result = evaluateMeshForwardTrust({
+      ...basePayload(),
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["sensor"],
+        evidence_trust_tier: "T2_operational_observation",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("orders all trust tiers", () => {
+    expect(compareMeshTrustTiers("T0_planning_inference", "T1_unverified_observation")).toBeLessThan(0);
+    expect(compareMeshTrustTiers("T1_unverified_observation", "T2_operational_observation")).toBeLessThan(0);
+    expect(compareMeshTrustTiers("T2_operational_observation", "T3_verified_action_evidence")).toBeLessThan(0);
+    expect(compareMeshTrustTiers("T3_verified_action_evidence", "T0_planning_inference")).toBeGreaterThan(0);
+  });
 });
 
