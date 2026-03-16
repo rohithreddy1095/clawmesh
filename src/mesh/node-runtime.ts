@@ -303,6 +303,7 @@ export class MeshNodeRuntime {
         const deviceId = this.peerRegistry.unregister(connId);
         if (deviceId) {
           this.capabilityRegistry.removePeer(deviceId);
+          this.eventBus.emit("peer.disconnected", { deviceId, reason: "socket closed" });
           this.log.info(`mesh: inbound peer disconnected ${deviceId.slice(0, 12)}…`);
         }
       });
@@ -466,6 +467,7 @@ export class MeshNodeRuntime {
       onDisconnected: (deviceId) => {
         this.capabilityRegistry.removePeer(deviceId);
         this.autoConnect.markDisconnected(deviceId);
+        this.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
         this.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
       onError: (err) => {
