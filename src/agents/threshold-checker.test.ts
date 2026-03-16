@@ -230,4 +230,22 @@ describe("isPermanentLLMError", () => {
     expect(isPermanentLLMError(null)).toBe(false);
     expect(isPermanentLLMError(undefined)).toBe(false);
   });
+
+  it("handles number inputs", () => {
+    expect(isPermanentLLMError(403)).toBe(true);
+    expect(isPermanentLLMError(401)).toBe(true);
+    expect(isPermanentLLMError(429)).toBe(false);
+    expect(isPermanentLLMError(500)).toBe(false);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isPermanentLLMError("FORBIDDEN")).toBe(true);
+    expect(isPermanentLLMError("Unauthorized")).toBe(true);
+  });
+
+  it("handles Error objects with stack traces", () => {
+    const err = new Error("API Error: 403 Forbidden");
+    err.stack = "Error: API Error: 403 Forbidden\n    at fetch (/path/to/file.js:42)";
+    expect(isPermanentLLMError(err)).toBe(true);
+  });
 });

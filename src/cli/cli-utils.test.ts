@@ -95,4 +95,12 @@ describe("validatePeerSpec", () => {
   it("returns error for empty string", () => {
     expect(validatePeerSpec("")).not.toBeNull();
   });
+
+  it("returns null for spec with TLS fingerprint", () => {
+    expect(validatePeerSpec("dev=wss://host:443|sha256:AABB")).toBeNull();
+  });
+
+  it("returns error for whitespace-only spec", () => {
+    expect(validatePeerSpec("   ")).not.toBeNull();
+  });
 });
