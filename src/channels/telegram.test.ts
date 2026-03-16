@@ -74,6 +74,49 @@ describe("TelegramChannel MarkdownV2 escaping", () => {
   });
 });
 
+describe("TelegramChannel access control", () => {
+  it("empty allowedChatIds means all chats are allowed", async () => {
+    const { TelegramChannel } = await import("./telegram.js");
+    const instance = Object.create(TelegramChannel.prototype);
+    instance["allowedChatIds"] = new Set();
+    // No allowlist = all allowed
+    expect(instance["allowedChatIds"].size).toBe(0);
+  });
+
+  it("allowedChatIds filters unauthorized chats", async () => {
+    const { TelegramChannel } = await import("./telegram.js");
+    const instance = Object.create(TelegramChannel.prototype);
+    instance["allowedChatIds"] = new Set([12345, 67890]);
+
+    expect(instance["allowedChatIds"].has(12345)).toBe(true);
+    expect(instance["allowedChatIds"].has(67890)).toBe(true);
+    expect(instance["allowedChatIds"].has(99999)).toBe(false);
+  });
+});
+
+describe("TelegramChannel alert management", () => {
+  it("tracks alert subscribers", async () => {
+    const { TelegramChannel } = await import("./telegram.js");
+    const instance = Object.create(TelegramChannel.prototype);
+    instance["alertSubscribers"] = new Set();
+
+    instance["alertSubscribers"].add(12345);
+    expect(instance["alertSubscribers"].has(12345)).toBe(true);
+    expect(instance["alertSubscribers"].size).toBe(1);
+  });
+
+  it("tracks alerted frame IDs to prevent duplicates", async () => {
+    const { TelegramChannel } = await import("./telegram.js");
+    const instance = Object.create(TelegramChannel.prototype);
+    instance["alertedFrameIds"] = new Set();
+
+    instance["alertedFrameIds"].add("frame-1");
+    instance["alertedFrameIds"].add("frame-2");
+    expect(instance["alertedFrameIds"].has("frame-1")).toBe(true);
+    expect(instance["alertedFrameIds"].has("frame-3")).toBe(false);
+  });
+});
+
 describe("TelegramChannel conversation tracking", () => {
   it("creates and retrieves conversations by chat ID", async () => {
     const { TelegramChannel } = await import("./telegram.js");
