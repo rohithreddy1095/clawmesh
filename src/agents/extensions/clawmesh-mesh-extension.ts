@@ -410,21 +410,29 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
     // Inject fresh mesh state snapshot each agent turn
     pi.on("before_agent_start", (event) => {
       const peers = runtime.listConnectedPeers();
-      const recentFrames = runtime.worldModel.getRecentFrames(5);
       const pending = [...state.proposals.values()].filter(
         (p) => p.status === "proposed" || p.status === "awaiting_approval",
       );
+
+      // Use the intelligent world model summarize() for compact, zone-grouped context
+      const worldSummary = runtime.worldModel.summarize(10);
+
+      // Also include the top 3 most relevant frames for detailed LLM reasoning
+      const relevantFrames = runtime.worldModel.getRelevantFrames(3);
+      const relevantSection = relevantFrames.length > 0
+        ? `Most relevant frames:\n${relevantFrames.map((f) => `  [${f.kind}] ${f.data?.metric ?? f.data?.event ?? "—"}: ${JSON.stringify(f.data).slice(0, 120)}`).join("\n")}`
+        : "";
 
       const snapshot = [
         `\n\n# Live Mesh Snapshot (${new Date().toISOString()})`,
         `Connected peers: ${peers.length}`,
         ...peers.map((p) => `  ${p.displayName ?? p.deviceId.slice(0, 12)} [${p.capabilities.join(",")}]`),
-        `Recent frames: ${recentFrames.length}`,
-        ...recentFrames.map((f) => `  [${f.kind}] ${f.data?.metric ?? f.data?.event ?? "—"}: ${JSON.stringify(f.data).slice(0, 100)}`),
+        worldSummary,
+        relevantSection,
         pending.length > 0
           ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.summary}`).join("\n")}`
           : "Pending proposals: 0",
-      ].join("\n");
+      ].filter(Boolean).join("\n");
 
       return {
         systemPrompt: event.systemPrompt + snapshot,
