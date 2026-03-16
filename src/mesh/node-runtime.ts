@@ -4,7 +4,6 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { MeshStaticPeer } from "../mesh/types.mesh.js";
 import { rawDataToString } from "../infra/ws.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
-import { forwardMessageToPeer } from "./forwarding.js";
 import { MeshCapabilityRegistry } from "./capabilities.js";
 import { MockActuatorController, createMockActuatorHandlers } from "./mock-actuator.js";
 import { MeshPeerClient } from "./peer-client.js";
@@ -25,7 +24,7 @@ import { routeInboundMessage } from "./message-router.js";
 import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
-import { evaluateMeshForwardTrust } from "./trust-policy.js";
+import { sendActuation } from "./actuation-sender.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -85,17 +84,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function defaultActuationTrust(): MeshForwardTrustMetadata {
-  return {
-    action_type: "actuation",
-    evidence_sources: ["sensor", "human"],
-    evidence_trust_tier: "T3_verified_action_evidence",
-    minimum_trust_tier: "T2_operational_observation",
-    verification_required: "human",
-    verification_satisfied: true,
-    approved_by: ["operator:local-cli"],
-  };
-}
 
 export class MeshNodeRuntime {
   readonly identity: DeviceIdentity;
@@ -535,55 +523,11 @@ export class MeshNodeRuntime {
   }
 
   async sendMockActuation(params: SendMockActuationParams) {
-    // If the caller provides explicit trust metadata, use it as-is.
-    // Only apply the safe defaults when no trust is specified.
-    const trust = (params.trust ?? defaultActuationTrust()) as ClawMeshCommandEnvelopeV1["trust"];
-
-    // Sender-side trust evaluation: reject before transmitting over the wire.
-    // This catches policy violations early (e.g. LLM-only actuation) rather than
-    // letting the receiver reject after a round-trip.
-    const senderPayload: MeshForwardPayload = {
-      channel: "clawmesh",
-      to: params.targetRef,
-      originGatewayId: this.identity.deviceId,
-      idempotencyKey: "",
-      trust,
-    };
-    const trustDecision = evaluateMeshForwardTrust(senderPayload);
-    this.trustAudit.record(senderPayload, trustDecision);
-    if (!trustDecision.ok) {
-      this.log.warn(
-        `mesh: sender-side trust rejection: ${trustDecision.code} — ${trustDecision.message}`,
-      );
-      return {
-        ok: false,
-        error: `trust policy: ${trustDecision.code} — ${trustDecision.message}`,
-      };
-    }
-
-    return await forwardMessageToPeer({
+    return await sendActuation(params, {
       peerRegistry: this.peerRegistry,
-      peerDeviceId: params.peerDeviceId,
-      channel: "clawmesh",
-      to: params.targetRef,
-      message: params.note,
-      originGatewayId: this.identity.deviceId,
-      commandDraft: {
-        source: {
-          nodeId: this.identity.deviceId,
-          role: "planner",
-        },
-        target: {
-          kind: "capability",
-          ref: params.targetRef,
-        },
-        operation: {
-          name: params.operation,
-          params: params.operationParams,
-        },
-        trust,
-        note: params.note,
-      },
+      deviceId: this.identity.deviceId,
+      trustAudit: this.trustAudit,
+      log: this.log,
     });
   }
 

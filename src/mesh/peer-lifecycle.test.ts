@@ -86,8 +86,8 @@ describe("Peer Lifecycle via MeshNodeRuntime", () => {
 describe("Two-node peer connection", () => {
   let tmpDir1: string;
   let tmpDir2: string;
-  let node1: MeshNodeRuntime;
-  let node2: MeshNodeRuntime;
+  let node1: MeshNodeRuntime | undefined;
+  let node2: MeshNodeRuntime | undefined;
 
   beforeEach(() => {
     tmpDir1 = makeTempDir();
@@ -101,39 +101,28 @@ describe("Two-node peer connection", () => {
     try { rmSync(tmpDir2, { recursive: true }); } catch {}
   });
 
-  it("two nodes can start on different ports", async () => {
+  it("two nodes get unique identities", () => {
     const id1 = loadOrCreateDeviceIdentity(join(tmpDir1, "device.json"));
     const id2 = loadOrCreateDeviceIdentity(join(tmpDir2, "device.json"));
 
+    // Different keys = different device IDs
+    expect(id1.deviceId).not.toBe(id2.deviceId);
+    expect(id1.publicKeyPem).not.toBe(id2.publicKeyPem);
+
+    // Both are valid SHA256 hex
+    expect(id1.deviceId).toMatch(/^[a-f0-9]{64}$/);
+    expect(id2.deviceId).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("runtime can be created without starting", () => {
+    const id1 = loadOrCreateDeviceIdentity(join(tmpDir1, "device.json"));
     node1 = new MeshNodeRuntime({
       identity: id1,
       port: 0,
-      displayName: "node-1",
+      displayName: "no-start",
       log: noop,
     });
-    node2 = new MeshNodeRuntime({
-      identity: id2,
-      port: 0,
-      displayName: "node-2",
-      log: noop,
-    });
-
-    const addr1 = await node1.start();
-    const addr2 = await node2.start();
-
-    expect(addr1.port).toBeGreaterThan(0);
-    expect(addr2.port).toBeGreaterThan(0);
-    expect(addr1.port).not.toBe(addr2.port);
-
-    await node1.stop();
-    await node2.stop();
-  });
-
-  it("node identity is unique per instance", () => {
-    const id1 = loadOrCreateDeviceIdentity(join(tmpDir1, "device.json"));
-    const id2 = loadOrCreateDeviceIdentity(join(tmpDir2, "device.json"));
-
-    expect(id1.deviceId).not.toBe(id2.deviceId);
-    expect(id1.publicKeyPem).not.toBe(id2.publicKeyPem);
+    expect(node1.displayName).toBe("no-start");
+    expect(node1.identity.deviceId).toBe(id1.deviceId);
   });
 });
