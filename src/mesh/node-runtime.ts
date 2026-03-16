@@ -19,6 +19,8 @@ import { createContextSyncHandlers } from "./server-methods/context-sync.js";
 import { createHealthCheckHandlers } from "./health-check.js";
 import { MeshEventBus } from "./event-bus.js";
 import { RpcDispatcher } from "./rpc-dispatcher.js";
+import { UIBroadcaster } from "./ui-broadcaster.js";
+import { extractIntentFromForward, routeIntent } from "./intent-router.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -28,9 +30,6 @@ import type {
 import { PiSession } from "../agents/pi-session.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
-
-// RPC types imported from rpc-dispatcher.ts
-type GatewayRequestHandlers = Record<string, import("./rpc-dispatcher.js").RpcHandlerFn>;
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
@@ -117,7 +116,7 @@ export class MeshNodeRuntime {
 
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
-  private readonly uiSubscribers = new Set<WebSocket>();
+  readonly uiBroadcaster = new UIBroadcaster();
   private wss: WebSocketServer | null = null;
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
@@ -211,10 +210,7 @@ export class MeshNodeRuntime {
     this.rpcDispatcher.register("chat.subscribe", ({ req, respond }) => {
       const socket = (req as any)._socket as WebSocket | undefined;
       if (socket) {
-        this.uiSubscribers.add(socket);
-        socket.addEventListener("close", () => {
-          this.uiSubscribers.delete(socket);
-        });
+        this.uiBroadcaster.addSubscriber(socket);
         this.log.info("mesh: UI client subscribed to chat");
       }
       respond(true, { subscribed: true });
@@ -261,12 +257,7 @@ export class MeshNodeRuntime {
    * Send an event to all UI WebSocket subscribers (browsers that called chat.subscribe).
    */
   broadcastToUI(event: string, payload: unknown): void {
-    const msg = JSON.stringify({ type: "event", event, payload });
-    for (const ws of this.uiSubscribers) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(msg);
-      }
-    }
+    this.uiBroadcaster.broadcast(event, payload);
   }
 
   async start(): Promise<{ host: string; port: number }> {
@@ -302,7 +293,7 @@ export class MeshNodeRuntime {
 
       socket.on("close", () => {
         this.inboundSocketConnIds.delete(socket);
-        this.uiSubscribers.delete(socket);
+        this.uiBroadcaster.removeSubscriber(socket);
         const deviceId = this.peerRegistry.unregister(connId);
         if (deviceId) {
           this.capabilityRegistry.removePeer(deviceId);
@@ -588,66 +579,18 @@ export class MeshNodeRuntime {
     // --- INTELLIGENCE HANDLER: route operator intents to planner ---
     if (frame.type === "req" && frame.method === "mesh.message.forward") {
       const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
-
-      // If targeting agent:pi, route to the planner loop (if active) or mock fallback
-      if (fwdParams.to === "agent:pi" && fwdParams.channel === "clawmesh") {
-        const cmd = fwdParams.commandDraft as Record<string, unknown> | undefined;
-        const operation = cmd?.operation as Record<string, unknown> | undefined;
-        if (operation?.name === "intent:parse") {
-          const intentText = (operation.params as Record<string, unknown>)?.text ?? "Unknown intent";
-          const conversationId = ((operation.params as Record<string, unknown>)?.conversationId as string) || randomUUID();
-          const requestId = randomUUID();
-
-          // Route to Pi planner if available, otherwise mock fallback
-          if (this.piSession) {
-            this.log.info(`[pi-planner] Operator intent: "${intentText}" (conv=${conversationId.slice(0, 8)})`);
-
-            this.contextPropagator.broadcastHumanInput({
-              data: { intent: intentText, conversationId, requestId },
-              note: `Operator submitted intent via UI`,
-            });
-
-            this.piSession.handleOperatorIntent(String(intentText), { conversationId, requestId });
-          } else {
-            // Fallback: mock handler for UI testing without LLM
-            this.log.info(`[mock-pi] Received natural language intent: "${intentText}"`);
-
-            this.contextPropagator.broadcastHumanInput({
-              data: { intent: intentText, conversationId, requestId },
-              note: `Operator submitted intent`,
-            });
-
-            // Send thinking status to UI
-            this.broadcastToUI("context.frame", {
-              kind: "agent_response",
-              frameId: randomUUID(),
-              sourceDeviceId: this.identity.deviceId,
-              sourceDisplayName: this.displayName,
-              timestamp: Date.now(),
-              data: { conversationId, requestId, message: "", status: "thinking" },
-              trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
-            });
-
-            setTimeout(() => {
-              const responseFrame = {
-                kind: "agent_response" as const,
-                frameId: randomUUID(),
-                sourceDeviceId: this.identity.deviceId,
-                sourceDisplayName: this.displayName,
-                timestamp: Date.now(),
-                data: {
-                  conversationId,
-                  requestId,
-                  message: `I received your intent: "${intentText}". This is a simulated response — enable the Pi planner (--pi-planner) for real intelligence.`,
-                  status: "complete",
-                },
-                trust: { evidence_sources: ["llm" as const], evidence_trust_tier: "T0_planning_inference" as const },
-              };
-              this.broadcastToUI("context.frame", responseFrame);
-              this.log.info(`[mock-pi] Broadcasted mock agent_response for intent.`);
-            }, 2000);
-          }
-        }
+      const intent = extractIntentFromForward(fwdParams);
+      if (intent) {
+        routeIntent(intent, {
+          deviceId: this.identity.deviceId,
+          displayName: this.displayName,
+          contextPropagator: this.contextPropagator,
+          broadcastToUI: (event, payload) => this.broadcastToUI(event, payload),
+          handlePlannerIntent: this.piSession
+            ? (text, opts) => this.piSession!.handleOperatorIntent(text, opts)
+            : undefined,
+          log: this.log,
+        });
       }
     }
     // ------------------------------------------------

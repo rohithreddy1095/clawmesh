@@ -93,6 +93,43 @@ describe("RpcDispatcher wiring in MeshNodeRuntime", () => {
   });
 });
 
+describe("UIBroadcaster wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("exposes uiBroadcaster as a public property", () => {
+    expect(runtime.uiBroadcaster).toBeDefined();
+    expect(typeof runtime.uiBroadcaster.broadcast).toBe("function");
+  });
+
+  it("broadcastToUI delegates to uiBroadcaster", () => {
+    // broadcastToUI should not throw even with no subscribers
+    expect(() => {
+      runtime.broadcastToUI("test.event", { data: "hello" });
+    }).not.toThrow();
+  });
+
+  it("starts with zero UI subscribers", () => {
+    expect(runtime.uiBroadcaster.subscriberCount).toBe(0);
+  });
+});
+
 describe("MeshNodeRuntime with mock actuator", () => {
   let tmpDir: string;
   let runtime: MeshNodeRuntime;
