@@ -126,5 +126,13 @@ All files under `src/` are in scope. Specifically:
 39. ✅ **Wire context sync** into peer connection — auto catch-up on connect
 40. ✅ **Wired system tests** — comprehensive e2e tests validating full integration
 
-### Results: 135 → 572 tests (+324%), 38 → 51 source modules (+34%), 17 → 49 test files (+188%)
-### God object: 754 → 691 lines (-8.4% with new functionality added)
+### Session 3: Deep Integration & God Object Reduction
+41. ✅ **Extract MessageRouter** — routes context frames, intents, RPC responses/requests (14 tests)
+42. ✅ **Wire MessageRouter** into node-runtime — replaced 80-line handleInboundMessage (god_object -63 lines)
+43. ✅ **PeerServer test suite** — mesh.connect handler: missing params, untrusted, valid handshake, bad sig (5 tests)
+44. ✅ **Wire event bus into lifecycle** — runtime.started/stopping, proposal.created/resolved, peer.disconnected events
+45. ✅ **CapabilityRouter** — health-aware routing with scoring, wildcard matching, findAllCapabilityPeers (10 tests)
+46. ✅ **Architecture metrics tests** — structural health enforcement: line limits, module existence, decomposition checks (14 tests)
+
+### Results: 135 → 617 tests (+357%), 38 → 53 source modules (+39%), 17 → 53 test files (+212%)
+### God object: 754 → 636 lines (-15.6%)
