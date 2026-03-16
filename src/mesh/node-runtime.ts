@@ -22,6 +22,7 @@ import { RpcDispatcher } from "./rpc-dispatcher.js";
 import { UIBroadcaster } from "./ui-broadcaster.js";
 import { extractIntentFromForward, routeIntent } from "./intent-router.js";
 import { AutoConnectManager } from "./auto-connect.js";
+import { TrustAuditTrail } from "./trust-audit.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -119,6 +120,7 @@ export class MeshNodeRuntime {
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
+  readonly trustAudit = new TrustAuditTrail();
   private wss: WebSocketServer | null = null;
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
@@ -509,6 +511,7 @@ export class MeshNodeRuntime {
       trust,
     };
     const trustDecision = evaluateMeshForwardTrust(senderPayload);
+    this.trustAudit.record(senderPayload, trustDecision);
     if (!trustDecision.ok) {
       this.log.warn(
         `mesh: sender-side trust rejection: ${trustDecision.code} — ${trustDecision.message}`,

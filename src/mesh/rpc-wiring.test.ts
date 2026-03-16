@@ -130,6 +130,39 @@ describe("UIBroadcaster wiring in MeshNodeRuntime", () => {
   });
 });
 
+describe("TrustAudit wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("exposes trustAudit as a public property", () => {
+    expect(runtime.trustAudit).toBeDefined();
+    expect(typeof runtime.trustAudit.record).toBe("function");
+    expect(typeof runtime.trustAudit.getStats).toBe("function");
+  });
+
+  it("trustAudit starts empty", () => {
+    expect(runtime.trustAudit.size).toBe(0);
+    const stats = runtime.trustAudit.getStats();
+    expect(stats.total).toBe(0);
+  });
+});
+
 describe("AutoConnect wiring in MeshNodeRuntime", () => {
   let tmpDir: string;
   let runtime: MeshNodeRuntime;
