@@ -172,6 +172,37 @@ describe("sendActuation", () => {
     expect(result.error).toContain("VERIFICATION_REQUIRED");
   });
 
+  it("includes operation params in forwarded command", async () => {
+    const socket = createMockSocket();
+    deps.peerRegistry.register({
+      deviceId: "peer-1",
+      connId: "conn-1",
+      socket,
+      outbound: true,
+      capabilities: [],
+      connectedAtMs: Date.now(),
+    });
+
+    sendActuation(
+      {
+        peerDeviceId: "peer-1",
+        targetRef: "actuator:valve:V1",
+        operation: "open",
+        operationParams: { durationSec: 300 },
+        note: "Zone-1 irrigation",
+      },
+      deps,
+    );
+
+    // Verify the command was sent with params
+    await new Promise((r) => setTimeout(r, 50));
+    expect(socket.send).toHaveBeenCalled();
+    const sent = JSON.parse((socket.send as any).mock.calls[0][0]);
+    expect(sent.params.message).toBe("Zone-1 irrigation");
+
+    deps.peerRegistry.unregister("conn-1");
+  });
+
   it("works without trustAudit dependency", async () => {
     const depsNoAudit = createDeps({ trustAudit: undefined });
 

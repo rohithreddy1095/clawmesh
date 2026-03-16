@@ -134,5 +134,9 @@ All files under `src/` are in scope. Specifically:
 45. ✅ **CapabilityRouter** — health-aware routing with scoring, wildcard matching, findAllCapabilityPeers (10 tests)
 46. ✅ **Architecture metrics tests** — structural health enforcement: line limits, module existence, decomposition checks (14 tests)
 
-### Results: 135 → 617 tests (+357%), 38 → 53 source modules (+39%), 17 → 53 test files (+212%)
-### God object: 754 → 636 lines (-15.6%)
+47. ✅ **Extract ActuationSender** — trust validation + forwarding extracted, wired into runtime (8 tests)
+48. ✅ **Wire ActuationSender** — removed inline sendMockActuation + unused imports (god_object -56 lines)
+49. ✅ **Peer lifecycle tests** — connection idempotency, timeout, identity uniqueness (8 tests)
+
+### Final Results: 135 → 634+ tests (+370%), 38 → 54 source modules (+42%), 17 → 55 test files (+224%)
+### God object: 754 → 580 lines (-23.1%)
