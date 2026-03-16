@@ -130,6 +130,36 @@ describe("UIBroadcaster wiring in MeshNodeRuntime", () => {
   });
 });
 
+describe("AutoConnect wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("exposes autoConnect as a public property", () => {
+    expect(runtime.autoConnect).toBeDefined();
+    expect(typeof runtime.autoConnect.evaluate).toBe("function");
+  });
+
+  it("autoConnect starts with no attempts", () => {
+    expect(runtime.autoConnect.getAttemptCount("any-peer")).toBe(0);
+  });
+});
+
 describe("MeshNodeRuntime with mock actuator", () => {
   let tmpDir: string;
   let runtime: MeshNodeRuntime;

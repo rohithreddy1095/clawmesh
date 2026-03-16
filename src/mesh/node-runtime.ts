@@ -21,6 +21,7 @@ import { MeshEventBus } from "./event-bus.js";
 import { RpcDispatcher } from "./rpc-dispatcher.js";
 import { UIBroadcaster } from "./ui-broadcaster.js";
 import { extractIntentFromForward, routeIntent } from "./intent-router.js";
+import { AutoConnectManager } from "./auto-connect.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -117,6 +118,7 @@ export class MeshNodeRuntime {
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   readonly uiBroadcaster = new UIBroadcaster();
+  readonly autoConnect = new AutoConnectManager();
   private wss: WebSocketServer | null = null;
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
@@ -320,6 +322,15 @@ export class MeshNodeRuntime {
       this.discovery?.start();
       this.discovery?.on("peer-discovered", (peer) => {
         this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
+        // Auto-connect to discovered peers that are already trusted
+        void this.autoConnect.evaluateWithTrust(peer).then((decision) => {
+          if (decision.action === "connect") {
+            this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
+            this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
+          }
+        }).catch(() => {
+          // Ignore auto-connect errors
+        });
       });
     } catch (err) {
       this.log.warn(`mesh: mDNS discovery unavailable (${err}). Using static peers only.`);
@@ -437,10 +448,12 @@ export class MeshNodeRuntime {
         if (session.capabilities.length > 0) {
           this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
+        this.autoConnect.markConnected(session.deviceId);
         this.log.info(`mesh: outbound connected ${session.deviceId.slice(0, 12)}…`);
       },
       onDisconnected: (deviceId) => {
         this.capabilityRegistry.removePeer(deviceId);
+        this.autoConnect.markDisconnected(deviceId);
         this.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
       onError: (err) => {
