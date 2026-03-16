@@ -113,4 +113,36 @@ All files under `src/` are in scope. Specifically:
 28. ✅ **Expanded command envelope tests** — validation and resolution edge cases (7 tests)
 29. ✅ **Architecture edge case tests** — boundary conditions across all new modules (21 tests)
 
-### Results: 135 → 505 tests (+274%), 38 → 51 source modules (+34%), 17 → 44 test files (+159%)
+### Session 2: Integration & Wiring
+30. ✅ **Wire RpcDispatcher** into node-runtime — replaced dispatchRpcRequest + handler map (-80 lines god object)
+31. ✅ **Wire UIBroadcaster** into node-runtime — replaced uiSubscribers Set (-7 lines)
+32. ✅ **Wire IntentRouter** into node-runtime — replaced 50-line inline handler (-47 lines)
+33. ✅ **Wire world model summarize()** into planner system prompt hook
+34. ✅ **Wire AutoConnect** into discovery pipeline — auto-connect trusted peers
+35. ✅ **Wire TrustAudit** into sendMockActuation — compliance logging
+36. ✅ **Wire TriggerQueue** into PiSession — proper priority + dedup
+37. ✅ **Pattern decay** — time-based confidence reduction for inactive patterns
+38. ✅ **WorldModel auto-eviction** — configurable TTL with periodic cleanup
+39. ✅ **Wire context sync** into peer connection — auto catch-up on connect
+40. ✅ **Wired system tests** — comprehensive e2e tests validating full integration
+
+### Session 3: Deep Integration & God Object Reduction
+41. ✅ **Extract MessageRouter** — routes context frames, intents, RPC responses/requests (14 tests)
+42. ✅ **Wire MessageRouter** into node-runtime — replaced 80-line handleInboundMessage (god_object -63 lines)
+43. ✅ **PeerServer test suite** — mesh.connect handler: missing params, untrusted, valid handshake, bad sig (5 tests)
+44. ✅ **Wire event bus into lifecycle** — runtime.started/stopping, proposal.created/resolved, peer.disconnected events
+45. ✅ **CapabilityRouter** — health-aware routing with scoring, wildcard matching, findAllCapabilityPeers (10 tests)
+46. ✅ **Architecture metrics tests** — structural health enforcement: line limits, module existence, decomposition checks (14 tests)
+
+47. ✅ **Extract ActuationSender** — trust validation + forwarding extracted, wired into runtime (8 tests)
+48. ✅ **Wire ActuationSender** — removed inline sendMockActuation + unused imports (god_object -56 lines)
+49. ✅ **Peer lifecycle tests** — connection idempotency, timeout, identity uniqueness (8 tests)
+
+### Session 4: Deep Decomposition
+50. ✅ **PeerClient test suite** — construction, states, error handling, TLS, callbacks (9 tests)
+51. ✅ **GatewayConnect test suite** — error handling, timeout, auth options, result fields (8 tests)
+52. ✅ **Extract PeerConnectionManager** — outbound lifecycle, context sync, capability updates (7 tests)
+53. ✅ **Wire PeerConnectionManager** — replaced connectToPeer + requestContextSync + outboundClients (god_object -59 lines)
+
+### Final Results: 135 → 658 tests (+388%), 38 → 55 source modules (+45%), 17 → 58 test files (+241%)
+### God object: 754 → 521 lines (-30.9%)

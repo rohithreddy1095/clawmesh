@@ -68,6 +68,7 @@ export class WorldModel {
   private entries = new Map<string, WorldModelEntry>();
   private frameLog: ContextFrame[] = [];
   private seenFrameIds = new Set<string>();
+  private evictionTimer?: ReturnType<typeof setInterval>;
 
   /** Optional callback fired after each successful ingest. Used by PiPlanner. */
   onIngest?: (frame: ContextFrame) => void;
@@ -75,9 +76,35 @@ export class WorldModel {
   constructor(
     private opts: {
       maxHistory?: number;
+      /** Auto-eviction TTL in ms. Entries older than this are periodically removed. 0 = disabled. */
+      autoEvictTtlMs?: number;
+      /** Auto-eviction check interval in ms. Default: 5 minutes. */
+      autoEvictIntervalMs?: number;
       log: { info: (msg: string) => void };
     },
-  ) {}
+  ) {
+    const ttl = opts.autoEvictTtlMs ?? 0;
+    if (ttl > 0) {
+      const intervalMs = opts.autoEvictIntervalMs ?? 5 * 60 * 1000;
+      this.evictionTimer = setInterval(() => {
+        this.evictStale(ttl);
+      }, intervalMs);
+      // Don't keep process alive for eviction
+      if (this.evictionTimer.unref) {
+        this.evictionTimer.unref();
+      }
+    }
+  }
+
+  /**
+   * Stop the auto-eviction timer (for cleanup in tests).
+   */
+  stopAutoEviction(): void {
+    if (this.evictionTimer) {
+      clearInterval(this.evictionTimer);
+      this.evictionTimer = undefined;
+    }
+  }
 
   /**
    * Ingest a context frame from a remote peer (or local propagator).

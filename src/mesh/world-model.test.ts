@@ -281,3 +281,58 @@ describe("WorldModel.summarize", () => {
     expect(summary).toContain("Pump P1 started");
   });
 });
+
+// ─── WorldModel auto-eviction ────────────────────
+
+describe("WorldModel auto-eviction", () => {
+  it("creates model with auto-eviction disabled by default", () => {
+    const model = new WorldModel({ log: noop });
+    // No timer should be set
+    model.stopAutoEviction(); // Should not throw
+  });
+
+  it("creates model with auto-eviction enabled", () => {
+    const model = new WorldModel({
+      log: noop,
+      autoEvictTtlMs: 60_000,
+      autoEvictIntervalMs: 1000,
+    });
+
+    // Cleanup timer
+    model.stopAutoEviction();
+  });
+
+  it("stopAutoEviction is idempotent", () => {
+    const model = new WorldModel({
+      log: noop,
+      autoEvictTtlMs: 60_000,
+    });
+
+    model.stopAutoEviction();
+    model.stopAutoEviction(); // Should not throw
+  });
+
+  it("auto-eviction timer fires and cleans stale entries", async () => {
+    const model = new WorldModel({
+      log: noop,
+      autoEvictTtlMs: 100, // 100ms TTL
+      autoEvictIntervalMs: 50, // Check every 50ms
+    });
+
+    // Add an already-stale frame
+    model.ingest(makeFrame({
+      frameId: "stale",
+      timestamp: Date.now() - 200, // 200ms ago, beyond 100ms TTL
+      data: { metric: "old", value: 1, zone: "z-old" },
+    }));
+
+    expect(model.size).toBe(1);
+
+    // Wait for eviction timer to fire
+    await new Promise((r) => setTimeout(r, 120));
+
+    expect(model.size).toBe(0);
+
+    model.stopAutoEviction();
+  });
+});

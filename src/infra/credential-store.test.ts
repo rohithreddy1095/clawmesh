@@ -111,4 +111,77 @@ describe("CredentialStore", () => {
     expect(CredentialStore.envVarForProvider("openai")).toBe("OPENAI_API_KEY");
     expect(CredentialStore.envVarForProvider("unknown")).toBeUndefined();
   });
+
+  // ─── Additional coverage ───────────────────
+
+  it("maskValue produces consistent hash for same input", () => {
+    const mask1 = CredentialStore.maskValue("sk-abc123");
+    const mask2 = CredentialStore.maskValue("sk-abc123");
+    expect(mask1).toBe(mask2);
+    expect(mask1).toContain("[redacted");
+    expect(mask1).toContain("len=9"); // "sk-abc123" is 9 chars
+    expect(mask1).not.toContain("sk-abc123"); // Must not leak the value
+  });
+
+  it("maskValue produces different hashes for different inputs", () => {
+    const mask1 = CredentialStore.maskValue("key-1");
+    const mask2 = CredentialStore.maskValue("key-2");
+    expect(mask1).not.toBe(mask2);
+  });
+
+  it("maskValue includes length", () => {
+    const mask = CredentialStore.maskValue("x".repeat(50));
+    expect(mask).toContain("len=50");
+  });
+
+  it("envVarForProvider covers all major providers", () => {
+    const providers = ["google", "anthropic", "openai", "groq", "xai", "mistral"];
+    for (const p of providers) {
+      expect(CredentialStore.envVarForProvider(p)).toBeTruthy();
+    }
+  });
+
+  it("injectProviderEnvVars does not overwrite existing env vars", () => {
+    const origVal = process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY = "existing-key";
+
+    store.set("provider/google", "new-key");
+    const injected = store.injectProviderEnvVars();
+
+    // Should NOT have injected because env var already exists
+    expect(injected).not.toContain("GEMINI_API_KEY");
+    expect(process.env.GEMINI_API_KEY).toBe("existing-key");
+
+    // Cleanup
+    if (origVal === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = origVal;
+    }
+  });
+
+  it("getEntry returns full metadata", () => {
+    store.set("test/key", "val", "My Label");
+    const entry = store.getEntry("test/key");
+    expect(entry?.value).toBe("val");
+    expect(entry?.label).toBe("My Label");
+    expect(entry?.addedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("has returns false for deleted key", () => {
+    store.set("temp", "val");
+    expect(store.has("temp")).toBe(true);
+    store.delete("temp");
+    expect(store.has("temp")).toBe(false);
+  });
+
+  it("list masks all values", () => {
+    store.set("key1", "secret1");
+    store.set("key2", "secret2");
+    const listing = store.list();
+    for (const item of listing) {
+      expect(item.masked).toContain("[redacted");
+      expect(item.masked).not.toContain("secret");
+    }
+  });
 });

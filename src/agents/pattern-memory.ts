@@ -292,6 +292,60 @@ export class PatternMemory {
     return [...this.patterns.values()];
   }
 
+  /**
+   * Apply time-based confidence decay to patterns that haven't been
+   * reinforced recently. This prevents stale patterns from accumulating
+   * indefinitely and keeps the learning model fresh.
+   *
+   * Decay formula: confidence *= decayFactor for each pattern not updated
+   * within the specified inactivity window. Patterns below the minimum
+   * confidence threshold are removed entirely.
+   *
+   * @param inactiveMs - How long since lastUpdatedAt before decay applies (default: 7 days)
+   * @param decayFactor - Multiplier applied to confidence (default: 0.8 = 20% reduction)
+   * @param minConfidence - Patterns below this are removed (default: 0.1)
+   * @returns Number of patterns decayed + number removed
+   */
+  decayPatterns(opts?: {
+    inactiveMs?: number;
+    decayFactor?: number;
+    minConfidence?: number;
+  }): { decayed: number; removed: number } {
+    const inactiveMs = opts?.inactiveMs ?? 7 * 24 * 60 * 60 * 1000; // 7 days
+    const decayFactor = opts?.decayFactor ?? 0.8;
+    const minConfidence = opts?.minConfidence ?? 0.1;
+    const cutoff = Date.now() - inactiveMs;
+
+    let decayed = 0;
+    let removed = 0;
+    const toRemove: string[] = [];
+
+    for (const [key, pattern] of this.patterns) {
+      if (pattern.lastUpdatedAt < cutoff) {
+        pattern.confidence *= decayFactor;
+        decayed++;
+
+        if (pattern.confidence < minConfidence) {
+          toRemove.push(key);
+        }
+      }
+    }
+
+    for (const key of toRemove) {
+      this.patterns.delete(key);
+      removed++;
+    }
+
+    if (decayed > 0) {
+      this.save();
+      this.log.info(
+        `[pattern-memory] Decayed ${decayed} patterns (${removed} removed below threshold)`,
+      );
+    }
+
+    return { decayed, removed };
+  }
+
   // ─── Persistence ──────────────────────────────────────
 
   private load(): void {
