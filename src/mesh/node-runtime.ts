@@ -21,6 +21,7 @@ import { MeshEventBus } from "./event-bus.js";
 import { RpcDispatcher } from "./rpc-dispatcher.js";
 import { UIBroadcaster } from "./ui-broadcaster.js";
 import { extractIntentFromForward, routeIntent } from "./intent-router.js";
+import { routeInboundMessage } from "./message-router.js";
 import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
@@ -596,86 +597,22 @@ export class MeshNodeRuntime {
   }
 
   private async handleInboundMessage(socket: WebSocket, connId: string, raw: string): Promise<void> {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return;
-    }
-
-    if (!parsed || typeof parsed !== "object") {
-      return;
-    }
-
-    const frame = parsed as Record<string, unknown>;
-
-    // Handle context.frame events from peers
-    if (frame.type === "event" && frame.event === "context.frame") {
-      const contextFrame = frame.payload as ContextFrame;
-      const senderSession = this.peerRegistry.getByConnId(connId);
-      const fromDeviceId = senderSession?.deviceId ?? contextFrame.sourceDeviceId;
-      const isNew = this.contextPropagator.handleInbound(contextFrame, fromDeviceId);
-      if (isNew) {
-        this.worldModel.ingest(contextFrame);
-        this.eventBus.emit("context.frame.ingested", { frame: contextFrame });
-      }
-      return;
-    }
-
-    // --- INTELLIGENCE HANDLER: route operator intents to planner ---
-    if (frame.type === "req" && frame.method === "mesh.message.forward") {
-      const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
-      const intent = extractIntentFromForward(fwdParams);
-      if (intent) {
-        routeIntent(intent, {
-          deviceId: this.identity.deviceId,
-          displayName: this.displayName,
-          contextPropagator: this.contextPropagator,
-          broadcastToUI: (event, payload) => this.broadcastToUI(event, payload),
-          handlePlannerIntent: this.piSession
-            ? (text, opts) => this.piSession!.handleOperatorIntent(text, opts)
-            : undefined,
-          log: this.log,
-        });
-      }
-    }
-    // ------------------------------------------------
-
-    if (!("type" in frame)) {
-      return;
-    }
-
-    if (frame.type === "res") {
-      if (typeof frame.id !== "string" || typeof frame.ok !== "boolean") {
-        return;
-      }
-      this.peerRegistry.handleRpcResult({
-        id: frame.id,
-        ok: frame.ok,
-        payload: frame.payload,
-        error:
-          frame.error && typeof frame.error === "object"
-            ? (frame.error as { code?: string; message?: string })
-            : null,
-      });
-      return;
-    }
-
-    if (frame.type !== "req") {
-      return;
-    }
-    if (typeof frame.id !== "string" || typeof frame.method !== "string") {
-      return;
-    }
-
-    await this.rpcDispatcher.dispatch(socket, connId, {
-      type: "req",
-      id: frame.id,
-      method: frame.method,
-      params:
-        frame.params && typeof frame.params === "object"
-          ? (frame.params as Record<string, unknown>)
-          : {},
+    await routeInboundMessage(raw, socket, connId, {
+      peerRegistry: this.peerRegistry,
+      contextPropagator: this.contextPropagator,
+      worldModel: this.worldModel,
+      eventBus: this.eventBus,
+      rpcDispatcher: this.rpcDispatcher,
+      intentRouterDeps: {
+        deviceId: this.identity.deviceId,
+        displayName: this.displayName,
+        contextPropagator: this.contextPropagator,
+        broadcastToUI: (event, payload) => this.broadcastToUI(event, payload),
+        handlePlannerIntent: this.piSession
+          ? (text, opts) => this.piSession!.handleOperatorIntent(text, opts)
+          : undefined,
+        log: this.log,
+      },
     });
   }
 }

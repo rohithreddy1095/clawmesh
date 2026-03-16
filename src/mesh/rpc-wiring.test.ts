@@ -130,6 +130,42 @@ describe("UIBroadcaster wiring in MeshNodeRuntime", () => {
   });
 });
 
+describe("MessageRouter wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("node-runtime god object is under 640 lines", () => {
+    // This test documents and enforces the decomposition progress
+    const fs = require("node:fs");
+    const lines = fs.readFileSync("src/mesh/node-runtime.ts", "utf-8").split("\n").length;
+    expect(lines).toBeLessThan(640);
+  });
+
+  it("has all critical RPC handlers after message router wiring", () => {
+    const methods = runtime.rpcDispatcher.listMethods();
+    expect(methods).toContain("mesh.connect");
+    expect(methods).toContain("mesh.message.forward");
+    expect(methods).toContain("context.sync");
+    expect(methods).toContain("mesh.health");
+  });
+});
+
 describe("Context sync wiring in MeshNodeRuntime", () => {
   let tmpDir: string;
   let runtime: MeshNodeRuntime;
