@@ -23,6 +23,7 @@ import { UIBroadcaster } from "./ui-broadcaster.js";
 import { extractIntentFromForward, routeIntent } from "./intent-router.js";
 import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
+import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -452,6 +453,8 @@ export class MeshNodeRuntime {
         }
         this.autoConnect.markConnected(session.deviceId);
         this.log.info(`mesh: outbound connected ${session.deviceId.slice(0, 12)}…`);
+        // Request context sync from the peer (catch up on missed frames)
+        this.requestContextSync(session.deviceId);
       },
       onDisconnected: (deviceId) => {
         this.capabilityRegistry.removePeer(deviceId);
@@ -474,6 +477,33 @@ export class MeshNodeRuntime {
     });
     this.outboundClients.set(peer.deviceId, client);
     client.start();
+  }
+
+  /**
+   * Request context sync from a peer — catch up on missed frames.
+   * Non-blocking: failures are logged and ignored.
+   */
+  private requestContextSync(peerDeviceId: string): void {
+    const recentFrames = this.worldModel.getRecentFrames(1);
+    const lastTimestamp = recentFrames.length > 0 ? recentFrames[recentFrames.length - 1].timestamp : null;
+    const since = calculateSyncSince(lastTimestamp, 60 * 60 * 1000); // 1 hour max lookback
+
+    this.peerRegistry.invoke({
+      deviceId: peerDeviceId,
+      method: "context.sync",
+      params: { since, limit: 50 },
+      timeoutMs: 10_000,
+    }).then((result) => {
+      if (result.ok && result.payload) {
+        const response = result.payload as ContextSyncResponse;
+        const { ingested, duplicates } = ingestSyncResponse(this.worldModel, response);
+        if (ingested > 0) {
+          this.log.info(`mesh: context sync from ${peerDeviceId.slice(0, 12)}…: ${ingested} new frames (${duplicates} duplicates)`);
+        }
+      }
+    }).catch(() => {
+      // Context sync is best-effort
+    });
   }
 
   async waitForPeerConnected(deviceId: string, timeoutMs: number = 10_000): Promise<boolean> {

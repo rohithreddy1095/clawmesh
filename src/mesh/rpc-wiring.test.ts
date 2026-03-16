@@ -130,6 +130,37 @@ describe("UIBroadcaster wiring in MeshNodeRuntime", () => {
   });
 });
 
+describe("Context sync wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("has context.sync RPC handler registered", () => {
+    expect(runtime.rpcDispatcher.hasHandler("context.sync")).toBe(true);
+  });
+
+  it("world model is accessible for sync operations", () => {
+    expect(runtime.worldModel).toBeDefined();
+    expect(typeof runtime.worldModel.ingest).toBe("function");
+    expect(typeof runtime.worldModel.getRecentFrames).toBe("function");
+  });
+});
+
 describe("TrustAudit wiring in MeshNodeRuntime", () => {
   let tmpDir: string;
   let runtime: MeshNodeRuntime;
