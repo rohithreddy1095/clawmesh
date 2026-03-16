@@ -6,7 +6,6 @@ import { rawDataToString } from "../infra/ws.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import { MeshCapabilityRegistry } from "./capabilities.js";
 import { MockActuatorController, createMockActuatorHandlers } from "./mock-actuator.js";
-import { MeshPeerClient } from "./peer-client.js";
 import { PeerRegistry } from "./peer-registry.js";
 import type { ContextFrame } from "./context-types.js";
 import { ContextPropagator } from "./context-propagator.js";
@@ -23,8 +22,8 @@ import { extractIntentFromForward, routeIntent } from "./intent-router.js";
 import { routeInboundMessage } from "./message-router.js";
 import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
-import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { sendActuation } from "./actuation-sender.js";
+import { PeerConnectionManager } from "./peer-connection-manager.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -106,7 +105,7 @@ export class MeshNodeRuntime {
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
   readonly rpcDispatcher: RpcDispatcher;
 
-  private readonly outboundClients = new Map<string, MeshPeerClient>();
+  readonly peerConnections: PeerConnectionManager;
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
@@ -151,6 +150,20 @@ export class MeshNodeRuntime {
       this.worldModel.ingest(frame);
       this.eventBus.emit("context.frame.broadcast", { frame });
     };
+
+    // ─── Peer Connection Manager ───
+    this.peerConnections = new PeerConnectionManager({
+      identity: this.identity,
+      displayName: this.displayName,
+      capabilities: this.capabilities,
+      peerRegistry: this.peerRegistry,
+      capabilityRegistry: this.capabilityRegistry,
+      contextPropagator: this.contextPropagator,
+      worldModel: this.worldModel,
+      eventBus: this.eventBus,
+      autoConnect: this.autoConnect,
+      log: this.log,
+    });
 
     // ─── RPC Handler Registration (via extracted RpcDispatcher) ───
     this.rpcDispatcher = new RpcDispatcher();
@@ -356,10 +369,7 @@ export class MeshNodeRuntime {
       this.discovery.stop();
     }
 
-    for (const client of this.outboundClients.values()) {
-      client.stop();
-    }
-    this.outboundClients.clear();
+    this.peerConnections.stopAll();
 
     for (const socket of this.inboundSocketConnIds.keys()) {
       try {
@@ -431,76 +441,7 @@ export class MeshNodeRuntime {
   }
 
   connectToPeer(peer: MeshStaticPeer): void {
-    if (this.outboundClients.has(peer.deviceId)) {
-      return;
-    }
-
-    const client = new MeshPeerClient({
-      url: peer.url,
-      remoteDeviceId: peer.deviceId,
-      identity: this.identity,
-      peerRegistry: this.peerRegistry,
-      tlsFingerprint: peer.tlsFingerprint,
-      displayName: this.displayName,
-      capabilities: this.capabilities,
-      onConnected: (session) => {
-        if (session.capabilities.length > 0) {
-          this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
-        }
-        this.autoConnect.markConnected(session.deviceId);
-        this.log.info(`mesh: outbound connected ${session.deviceId.slice(0, 12)}…`);
-        // Request context sync from the peer (catch up on missed frames)
-        this.requestContextSync(session.deviceId);
-      },
-      onDisconnected: (deviceId) => {
-        this.capabilityRegistry.removePeer(deviceId);
-        this.autoConnect.markDisconnected(deviceId);
-        this.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
-        this.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
-      },
-      onError: (err) => {
-        this.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
-      },
-      onEvent: (event, payload) => {
-        if (event === "context.frame") {
-          const frame = payload as ContextFrame;
-          const isNew = this.contextPropagator.handleInbound(frame, peer.deviceId);
-          if (isNew) {
-            this.worldModel.ingest(frame);
-            this.eventBus.emit("context.frame.ingested", { frame });
-          }
-        }
-      },
-    });
-    this.outboundClients.set(peer.deviceId, client);
-    client.start();
-  }
-
-  /**
-   * Request context sync from a peer — catch up on missed frames.
-   * Non-blocking: failures are logged and ignored.
-   */
-  private requestContextSync(peerDeviceId: string): void {
-    const recentFrames = this.worldModel.getRecentFrames(1);
-    const lastTimestamp = recentFrames.length > 0 ? recentFrames[recentFrames.length - 1].timestamp : null;
-    const since = calculateSyncSince(lastTimestamp, 60 * 60 * 1000); // 1 hour max lookback
-
-    this.peerRegistry.invoke({
-      deviceId: peerDeviceId,
-      method: "context.sync",
-      params: { since, limit: 50 },
-      timeoutMs: 10_000,
-    }).then((result) => {
-      if (result.ok && result.payload) {
-        const response = result.payload as ContextSyncResponse;
-        const { ingested, duplicates } = ingestSyncResponse(this.worldModel, response);
-        if (ingested > 0) {
-          this.log.info(`mesh: context sync from ${peerDeviceId.slice(0, 12)}…: ${ingested} new frames (${duplicates} duplicates)`);
-        }
-      }
-    }).catch(() => {
-      // Context sync is best-effort
-    });
+    this.peerConnections.connectToPeer(peer);
   }
 
   async waitForPeerConnected(deviceId: string, timeoutMs: number = 10_000): Promise<boolean> {

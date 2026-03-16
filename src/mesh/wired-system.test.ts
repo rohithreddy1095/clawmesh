@@ -138,6 +138,7 @@ describe("Wired MeshNodeRuntime", () => {
   it("start and stop without errors", async () => {
     const addr = await runtime.start();
     expect(addr.port).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 300)); // Wait for mDNS probes
     await runtime.stop();
   });
 
@@ -145,6 +146,7 @@ describe("Wired MeshNodeRuntime", () => {
     const addr = await runtime.start();
     const listen = runtime.listenAddress();
     expect(listen.port).toBe(addr.port);
+    await new Promise((r) => setTimeout(r, 300));
     await runtime.stop();
   });
 
@@ -164,6 +166,7 @@ describe("Wired MeshNodeRuntime", () => {
     expect(startPayload).toBeDefined();
     expect(startPayload!.port).toBe(addr.port);
 
+    await new Promise((r) => setTimeout(r, 300));
     await runtime.stop();
   });
 
@@ -172,6 +175,7 @@ describe("Wired MeshNodeRuntime", () => {
     runtime.eventBus.on("runtime.stopping", () => { stopEmitted = true; });
 
     await runtime.start();
+    await new Promise((r) => setTimeout(r, 300));
     await runtime.stop();
     expect(stopEmitted).toBe(true);
   });

@@ -35,9 +35,9 @@ function fileLineCount(path: string): number {
 describe("Architecture Metrics", () => {
   // ─── God Object Decomposition ──────────────
 
-  it("node-runtime.ts is under 600 lines (decomposed from 754)", () => {
+  it("node-runtime.ts is under 540 lines (decomposed from 754)", () => {
     const lines = fileLineCount("src/mesh/node-runtime.ts");
-    expect(lines).toBeLessThan(600);
+    expect(lines).toBeLessThan(540);
   });
 
   it("node-runtime.ts delegates to RpcDispatcher (no inline dispatch)", () => {
@@ -82,6 +82,8 @@ describe("Architecture Metrics", () => {
       "src/mesh/capability-router.ts",
       "src/infra/mesh-logger.ts",
       "src/agents/trigger-queue.ts",
+      "src/mesh/actuation-sender.ts",
+      "src/mesh/peer-connection-manager.ts",
     ];
 
     for (const mod of expectedModules) {
@@ -105,6 +107,8 @@ describe("Architecture Metrics", () => {
       "src/mesh/capability-router.test.ts",
       "src/infra/mesh-logger.test.ts",
       "src/agents/trigger-queue.test.ts",
+      "src/mesh/actuation-sender.test.ts",
+      "src/mesh/peer-connection-manager.test.ts",
     ];
 
     for (const test of expectedTests) {
