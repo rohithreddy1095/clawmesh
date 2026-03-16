@@ -144,5 +144,16 @@ All files under `src/` are in scope. Specifically:
 52. ✅ **Extract PeerConnectionManager** — outbound lifecycle, context sync, capability updates (7 tests)
 53. ✅ **Wire PeerConnectionManager** — replaced connectToPeer + requestContextSync + outboundClients (god_object -59 lines)
 
-### Final Results: 135 → 658 tests (+388%), 38 → 55 source modules (+45%), 17 → 58 test files (+241%)
+### Session 6: Intelligence Layer Extraction + 1000 Test Milestone
+61. ✅ **Extract mesh extension helpers** — formatFrames, findPeerForCapability, findProposalByPrefix, summarizeProposals, countPending, fmtUptime, compactDataSummary (39 tests)
+62. ✅ **Extract ModeController** — mode state machine, error tracking, threshold transitions, resume logic (29 tests)
+63. ✅ **Extract PlannerPromptBuilder** — operator/planner prompts, citation extraction, model spec parsing (29 tests)
+64. ✅ **Extract SessionEventClassifier** — event classification, text/tool extraction from Pi agent events (32 tests)
+65. ✅ **Extract ProposalManager** — proposal CRUD, approve/reject with decision recording, complete (31 tests)
+66. ✅ **Intelligence layer integration tests** — ModeController+ProposalManager scenarios, cross-module (21 tests)
+67. ✅ **🎉 BROKE 1000 TESTS!** Boundary/edge case tests across all extracted modules (25 tests)
+68. ✅ **Extract FrameIngestor** — pattern detection, threshold breach processing, cooldown tracking (22 tests)
+69. ✅ **Pure functions expanded tests** — trust utilities, routing, trust tiers, frame relevance, context sync, command envelope (24 tests)
+
+### Current Results: 135 → 1052 tests (+679%), 38 → 64 source modules (+68%), 17 → 73 test files (+329%)
 ### God object: 754 → 521 lines (-30.9%)
