@@ -1,16 +1,18 @@
 # Autoresearch Ideas Backlog
 
-## Medium Priority — God Object Reduction
-- **Extract peer lifecycle from node-runtime**: The onConnected/onDisconnected callbacks + connectToPeer logic (~80 lines) could become a PeerLifecycleManager. Would reduce god object further.
-- **Extract start/stop lifecycle**: MeshNodeRuntime.start() and stop() contain WS server setup, mDNS init, planner init — could split into separate bootstrap module.
-- **Wire auto-connect markConnected for inbound peers**: Currently only outbound peers track state in AutoConnectManager.
+## High Priority — Remaining Extractions
+- **Extract start/stop lifecycle from node-runtime**: MeshNodeRuntime.start() (~90 lines) and stop() (~30 lines) do WS server setup, mDNS init, planner init, peer connection — could extract WebSocket server lifecycle into a module.
+- **Extract peer connection management**: connectToPeer + outboundClients map (~50 lines) could become PeerConnectionManager.
 
-## Medium Priority — Architecture Quality
-- **Peer registry transport abstraction**: Replace raw WebSocket refs in PeerSession with Transport interface. Unlocks testability for PeerRegistry without real sockets.
-- **Structured logger adoption**: Replace console.log calls in node-runtime, peer-client, pi-session with MeshLogger instances — correlation IDs per peer.
-- **Capability health tracking**: Wire structured capability health updates into the registry on peer heartbeat/disconnect.
+## Medium Priority — Test Coverage Gaps
+- **peer-client.ts tests** (232L, 0 tests): Outbound WebSocket connection with reconnect backoff — test reconnect, handshake, TLS pinning logic.
+- **gateway-connect.ts tests** (199L, 0 tests): Remote gateway connection with auth.
+- **Telegram channel deeper tests**: Only 5 tests for 701 lines — could add mock bot tests.
 
-## Lower Priority — Stretch Goals
-- **Mesh TUI test coverage**: mesh-tui.ts (599 lines) has no tests.
-- **Telegram channel test expansion**: Only 5 tests currently for a 701-line module.
-- **CLI command tests**: clawmesh-cli.ts (822 lines) has no direct unit tests.
+## Lower Priority — Quality
+- **Structured logger adoption**: Replace console.log across codebase with MeshLogger.
+- **Peer registry transport abstraction**: Replace WebSocket refs with Transport interface.
+- **Inbound peer auto-connect tracking**: Only outbound peers tracked in AutoConnectManager.
+
+## Completed ✅ (pruned — see autoresearch.md for full history)
+All Phase 1-3 items, all wiring, all module extractions from sessions 1-3.
