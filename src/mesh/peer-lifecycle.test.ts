@@ -40,23 +40,22 @@ describe("Peer Lifecycle via MeshNodeRuntime", () => {
     expect(runtime.listConnectedPeers()).toHaveLength(0);
   });
 
-  it("connectToPeer is idempotent for same deviceId", async () => {
-    await runtime.start();
-
-    // Connect to a non-existent peer (will fail silently with backoff)
-    runtime.connectToPeer({
-      deviceId: "fake-peer-id",
-      url: "ws://127.0.0.1:19999", // won't connect
-    });
-
-    // Second call should be a no-op
+  it("connectToPeer delegates to peerConnections manager", () => {
+    // The PeerConnectionManager handles idempotency
     runtime.connectToPeer({
       deviceId: "fake-peer-id",
       url: "ws://127.0.0.1:19999",
     });
+    expect(runtime.peerConnections.has("fake-peer-id")).toBe(true);
 
-    // Only one outbound client should exist (verified by no crash)
-    await runtime.stop();
+    // Second call is idempotent
+    runtime.connectToPeer({
+      deviceId: "fake-peer-id",
+      url: "ws://127.0.0.1:19999",
+    });
+    expect(runtime.peerConnections.size).toBe(1);
+
+    runtime.peerConnections.stopAll();
   });
 
   it("waitForPeerConnected returns false on timeout", async () => {

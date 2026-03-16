@@ -138,5 +138,11 @@ All files under `src/` are in scope. Specifically:
 48. ✅ **Wire ActuationSender** — removed inline sendMockActuation + unused imports (god_object -56 lines)
 49. ✅ **Peer lifecycle tests** — connection idempotency, timeout, identity uniqueness (8 tests)
 
-### Final Results: 135 → 634+ tests (+370%), 38 → 54 source modules (+42%), 17 → 55 test files (+224%)
-### God object: 754 → 580 lines (-23.1%)
+### Session 4: Deep Decomposition
+50. ✅ **PeerClient test suite** — construction, states, error handling, TLS, callbacks (9 tests)
+51. ✅ **GatewayConnect test suite** — error handling, timeout, auth options, result fields (8 tests)
+52. ✅ **Extract PeerConnectionManager** — outbound lifecycle, context sync, capability updates (7 tests)
+53. ✅ **Wire PeerConnectionManager** — replaced connectToPeer + requestContextSync + outboundClients (god_object -59 lines)
+
+### Final Results: 135 → 658 tests (+388%), 38 → 55 source modules (+45%), 17 → 58 test files (+241%)
+### God object: 754 → 521 lines (-30.9%)
