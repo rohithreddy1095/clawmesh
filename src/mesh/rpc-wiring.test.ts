@@ -1,0 +1,126 @@
+/**
+ * Tests for RpcDispatcher wiring into MeshNodeRuntime.
+ *
+ * Verifies that the RpcDispatcher correctly replaced the inline
+ * dispatchRpcRequest method and all handlers are properly registered.
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { MeshNodeRuntime } from "./node-runtime.js";
+import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+function makeTempDir(): string {
+  return mkdtempSync(join(tmpdir(), "rpc-wiring-test-"));
+}
+
+describe("RpcDispatcher wiring in MeshNodeRuntime", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0, // Random port
+      displayName: "test-node",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("exposes rpcDispatcher as a public property", () => {
+    expect(runtime.rpcDispatcher).toBeDefined();
+    expect(typeof runtime.rpcDispatcher.dispatch).toBe("function");
+  });
+
+  it("registers mesh.connect handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.connect")).toBe(true);
+  });
+
+  it("registers mesh.peers handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.peers")).toBe(true);
+  });
+
+  it("registers mesh.status handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.status")).toBe(true);
+  });
+
+  it("registers mesh.message.forward handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.message.forward")).toBe(true);
+  });
+
+  it("registers chat.subscribe handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("chat.subscribe")).toBe(true);
+  });
+
+  it("registers chat.proposal.approve handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("chat.proposal.approve")).toBe(true);
+  });
+
+  it("registers chat.proposal.reject handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("chat.proposal.reject")).toBe(true);
+  });
+
+  it("registers context.sync handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("context.sync")).toBe(true);
+  });
+
+  it("registers mesh.health handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.health")).toBe(true);
+  });
+
+  it("lists all registered methods", () => {
+    const methods = runtime.rpcDispatcher.listMethods();
+    expect(methods.length).toBeGreaterThanOrEqual(7);
+    expect(methods).toContain("mesh.connect");
+    expect(methods).toContain("mesh.peers");
+    expect(methods).toContain("context.sync");
+    expect(methods).toContain("mesh.health");
+  });
+
+  it("exposes eventBus as a public property", () => {
+    expect(runtime.eventBus).toBeDefined();
+    expect(typeof runtime.eventBus.on).toBe("function");
+    expect(typeof runtime.eventBus.emit).toBe("function");
+  });
+});
+
+describe("MeshNodeRuntime with mock actuator", () => {
+  let tmpDir: string;
+  let runtime: MeshNodeRuntime;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const identity = loadOrCreateDeviceIdentity(join(tmpDir, "device.json"));
+    runtime = new MeshNodeRuntime({
+      identity,
+      port: 0,
+      displayName: "actuator-node",
+      enableMockActuator: true,
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+  });
+
+  afterEach(async () => {
+    await runtime.stop();
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it("registers actuator state handler when mock actuator enabled", () => {
+    expect(runtime.rpcDispatcher.hasHandler("clawmesh.mock.actuator.state")).toBe(true);
+  });
+
+  it("has more methods than a basic node", () => {
+    const methods = runtime.rpcDispatcher.listMethods();
+    expect(methods).toContain("clawmesh.mock.actuator.state");
+    expect(methods.length).toBeGreaterThanOrEqual(8);
+  });
+});

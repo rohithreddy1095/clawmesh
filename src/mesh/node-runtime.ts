@@ -18,6 +18,7 @@ import { createMeshPeersHandlers } from "./server-methods/peers.js";
 import { createContextSyncHandlers } from "./server-methods/context-sync.js";
 import { createHealthCheckHandlers } from "./health-check.js";
 import { MeshEventBus } from "./event-bus.js";
+import { RpcDispatcher } from "./rpc-dispatcher.js";
 import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -28,30 +29,8 @@ import { PiSession } from "../agents/pi-session.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
 
-type RpcRequestFrame = {
-  type: "req";
-  id: string;
-  method: string;
-  params?: Record<string, unknown>;
-};
-
-type RpcResponseFrame = {
-  type: "res";
-  id: string;
-  ok: boolean;
-  payload?: unknown;
-  error?: { code?: string; message?: string } | null;
-};
-
-type HandlerFn = (opts: {
-  req: Record<string, unknown>;
-  params: Record<string, unknown>;
-  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
-  client?: unknown;
-  isWebchatConnect?: () => boolean;
-  context?: unknown;
-}) => void | Promise<void>;
-type GatewayRequestHandlers = Record<string, HandlerFn>;
+// RPC types imported from rpc-dispatcher.ts
+type GatewayRequestHandlers = Record<string, import("./rpc-dispatcher.js").RpcHandlerFn>;
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
@@ -134,7 +113,7 @@ export class MeshNodeRuntime {
   private readonly capabilities: string[];
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
-  private readonly handlers: GatewayRequestHandlers;
+  readonly rpcDispatcher: RpcDispatcher;
 
   private readonly outboundClients = new Map<string, MeshPeerClient>();
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
@@ -180,62 +159,56 @@ export class MeshNodeRuntime {
       this.eventBus.emit("context.frame.broadcast", { frame });
     };
 
-    const sharedHandlers: GatewayRequestHandlers = {
-      ...createMeshServerHandlers({
-        identity: this.identity,
-        peerRegistry: this.peerRegistry,
-        displayName: this.displayName,
-        capabilities: this.capabilities,
-        onPeerConnected: (session) => {
-          if (session.capabilities.length > 0) {
-            this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
-          }
-          this.eventBus.emit("peer.connected", { session });
-        },
-      }),
-      ...createMeshPeersHandlers({
-        peerRegistry: this.peerRegistry,
-        capabilityRegistry: this.capabilityRegistry,
-        localDeviceId: this.identity.deviceId,
-      }),
-      ...createMeshForwardHandlers({
-        identity: this.identity,
-        onForward: async (payload) => {
-          if (this.mockActuator) {
-            await this.mockActuator.handleForward(payload);
-          }
-        },
-      }),
-    };
+    // ─── RPC Handler Registration (via extracted RpcDispatcher) ───
+    this.rpcDispatcher = new RpcDispatcher();
+
+    this.rpcDispatcher.registerAll(createMeshServerHandlers({
+      identity: this.identity,
+      peerRegistry: this.peerRegistry,
+      displayName: this.displayName,
+      capabilities: this.capabilities,
+      onPeerConnected: (session) => {
+        if (session.capabilities.length > 0) {
+          this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
+        }
+        this.eventBus.emit("peer.connected", { session });
+      },
+    }));
+    this.rpcDispatcher.registerAll(createMeshPeersHandlers({
+      peerRegistry: this.peerRegistry,
+      capabilityRegistry: this.capabilityRegistry,
+      localDeviceId: this.identity.deviceId,
+    }));
+    this.rpcDispatcher.registerAll(createMeshForwardHandlers({
+      identity: this.identity,
+      onForward: async (payload) => {
+        if (this.mockActuator) {
+          await this.mockActuator.handleForward(payload);
+        }
+      },
+    }));
 
     if (this.mockActuator) {
-      Object.assign(
-        sharedHandlers,
-        createMockActuatorHandlers({
-          controller: this.mockActuator,
-        }),
-      );
+      this.rpcDispatcher.registerAll(createMockActuatorHandlers({
+        controller: this.mockActuator,
+      }));
     }
 
-    // ─── Context Sync & Health Check handlers ───────────────
-    Object.assign(
-      sharedHandlers,
-      createContextSyncHandlers({ worldModel: this.worldModel }),
-      createHealthCheckHandlers({
-        nodeId: this.identity.deviceId,
-        displayName: this.displayName,
-        startedAtMs: this.startedAtMs,
-        version: "0.2.0",
-        localCapabilities: this.capabilities,
-        peerRegistry: this.peerRegistry,
-        capabilityRegistry: this.capabilityRegistry,
-        worldModel: this.worldModel,
-        getPlannerMode: () => this.piSession?.mode,
-      }),
-    );
+    this.rpcDispatcher.registerAll(createContextSyncHandlers({ worldModel: this.worldModel }));
+    this.rpcDispatcher.registerAll(createHealthCheckHandlers({
+      nodeId: this.identity.deviceId,
+      displayName: this.displayName,
+      startedAtMs: this.startedAtMs,
+      version: "0.2.0",
+      localCapabilities: this.capabilities,
+      peerRegistry: this.peerRegistry,
+      capabilityRegistry: this.capabilityRegistry,
+      worldModel: this.worldModel,
+      getPlannerMode: () => this.piSession?.mode,
+    }));
 
     // ─── Chat & UI subscriber handlers ─────────────────────
-    sharedHandlers["chat.subscribe"] = ({ req, respond }) => {
+    this.rpcDispatcher.register("chat.subscribe", ({ req, respond }) => {
       const socket = (req as any)._socket as WebSocket | undefined;
       if (socket) {
         this.uiSubscribers.add(socket);
@@ -245,9 +218,9 @@ export class MeshNodeRuntime {
         this.log.info("mesh: UI client subscribed to chat");
       }
       respond(true, { subscribed: true });
-    };
+    });
 
-    sharedHandlers["chat.proposal.approve"] = async ({ params, respond }) => {
+    this.rpcDispatcher.register("chat.proposal.approve", async ({ params, respond }) => {
       const taskId = params.taskId as string;
       if (!taskId) {
         respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
@@ -263,9 +236,9 @@ export class MeshNodeRuntime {
       } else {
         respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
       }
-    };
+    });
 
-    sharedHandlers["chat.proposal.reject"] = ({ params, respond }) => {
+    this.rpcDispatcher.register("chat.proposal.reject", ({ params, respond }) => {
       const taskId = params.taskId as string;
       if (!taskId) {
         respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
@@ -281,9 +254,7 @@ export class MeshNodeRuntime {
       } else {
         respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
       }
-    };
-
-    this.handlers = sharedHandlers;
+    });
   }
 
   /**
@@ -708,7 +679,7 @@ export class MeshNodeRuntime {
       return;
     }
 
-    await this.dispatchRpcRequest(socket, connId, {
+    await this.rpcDispatcher.dispatch(socket, connId, {
       type: "req",
       id: frame.id,
       method: frame.method,
@@ -717,57 +688,6 @@ export class MeshNodeRuntime {
           ? (frame.params as Record<string, unknown>)
           : {},
     });
-  }
-
-  private async dispatchRpcRequest(
-    socket: WebSocket,
-    connId: string,
-    frame: RpcRequestFrame,
-  ): Promise<void> {
-    const respond = (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => {
-      if (socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-      const response: RpcResponseFrame = {
-        type: "res",
-        id: frame.id,
-        ok,
-        payload,
-        error,
-      };
-      socket.send(JSON.stringify(response));
-    };
-
-    const handler = this.handlers[frame.method];
-    if (!handler) {
-      respond(false, undefined, {
-        code: "UNKNOWN_METHOD",
-        message: `unknown method: ${frame.method}`,
-      });
-      return;
-    }
-
-    try {
-      await handler({
-        req: {
-          id: frame.id,
-          method: frame.method,
-          params: frame.params ?? {},
-          _connId: connId,
-          _socket: socket,
-        },
-        params: frame.params ?? {},
-        client: null,
-        isWebchatConnect: () => false,
-        context: {},
-        respond,
-      });
-    } catch (err) {
-      respond(false, undefined, {
-        code: "INTERNAL_ERROR",
-        message: String(err),
-      });
-    }
   }
 }
 
