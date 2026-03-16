@@ -113,4 +113,18 @@ All files under `src/` are in scope. Specifically:
 28. ✅ **Expanded command envelope tests** — validation and resolution edge cases (7 tests)
 29. ✅ **Architecture edge case tests** — boundary conditions across all new modules (21 tests)
 
-### Results: 135 → 505 tests (+274%), 38 → 51 source modules (+34%), 17 → 44 test files (+159%)
+### Session 2: Integration & Wiring
+30. ✅ **Wire RpcDispatcher** into node-runtime — replaced dispatchRpcRequest + handler map (-80 lines god object)
+31. ✅ **Wire UIBroadcaster** into node-runtime — replaced uiSubscribers Set (-7 lines)
+32. ✅ **Wire IntentRouter** into node-runtime — replaced 50-line inline handler (-47 lines)
+33. ✅ **Wire world model summarize()** into planner system prompt hook
+34. ✅ **Wire AutoConnect** into discovery pipeline — auto-connect trusted peers
+35. ✅ **Wire TrustAudit** into sendMockActuation — compliance logging
+36. ✅ **Wire TriggerQueue** into PiSession — proper priority + dedup
+37. ✅ **Pattern decay** — time-based confidence reduction for inactive patterns
+38. ✅ **WorldModel auto-eviction** — configurable TTL with periodic cleanup
+39. ✅ **Wire context sync** into peer connection — auto catch-up on connect
+40. ✅ **Wired system tests** — comprehensive e2e tests validating full integration
+
+### Results: 135 → 572 tests (+324%), 38 → 51 source modules (+34%), 17 → 49 test files (+188%)
+### God object: 754 → 691 lines (-8.4% with new functionality added)
