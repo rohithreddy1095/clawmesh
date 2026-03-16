@@ -332,4 +332,82 @@ describe("PatternMemory", () => {
     expect(patterns).toHaveLength(1);
     expect(patterns[0].triggerCondition).toBe("persist test");
   });
+
+  // ─── Pattern Decay ──────────────────────
+
+  it("decayPatterns reduces confidence of inactive patterns", () => {
+    const persistPath = join(tmpDir, "decay-test.json");
+    const mem = new PatternMemory({ persistPath, localDeviceId: "A", log: noop });
+
+    // Create a pattern and artificially age it
+    const pattern = mem.recordDecision({
+      approved: true,
+      triggerCondition: "old pattern",
+      action: makeAction(),
+    });
+    // Set lastUpdatedAt to 10 days ago
+    const allPatterns = mem.getAllPatterns();
+    allPatterns[0].lastUpdatedAt = Date.now() - 10 * 24 * 60 * 60 * 1000;
+
+    const result = mem.decayPatterns({ inactiveMs: 7 * 24 * 60 * 60 * 1000 });
+    expect(result.decayed).toBe(1);
+
+    const after = mem.getAllPatterns();
+    expect(after[0].confidence).toBeLessThan(1.0); // Was 1.0, now decayed
+  });
+
+  it("decayPatterns removes patterns below minimum confidence", () => {
+    const persistPath = join(tmpDir, "decay-remove-test.json");
+    const mem = new PatternMemory({ persistPath, localDeviceId: "A", log: noop });
+
+    mem.recordDecision({
+      approved: true,
+      triggerCondition: "will be removed",
+      action: makeAction(),
+    });
+
+    // Set very old and very low confidence
+    const patterns = mem.getAllPatterns();
+    patterns[0].lastUpdatedAt = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    patterns[0].confidence = 0.05; // Below default 0.1 threshold after decay
+
+    const result = mem.decayPatterns();
+    expect(result.removed).toBe(1);
+    expect(mem.getAllPatterns()).toHaveLength(0);
+  });
+
+  it("decayPatterns does not affect recently updated patterns", () => {
+    const persistPath = join(tmpDir, "decay-recent-test.json");
+    const mem = new PatternMemory({ persistPath, localDeviceId: "A", log: noop });
+
+    mem.recordDecision({
+      approved: true,
+      triggerCondition: "recent",
+      action: makeAction(),
+    });
+
+    // Pattern was just created, so lastUpdatedAt is now
+    const result = mem.decayPatterns();
+    expect(result.decayed).toBe(0);
+    expect(result.removed).toBe(0);
+    expect(mem.getAllPatterns()[0].confidence).toBe(1.0);
+  });
+
+  it("decayPatterns with custom parameters", () => {
+    const persistPath = join(tmpDir, "decay-custom-test.json");
+    const mem = new PatternMemory({ persistPath, localDeviceId: "A", log: noop });
+
+    mem.recordDecision({ approved: true, triggerCondition: "test", action: makeAction() });
+    const patterns = mem.getAllPatterns();
+    patterns[0].lastUpdatedAt = Date.now() - 2 * 60 * 60 * 1000; // 2 hours ago
+
+    const result = mem.decayPatterns({
+      inactiveMs: 1 * 60 * 60 * 1000, // 1 hour
+      decayFactor: 0.5,
+      minConfidence: 0.4,
+    });
+
+    expect(result.decayed).toBe(1);
+    expect(mem.getAllPatterns()[0].confidence).toBeCloseTo(0.5);
+  });
 });
