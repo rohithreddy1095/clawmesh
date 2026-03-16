@@ -153,4 +153,26 @@ describe("Wired MeshNodeRuntime", () => {
     expect(caps).toContain("actuator:mock");
     expect(caps).toContain("channel:clawmesh");
   });
+
+  // ─── Event bus lifecycle events ────────────
+
+  it("emits runtime.started event on start", async () => {
+    let startPayload: { host: string; port: number } | undefined;
+    runtime.eventBus.on("runtime.started", (p) => { startPayload = p; });
+
+    const addr = await runtime.start();
+    expect(startPayload).toBeDefined();
+    expect(startPayload!.port).toBe(addr.port);
+
+    await runtime.stop();
+  });
+
+  it("emits runtime.stopping event on stop", async () => {
+    let stopEmitted = false;
+    runtime.eventBus.on("runtime.stopping", () => { stopEmitted = true; });
+
+    await runtime.start();
+    await runtime.stop();
+    expect(stopEmitted).toBe(true);
+  });
 });

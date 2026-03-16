@@ -312,9 +312,11 @@ export class MeshNodeRuntime {
       });
     });
 
+    const addr = this.listenAddress();
     this.log.info(
-      `mesh: listening on ws://${this.host}:${this.listenAddress().port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
+      `mesh: listening on ws://${this.host}:${addr.port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
     );
+    this.eventBus.emit("runtime.started", { host: this.host, port: addr.port });
 
     // Start mDNS discovery (best-effort — not all platforms support it)
     try {
@@ -353,6 +355,8 @@ export class MeshNodeRuntime {
   }
 
   async stop(): Promise<void> {
+    this.eventBus.emit("runtime.stopping", {});
+
     // Stop planner
     if (this.piSession) {
       this.piSession.stop();
@@ -397,11 +401,13 @@ export class MeshNodeRuntime {
       onProposalCreated: (proposal) => {
         this.peerRegistry.broadcastEvent("planner.proposal", proposal);
         this.broadcastToUI("planner.proposal", proposal);
+        this.eventBus.emit("proposal.created", { proposal });
         this.opts.onProposalCreated?.(proposal);
       },
       onProposalResolved: (proposal) => {
         this.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
         this.broadcastToUI("planner.proposal.resolved", proposal);
+        this.eventBus.emit("proposal.resolved", { proposal });
         this.opts.onProposalResolved?.(proposal);
       },
       onModeChange: (mode, reason) => {
