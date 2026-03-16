@@ -23,6 +23,7 @@ import {
   type MeshExtensionState,
 } from "./extensions/clawmesh-mesh-extension.js";
 import { PatternMemory } from "./pattern-memory.js";
+import { TriggerQueue, type TriggerEntry } from "./trigger-queue.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -79,13 +80,7 @@ export class PiSession {
   readonly patternMemory: PatternMemory;
 
   private session!: AgentSession;
-  private pendingTriggers: Array<{
-    reason: string;
-    frames: ContextFrame[];
-    conversationId?: string;
-    requestId?: string;
-    type: "operator_intent" | "threshold_breach" | "proactive_check";
-  }> = [];
+  private readonly triggerQueue = new TriggerQueue();
   private thresholdLastFired = new Map<string, number>();
   private proactiveTimer?: ReturnType<typeof setInterval>;
   private probeTimer?: ReturnType<typeof setTimeout>;
@@ -222,7 +217,7 @@ export class PiSession {
         this.lastErrorTime = 0;
         this.setMode("active", "probe succeeded — provider is available");
         // Drain queued triggers
-        if (this.pendingTriggers.length > 0 && !this.stopped) {
+        if (!this.triggerQueue.isEmpty && !this.stopped) {
           setTimeout(() => void this.runCycle(), 1000);
         }
       } else {
@@ -287,7 +282,7 @@ export class PiSession {
     this.clearProbeTimer();
     this.setMode("active", reason);
     // Drain queued triggers
-    if (this.pendingTriggers.length > 0 && !this.stopped) {
+    if (!this.triggerQueue.isEmpty && !this.stopped) {
       setTimeout(() => void this.runCycle(), 1000);
     }
   }
@@ -387,13 +382,7 @@ export class PiSession {
 
     if (this._mode !== "active") {
       this.log.warn(`[pi-session] Operator intent received but mode is '${this._mode}'. Queuing — use 'resume' to re-enable LLM calls.`);
-      this.pendingTriggers.push({
-        reason: `operator_intent: "${text}"`,
-        frames: [],
-        conversationId,
-        requestId,
-        type: "operator_intent",
-      });
+      this.triggerQueue.enqueueIntent(text, { conversationId, requestId });
       return;
     }
 
@@ -407,13 +396,7 @@ export class PiSession {
       });
     }
 
-    this.pendingTriggers.push({
-      reason: `operator_intent: "${text}"`,
-      frames: [],
-      conversationId,
-      requestId,
-      type: "operator_intent",
-    });
+    this.triggerQueue.enqueueIntent(text, { conversationId, requestId });
     void this.runCycle();
   }
 
@@ -558,14 +541,16 @@ export class PiSession {
     for (const rule of this.extensionState.thresholds) {
       if (this.checkThresholdRule(rule, frame)) {
         this.log.info(`pi-session: THRESHOLD BREACH — ${rule.ruleId}: value=${frame.data.value}${this._mode !== "active" ? ` (queued — mode=${this._mode})` : ""}`);
-        this.pendingTriggers.push({
-          reason: `threshold_breach: ${rule.ruleId} — ${rule.promptHint}`,
-          frames: [frame],
-          type: "threshold_breach",
+        this.triggerQueue.enqueueThresholdBreach({
+          ruleId: rule.ruleId,
+          promptHint: rule.promptHint,
+          metric: rule.metric,
+          zone: rule.zone,
+          frame,
         });
       }
     }
-    if (this.pendingTriggers.length > 0) {
+    if (!this.triggerQueue.isEmpty) {
       void this.runCycle();
     }
   }
@@ -594,11 +579,7 @@ export class PiSession {
     if (this._mode !== "active") return; // Silent skip in observing/suspended
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
-    this.pendingTriggers.push({
-      reason: "proactive_check: periodic farm state review",
-      frames: recentFrames,
-      type: "proactive_check",
-    });
+    this.triggerQueue.enqueueProactiveCheck(recentFrames);
     void this.runCycle();
   }
 
@@ -624,13 +605,9 @@ export class PiSession {
     this.running = true;
 
     try {
-      const triggers = [...this.pendingTriggers];
-      this.pendingTriggers = [];
-      if (triggers.length === 0) return;
-
-      // Separate operator intents from system triggers
-      const operatorIntents = triggers.filter(t => t.type === "operator_intent");
-      const systemTriggers = triggers.filter(t => t.type !== "operator_intent");
+      // Drain all triggers from the priority queue (sorted by priority)
+      const { operatorIntents, systemTriggers } = this.triggerQueue.drain();
+      if (operatorIntents.length === 0 && systemTriggers.length === 0) return;
 
       let prompt: string;
       let activeConversationId: string | undefined;
@@ -662,7 +639,11 @@ Respond naturally to the operator's message. Use your tools to check current sen
 
         // Queue remaining operator intents for next cycle
         for (let i = 1; i < operatorIntents.length; i++) {
-          this.pendingTriggers.push(operatorIntents[i]);
+          const remaining = operatorIntents[i];
+          this.triggerQueue.enqueueIntent(
+            remaining.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, ""),
+            { conversationId: remaining.conversationId, requestId: remaining.requestId },
+          );
         }
       } else {
         // Standard planner cycle for system triggers
@@ -771,7 +752,7 @@ Always explain your reasoning. Never fabricate sensor data.`;
     } finally {
       this.running = false;
       // Only drain queue if still active
-      if (this._mode === "active" && this.pendingTriggers.length > 0 && !this.stopped) {
+      if (this._mode === "active" && !this.triggerQueue.isEmpty && !this.stopped) {
         setTimeout(() => void this.runCycle(), 2000);
       }
     }
