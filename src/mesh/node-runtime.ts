@@ -26,6 +26,7 @@ import { sendActuation } from "./actuation-sender.js";
 import { PeerConnectionManager } from "./peer-connection-manager.js";
 import { createChatHandlers } from "./chat-handlers.js";
 import { handleInboundDisconnect } from "./inbound-connection.js";
+import { RateLimiter } from "./rate-limiter.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -109,6 +110,8 @@ export class MeshNodeRuntime {
 
   readonly peerConnections: PeerConnectionManager;
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
+  /** Rate limiter for inbound RPC requests (100 req/min per connection). */
+  private readonly inboundRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60_000 });
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
   readonly trustAudit = new TrustAuditTrail();
@@ -258,10 +261,15 @@ export class MeshNodeRuntime {
       this.inboundSocketConnIds.set(socket, connId);
 
       socket.on("message", (raw) => {
+        if (!this.inboundRateLimiter.allow(connId)) {
+          this.log.warn(`mesh: rate-limited inbound connection ${connId.slice(0, 8)}… (${this.inboundRateLimiter.retryAfterMs(connId)}ms until reset)`);
+          return;
+        }
         void this.handleInboundMessage(socket, connId, rawDataToString(raw));
       });
 
       socket.on("close", () => {
+        this.inboundRateLimiter.reset(connId);
         this.inboundSocketConnIds.delete(socket);
         this.uiBroadcaster.removeSubscriber(socket);
         handleInboundDisconnect(connId, {
