@@ -25,6 +25,7 @@ import { TrustAuditTrail } from "./trust-audit.js";
 import { sendActuation } from "./actuation-sender.js";
 import { PeerConnectionManager } from "./peer-connection-manager.js";
 import { createChatHandlers } from "./chat-handlers.js";
+import { handleInboundDisconnect } from "./inbound-connection.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -263,12 +264,12 @@ export class MeshNodeRuntime {
       socket.on("close", () => {
         this.inboundSocketConnIds.delete(socket);
         this.uiBroadcaster.removeSubscriber(socket);
-        const deviceId = this.peerRegistry.unregister(connId);
-        if (deviceId) {
-          this.capabilityRegistry.removePeer(deviceId);
-          this.eventBus.emit("peer.disconnected", { deviceId, reason: "socket closed" });
-          this.log.info(`mesh: inbound peer disconnected ${deviceId.slice(0, 12)}…`);
-        }
+        handleInboundDisconnect(connId, {
+          peerRegistry: this.peerRegistry,
+          capabilityRegistry: this.capabilityRegistry,
+          eventBus: this.eventBus,
+          log: this.log,
+        });
       });
 
       socket.on("error", (err) => {
