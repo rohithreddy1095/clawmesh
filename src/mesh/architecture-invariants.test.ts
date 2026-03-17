@@ -48,10 +48,10 @@ describe("Architecture - module inventory", () => {
 // ─── God object health ──────────────────────────────
 
 describe("Architecture - god object health", () => {
-  it("node-runtime.ts is under 600 lines", () => {
+  it("node-runtime.ts is under 500 lines", () => {
     const content = readFileSync(join(srcDir, "mesh/node-runtime.ts"), "utf8");
     const lines = content.split("\n").length;
-    expect(lines).toBeLessThan(600);
+    expect(lines).toBeLessThan(500);
   });
 
   it("pi-session.ts is under 1000 lines", () => {
@@ -95,6 +95,9 @@ describe("Architecture - extracted modules exist", () => {
     "cli/cli-utils.ts",
     "cli/cli-config.ts",
     "infra/mesh-logger.ts",
+    "mesh/chat-handlers.ts",
+    "mesh/inbound-connection.ts",
+    "agents/pi-session-config.ts",
   ];
 
   for (const mod of expectedModules) {
@@ -139,6 +142,11 @@ describe("Architecture - test coverage", () => {
     "infra/mesh-logger",
     "infra/credential-store",
     "infra/device-identity",
+    "mesh/chat-handlers",
+    "mesh/inbound-connection",
+    "mesh/sensor-simulation",
+    "mesh/actuator-logic",
+    "agents/pi-session-config",
   ];
 
   for (const mod of testableModules) {
