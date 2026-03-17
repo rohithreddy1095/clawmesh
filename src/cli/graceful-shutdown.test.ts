@@ -8,7 +8,7 @@ import { GracefulShutdown } from "./graceful-shutdown.js";
 describe("GracefulShutdown", () => {
   it("runs registered handlers in order", async () => {
     const order: number[] = [];
-    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} } });
+    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} }, exitProcess: false });
 
     shutdown.register(() => { order.push(1); });
     shutdown.register(() => { order.push(2); });
@@ -19,7 +19,7 @@ describe("GracefulShutdown", () => {
   });
 
   it("sets isShuttingDown during shutdown", async () => {
-    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} } });
+    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} }, exitProcess: false });
     expect(shutdown.isShuttingDown).toBe(false);
     await shutdown.handleSignal();
     expect(shutdown.isShuttingDown).toBe(true);
@@ -28,7 +28,7 @@ describe("GracefulShutdown", () => {
   it("second signal warns but doesn't re-run handlers", async () => {
     const warnings: string[] = [];
     const runs: number[] = [];
-    const shutdown = new GracefulShutdown({
+    const shutdown = new GracefulShutdown({ exitProcess: false,
       log: { info: () => {}, warn: (msg) => warnings.push(msg) },
     });
 
@@ -43,7 +43,7 @@ describe("GracefulShutdown", () => {
 
   it("calls onShutdownStart and onShutdownComplete", async () => {
     const events: string[] = [];
-    const shutdown = new GracefulShutdown({
+    const shutdown = new GracefulShutdown({ exitProcess: false,
       log: { info: () => {}, warn: () => {} },
       onShutdownStart: () => events.push("start"),
       onShutdownComplete: () => events.push("complete"),
@@ -54,7 +54,7 @@ describe("GracefulShutdown", () => {
   });
 
   it("handles async shutdown handlers", async () => {
-    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} } });
+    const shutdown = new GracefulShutdown({ log: { info: () => {}, warn: () => {} }, exitProcess: false });
     let cleaned = false;
 
     shutdown.register(async () => {
@@ -68,7 +68,7 @@ describe("GracefulShutdown", () => {
 
   it("handles errors in shutdown handlers gracefully", async () => {
     const warnings: string[] = [];
-    const shutdown = new GracefulShutdown({
+    const shutdown = new GracefulShutdown({ exitProcess: false,
       log: { info: () => {}, warn: (msg) => warnings.push(msg) },
     });
 
@@ -80,7 +80,7 @@ describe("GracefulShutdown", () => {
 
   it("empty handlers list shuts down immediately", async () => {
     const events: string[] = [];
-    const shutdown = new GracefulShutdown({
+    const shutdown = new GracefulShutdown({ exitProcess: false,
       log: { info: () => {}, warn: () => {} },
       onShutdownComplete: () => events.push("done"),
     });
@@ -90,7 +90,7 @@ describe("GracefulShutdown", () => {
   });
 
   it("configurable timeout", () => {
-    const shutdown = new GracefulShutdown({ timeoutMs: 5000 });
+    const shutdown = new GracefulShutdown({ timeoutMs: 5000, exitProcess: false });
     // Just verify it doesn't throw
     expect(shutdown.isShuttingDown).toBe(false);
   });

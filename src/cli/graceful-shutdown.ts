@@ -19,6 +19,8 @@ export type GracefulShutdownConfig = {
   onShutdownStart?: () => void;
   /** Called after shutdown completes. */
   onShutdownComplete?: () => void;
+  /** Call process.exit after shutdown. Default: true for CLI, false for tests. */
+  exitProcess?: boolean;
 };
 
 export class GracefulShutdown {
@@ -85,9 +87,11 @@ export class GracefulShutdown {
       clearTimeout(timer);
       this.log.info("mesh: shutdown complete");
       this.config.onShutdownComplete?.();
+      if (this.config.exitProcess !== false) process.exit(0);
     } catch (err) {
       clearTimeout(timer);
       this.log.warn(`mesh: shutdown error: ${String(err)}`);
+      if (this.config.exitProcess !== false) process.exit(1);
     }
   }
 

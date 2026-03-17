@@ -15,6 +15,8 @@ import { loadBhoomiContext } from "../agents/farm-context-loader.js";
 import type { ThresholdRule } from "../agents/types.js";
 import { MeshTUI } from "../tui/mesh-tui.js";
 import { CredentialStore } from "../infra/credential-store.js";
+import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
+import { createGracefulShutdown } from "./graceful-shutdown.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -203,6 +205,30 @@ export function createClawMeshCli(): Command {
           if (!opts.capability.includes("channel:telegram")) {
             opts.capability.push("channel:telegram");
           }
+        }
+
+        // ── Pre-flight validation ──────────────────────────
+        const diagnostics = validateStartupConfig({
+          deviceId: identity.deviceId,
+          port: opts.port,
+          staticPeers,
+          capabilities: opts.capability,
+          thresholds: opts.piPlanner ? defaultThresholds : undefined,
+          enablePiSession: !!opts.piPlanner,
+          modelSpec: opts.piModel,
+          hasApiKey: !!(
+            process.env.ANTHROPIC_API_KEY ||
+            process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+            process.env.OPENAI_API_KEY
+          ),
+        });
+
+        if (diagnostics.length > 0) {
+          console.log("\n" + formatDiagnostics(diagnostics) + "\n");
+        }
+        if (hasBlockingDiagnostics(diagnostics)) {
+          console.error("Cannot start: blocking issues detected. Fix the errors above.");
+          process.exit(1);
         }
 
         const runtime = new MeshNodeRuntime({
@@ -402,20 +428,14 @@ export function createClawMeshCli(): Command {
           });
         }
 
-        await new Promise<void>((resolve) => {
-          const shutdown = async () => {
-            process.off("SIGINT", onSignal);
-            process.off("SIGTERM", onSignal);
-            if (tui) tui.stop();
-            if (telegramChannel) await telegramChannel.stop();
-            await runtime.stop();
-            resolve();
-          };
-          const onSignal = () => {
-            void shutdown();
-          };
-          process.once("SIGINT", onSignal);
-          process.once("SIGTERM", onSignal);
+        // ── Graceful shutdown (replaces raw signal handler) ──
+        const shutdown = createGracefulShutdown(async () => {
+          if (tui) tui.stop();
+          if (telegramChannel) await telegramChannel.stop().catch(() => {});
+          await runtime.stop();
+        }, { log, timeoutMs: 15_000 });
+        await new Promise<void>(() => {
+          // Keep alive — GracefulShutdown handles SIGINT/SIGTERM
         });
       },
     );
