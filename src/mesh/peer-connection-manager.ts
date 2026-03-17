@@ -41,6 +41,7 @@ export type PeerConnectionManagerDeps = {
 export class PeerConnectionManager {
   private readonly clients = new Map<string, MeshPeerClient>();
   private readonly deps: PeerConnectionManagerDeps;
+  private healthTimer?: ReturnType<typeof setInterval>;
   readonly connectionHealth = new ConnectionHealthMonitor({
     staleThresholdMs: 90_000, // 90 seconds without activity = stale
     onStaleDetected: (deviceId) => {
@@ -50,6 +51,11 @@ export class PeerConnectionManager {
 
   constructor(deps: PeerConnectionManagerDeps) {
     this.deps = deps;
+    // Periodic health check every 30 seconds
+    this.healthTimer = setInterval(() => {
+      this.connectionHealth.checkAll();
+    }, 30_000);
+    this.healthTimer.unref(); // Don't keep process alive
   }
 
   /**
@@ -109,6 +115,10 @@ export class PeerConnectionManager {
    * Stop all outbound connections.
    */
   stopAll(): void {
+    if (this.healthTimer) {
+      clearInterval(this.healthTimer);
+      this.healthTimer = undefined;
+    }
     for (const client of this.clients.values()) {
       client.stop();
     }
