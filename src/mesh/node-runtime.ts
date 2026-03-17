@@ -24,6 +24,7 @@ import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
 import { sendActuation } from "./actuation-sender.js";
 import { PeerConnectionManager } from "./peer-connection-manager.js";
+import { createChatHandlers } from "./chat-handlers.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -213,51 +214,12 @@ export class MeshNodeRuntime {
       getPlannerMode: () => this.piSession?.mode,
     }));
 
-    // ─── Chat & UI subscriber handlers ─────────────────────
-    this.rpcDispatcher.register("chat.subscribe", ({ req, respond }) => {
-      const socket = (req as any)._socket as WebSocket | undefined;
-      if (socket) {
-        this.uiBroadcaster.addSubscriber(socket);
-        this.log.info("mesh: UI client subscribed to chat");
-      }
-      respond(true, { subscribed: true });
-    });
-
-    this.rpcDispatcher.register("chat.proposal.approve", async ({ params, respond }) => {
-      const taskId = params.taskId as string;
-      if (!taskId) {
-        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
-        return;
-      }
-      if (!this.piSession) {
-        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
-        return;
-      }
-      const proposal = await this.piSession.approveProposal(taskId);
-      if (proposal) {
-        respond(true, { proposal });
-      } else {
-        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
-      }
-    });
-
-    this.rpcDispatcher.register("chat.proposal.reject", ({ params, respond }) => {
-      const taskId = params.taskId as string;
-      if (!taskId) {
-        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
-        return;
-      }
-      if (!this.piSession) {
-        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
-        return;
-      }
-      const proposal = this.piSession.rejectProposal(taskId);
-      if (proposal) {
-        respond(true, { proposal });
-      } else {
-        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
-      }
-    });
+    // ─── Chat & UI subscriber handlers (extracted) ────────
+    this.rpcDispatcher.registerAll(createChatHandlers({
+      uiBroadcaster: this.uiBroadcaster,
+      getPiSession: () => this.piSession,
+      log: this.log,
+    }));
   }
 
   /**
