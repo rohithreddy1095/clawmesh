@@ -110,11 +110,19 @@ export class TelegramChannel {
     // Note: channel:telegram capability is announced via the CLI when Telegram is enabled.
     // The runtime's capabilities list is set at construction time.
 
-    // Start long-polling (no webhook needed)
+    // Start long-polling (no webhook needed).
+    // Catch polling errors (e.g. 409 conflict from another bot instance)
+    // so they don't crash the entire process.
+    this.bot.catch((err) => {
+      this.log.warn(`[telegram] Bot error (non-fatal): ${err.message ?? err}`);
+    });
     this.bot.start({
       onStart: (info) => {
         this.log.info(`[telegram] Bot @${info.username} started (long-polling). Allowed chats: ${this.allowedChatIds.size || "all"}`);
       },
+    }).catch((err) => {
+      this.log.warn(`[telegram] Polling stopped: ${err.message ?? err}. Mesh node continues without Telegram.`);
+      this.running = false;
     });
 
     this.running = true;

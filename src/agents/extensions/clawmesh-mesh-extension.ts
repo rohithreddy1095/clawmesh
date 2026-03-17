@@ -23,6 +23,13 @@ import type { MeshNodeRuntime } from "../../mesh/node-runtime.js";
 import type { ContextFrame, ContextFrameKind } from "../../mesh/context-types.js";
 import type { MeshForwardTrustMetadata } from "../../mesh/types.js";
 import type { ApprovalLevel, TaskProposal, ThresholdRule } from "../types.js";
+import {
+  formatFrames,
+  findProposalByPrefix as _findProposalByPrefix,
+  findPeerForCapability as _findPeerForCapability,
+  summarizeProposals,
+  countPending,
+} from "./mesh-extension-helpers.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -302,15 +309,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           return { content: [{ type: "text", text: "No proposals found." }], details: [] };
         }
 
-        const summary = proposals.map((p) => ({
-          taskId: p.taskId.slice(0, 8) + "...",
-          summary: p.summary,
-          targetRef: p.targetRef,
-          operation: p.operation,
-          approvalLevel: p.approvalLevel,
-          status: p.status,
-          createdAt: new Date(p.createdAt).toISOString(),
-        }));
+        const summary = summarizeProposals(proposals);
 
         return {
           content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
@@ -326,9 +325,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
       handler: async (_args, ctx) => {
         const peers = runtime.listConnectedPeers();
         const frameCount = runtime.worldModel.getRecentFrames(100).length;
-        const pending = [...state.proposals.values()].filter(
-          (p) => p.status === "proposed" || p.status === "awaiting_approval",
-        ).length;
+        const pending = countPending(state.proposals);
 
         const lines = [
           `Mesh Status:`,
@@ -456,18 +453,14 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
     // ─── Helpers (closure-scoped) ───────────────────────
 
     function findPeerForCapability(targetRef: string): string | null {
-      const exactPeers = runtime.capabilityRegistry.findPeersWithCapability(targetRef);
-      if (exactPeers.length > 0) return exactPeers[0];
-      const prefix = targetRef.split(":").slice(0, 2).join(":");
-      const prefixPeers = runtime.capabilityRegistry.findPeersWithCapability(prefix);
-      return prefixPeers.length > 0 ? prefixPeers[0] : null;
+      return _findPeerForCapability(
+        (ref) => runtime.capabilityRegistry.findPeersWithCapability(ref),
+        targetRef,
+      );
     }
 
     function findProposalByPrefix(prefix: string): TaskProposal | undefined {
-      for (const p of state.proposals.values()) {
-        if (p.taskId.startsWith(prefix)) return p;
-      }
-      return undefined;
+      return _findProposalByPrefix(state.proposals, prefix);
     }
 
     async function executeProposal(proposal: TaskProposal): Promise<void> {
@@ -522,19 +515,6 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
       state.onProposalResolved?.(proposal);
     }
 
-    function formatFrames(frames: ContextFrame[]): string {
-      if (frames.length === 0) return "No context frames found.";
-
-      return frames
-        .map((f) => {
-          const ts = new Date(f.timestamp).toISOString();
-          const src = f.sourceDisplayName ?? f.sourceDeviceId.slice(0, 12) + "...";
-          const lines = [`[${f.kind}] ${src} @ ${ts}`];
-          lines.push(`Data: ${JSON.stringify(f.data, null, 2)}`);
-          if (f.note) lines.push(`Note: ${f.note}`);
-          return lines.join("\n");
-        })
-        .join("\n\n");
-    }
+    // formatFrames is now imported from mesh-extension-helpers.ts
   };
 }

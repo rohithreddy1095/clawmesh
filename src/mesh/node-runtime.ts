@@ -24,6 +24,8 @@ import { AutoConnectManager } from "./auto-connect.js";
 import { TrustAuditTrail } from "./trust-audit.js";
 import { sendActuation } from "./actuation-sender.js";
 import { PeerConnectionManager } from "./peer-connection-manager.js";
+import { createChatHandlers } from "./chat-handlers.js";
+import { handleInboundDisconnect } from "./inbound-connection.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -213,51 +215,12 @@ export class MeshNodeRuntime {
       getPlannerMode: () => this.piSession?.mode,
     }));
 
-    // ─── Chat & UI subscriber handlers ─────────────────────
-    this.rpcDispatcher.register("chat.subscribe", ({ req, respond }) => {
-      const socket = (req as any)._socket as WebSocket | undefined;
-      if (socket) {
-        this.uiBroadcaster.addSubscriber(socket);
-        this.log.info("mesh: UI client subscribed to chat");
-      }
-      respond(true, { subscribed: true });
-    });
-
-    this.rpcDispatcher.register("chat.proposal.approve", async ({ params, respond }) => {
-      const taskId = params.taskId as string;
-      if (!taskId) {
-        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
-        return;
-      }
-      if (!this.piSession) {
-        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
-        return;
-      }
-      const proposal = await this.piSession.approveProposal(taskId);
-      if (proposal) {
-        respond(true, { proposal });
-      } else {
-        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
-      }
-    });
-
-    this.rpcDispatcher.register("chat.proposal.reject", ({ params, respond }) => {
-      const taskId = params.taskId as string;
-      if (!taskId) {
-        respond(false, undefined, { code: "INVALID_PARAMS", message: "taskId required" });
-        return;
-      }
-      if (!this.piSession) {
-        respond(false, undefined, { code: "NO_PLANNER", message: "Pi planner not active" });
-        return;
-      }
-      const proposal = this.piSession.rejectProposal(taskId);
-      if (proposal) {
-        respond(true, { proposal });
-      } else {
-        respond(false, undefined, { code: "NOT_FOUND", message: "Proposal not found or not awaiting approval" });
-      }
-    });
+    // ─── Chat & UI subscriber handlers (extracted) ────────
+    this.rpcDispatcher.registerAll(createChatHandlers({
+      uiBroadcaster: this.uiBroadcaster,
+      getPiSession: () => this.piSession,
+      log: this.log,
+    }));
   }
 
   /**
@@ -301,12 +264,12 @@ export class MeshNodeRuntime {
       socket.on("close", () => {
         this.inboundSocketConnIds.delete(socket);
         this.uiBroadcaster.removeSubscriber(socket);
-        const deviceId = this.peerRegistry.unregister(connId);
-        if (deviceId) {
-          this.capabilityRegistry.removePeer(deviceId);
-          this.eventBus.emit("peer.disconnected", { deviceId, reason: "socket closed" });
-          this.log.info(`mesh: inbound peer disconnected ${deviceId.slice(0, 12)}…`);
-        }
+        handleInboundDisconnect(connId, {
+          peerRegistry: this.peerRegistry,
+          capabilityRegistry: this.capabilityRegistry,
+          eventBus: this.eventBus,
+          log: this.log,
+        });
       });
 
       socket.on("error", (err) => {
