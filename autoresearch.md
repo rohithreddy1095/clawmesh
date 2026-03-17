@@ -155,5 +155,12 @@ All files under `src/` are in scope. Specifically:
 68. ✅ **Extract FrameIngestor** — pattern detection, threshold breach processing, cooldown tracking (22 tests)
 69. ✅ **Pure functions expanded tests** — trust utilities, routing, trust tiers, frame relevance, context sync, command envelope (24 tests)
 
-### Current Results: 135 → 1052 tests (+679%), 38 → 64 source modules (+68%), 17 → 73 test files (+329%)
+70. ✅ **Extract Telegram helpers** — escapeMarkdownV2, chunkMessage, severity filtering, alert/citation formatting, proposal notification (39 tests)
+71. ✅ **Extract CLI config** — shorthand flag expansion, default thresholds, numeric parsing, env var checking, capabilities (35 tests)
+72. ✅ **Extract sensor simulation** — moisture step, status classification, clamping, observation payloads (26 tests)
+73. ✅ **Extract pattern logic** — confidence, export threshold, pattern key, decay, matching (32 tests)
+74. ✅ **Extract actuator logic** — status derivation, activation/deactivation, target ref parsing (29 tests)
+75. ✅ **Full-stack validation tests** — 8 e2e scenarios validating all extracted modules work together (17 tests)
+
+### Current Results: 135 → 1230 tests (+811%), 38 → 69 source modules (+82%), 17 → 79 test files (+365%)
 ### God object: 754 → 521 lines (-30.9%)
