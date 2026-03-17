@@ -194,6 +194,11 @@ All files under `src/` are in scope. Specifically:
 68. ✅ **Full pipeline validation** — 4 e2e scenarios: normal planner, degraded recovery, pattern learning, event routing
 69. ✅ **Architecture summary validation** — 13 module import health, decomposition count, wiring validation (15 tests)
 
-### Current Results: 135 → 1831 tests (+1256%), 38 → 74 source modules (+95%), 17 → 107 test files (+529%)
+70. ✅ **Extended ContextPropagator tests** — broadcast variants, dedup, self-loop, hop behavior (8 tests)
+71. ✅ **PeerRegistry + WorldModel integration** — advanced scenarios, cross-module independence (7 tests)
+72. ✅ **API contract tests** — 8 core module public interface validation (44 tests)
+73. ✅ **🎉 BROKE 1900!** Session 5 milestone tests (12 tests)
+
+### Current Results: 135 → 1902 tests (+1309%), 38 → 74 source modules (+95%), 17 → 111 test files (+553%)
 ### God object: 754 → 484 lines (-35.8%)
 ### PiSession: 895 → 638 lines (-28.7%)
