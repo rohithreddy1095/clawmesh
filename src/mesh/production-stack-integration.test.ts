@@ -9,6 +9,7 @@ import { RateLimiter } from "./rate-limiter.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { validateMessageSize, validateAndParse } from "./message-validation.js";
 import { computeHealthCheck, type HealthCheckDeps } from "./health-check.js";
+import { createSnapshot, filterSnapshotByAge, isValidSnapshot, type WorldModelSnapshotData } from "./world-model-snapshot.js";
 import { PeerRegistry } from "./peer-registry.js";
 import { MeshCapabilityRegistry } from "./capabilities.js";
 import { WorldModel } from "./world-model.js";
@@ -126,5 +127,41 @@ describe("Production stack: validateAndParse pipeline", () => {
     });
     const result = validateAndParse(msg);
     expect(result.parsed).not.toBeNull();
+  });
+});
+
+describe("Production stack: world model snapshot lifecycle", () => {
+  it("snapshot round-trip preserves recent frames for fast restart", () => {
+    const now = Date.now();
+    const wm = new WorldModel({ autoEvictTtlMs: 0, log: { info: () => {} } });
+
+    // Ingest some frames
+    for (let i = 0; i < 10; i++) {
+      wm.ingest({
+        kind: "observation",
+        frameId: `f-${i}`,
+        sourceDeviceId: "sensor-01",
+        timestamp: now - (i * 60_000), // Every minute
+        data: { metric: "soil_moisture", value: 50 - i, zone: "zone-1" },
+        trust: { evidence_sources: ["sensor"], evidence_trust_tier: "T2_operational_observation" },
+      });
+    }
+
+    // Create snapshot on "shutdown"
+    const frames = wm.getRecentFrames(100);
+    const snapshot = createSnapshot(frames, "node-01");
+    expect(isValidSnapshot(snapshot)).toBe(true);
+    expect(snapshot.frames.length).toBeGreaterThan(0);
+
+    // Filter to 1-hour window on "startup"
+    const restored = filterSnapshotByAge(snapshot, 3_600_000, now);
+    expect(restored.length).toBeGreaterThan(0);
+
+    // Restore into fresh world model
+    const wm2 = new WorldModel({ autoEvictTtlMs: 0, log: { info: () => {} } });
+    for (const frame of restored) {
+      wm2.ingest(frame);
+    }
+    expect(wm2.size).toBeGreaterThan(0);
   });
 });
