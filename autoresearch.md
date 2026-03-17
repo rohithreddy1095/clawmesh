@@ -208,6 +208,10 @@ All files under `src/` are in scope. Specifically:
 79. ✅ **RateLimiter** — sliding window rate limiting for DoS protection (15 tests)
 80. ✅ **🎉🎉 2000 TESTS!** Production readiness validation (8 tests)
 
-### Current Results: 135 → 2000 tests (+1382%), 38 → 77 source modules (+103%), 17 → 117 test files (+588%)
-### God object: 754 → 495 lines (-34.4%)
+81. ✅ **GracefulShutdown** — SIGTERM/SIGINT signal handling with ordered cleanup, timeout, double-signal force exit (8 tests)
+82. ✅ **MessageValidation** — size limits (1MB), structure validation, validateAndParse pipeline (19 tests)
+83. ✅ **Wire production modules** — rate limiter + message validation into inbound handler, connection health into PeerConnectionManager
+
+### Current Results: 135 → 2034 tests (+1407%), 38 → 79 source modules (+108%), 17 → 120 test files (+606%)
+### God object: 754 → 511 lines (-32.2%)
 ### PiSession: 895 → 638 lines (-28.7%)
