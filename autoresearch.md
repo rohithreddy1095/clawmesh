@@ -168,5 +168,11 @@ All files under `src/` are in scope. Specifically:
 79. ✅ **Core modules deep coverage** — WorldModel, IntentRouter, context sync expanded tests (20 tests)
 80. ✅ **🎉 BROKE 1400! Architecture invariant tests** — module existence, test coverage, circular dependency guards (70 tests)
 
-### Current Results: 135 → 1402 tests (+939%), 38 → 69 source modules (+82%), 17 → 84 test files (+394%)
+81. ✅ **Protocol format tests** — command envelope wire format, trust policy, RPC dispatch, handshake auth (13 tests)
+82. ✅ **Data flow validation** — CRDT commutativity/idempotency, threshold checker, target ref, sensor→alert pipeline (20 tests)
+83. ✅ **Security/safety invariants** — LLM actuation blocking, trust hierarchy, auth tamper resistance (19 tests)
+84. ✅ **Push to 1500** — TriggerQueue ordering/dedup, system prompt, fingerprint, formatting, CRDT associativity (25 tests)
+85. ✅ **🎉 BROKE 1500!** — Mode controller, actuator status comprehensive, moisture boundaries (25 tests)
+
+### Current Results: 135 → 1504 tests (+1014%), 38 → 69 source modules (+82%), 17 → 89 test files (+424%)
 ### God object: 754 → 521 lines (-30.9%)
