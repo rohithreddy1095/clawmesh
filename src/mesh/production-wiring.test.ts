@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { validateMessageSize, validateAndParse, MAX_MESSAGE_SIZE } from "./message-validation.js";
 
 describe("Production wiring: ConnectionHealth + PeerConnectionManager", () => {
   it("activity recording on peer event simulates the wired path", () => {
@@ -44,6 +45,21 @@ describe("Production wiring: RateLimiter + inbound handler", () => {
     for (let i = 0; i < 100; i++) limiter.allow(connId);
     expect(limiter.allow(connId)).toBe(false);
     expect(limiter.retryAfterMs(connId)).toBeGreaterThan(0);
+  });
+
+  it("message size validation rejects before parse (production path)", () => {
+    const oversized = "x".repeat(MAX_MESSAGE_SIZE + 1);
+    const result = validateMessageSize(oversized);
+    expect(result.valid).toBe(false);
+    // This check happens BEFORE JSON.parse in the runtime
+  });
+
+  it("validateAndParse handles complete pipeline", () => {
+    const valid = validateAndParse('{"type":"req","id":"1","method":"test"}');
+    expect(valid.parsed).not.toBeNull();
+
+    const invalid = validateAndParse("not json");
+    expect(invalid.parsed).toBeNull();
   });
 
   it("cleanup on disconnect frees resources", () => {

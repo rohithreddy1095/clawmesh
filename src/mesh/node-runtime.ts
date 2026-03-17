@@ -27,6 +27,7 @@ import { PeerConnectionManager } from "./peer-connection-manager.js";
 import { createChatHandlers } from "./chat-handlers.js";
 import { handleInboundDisconnect } from "./inbound-connection.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { validateMessageSize } from "./message-validation.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -472,6 +473,13 @@ export class MeshNodeRuntime {
   }
 
   private async handleInboundMessage(socket: WebSocket, connId: string, raw: string): Promise<void> {
+    // Reject oversized messages before parsing
+    const sizeCheck = validateMessageSize(raw);
+    if (!sizeCheck.valid) {
+      this.log.warn(`mesh: rejected oversized message from ${connId.slice(0, 8)}…: ${sizeCheck.error}`);
+      return;
+    }
+
     await routeInboundMessage(raw, socket, connId, {
       peerRegistry: this.peerRegistry,
       contextPropagator: this.contextPropagator,
