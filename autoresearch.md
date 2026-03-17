@@ -174,5 +174,15 @@ All files under `src/` are in scope. Specifically:
 84. ✅ **Push to 1500** — TriggerQueue ordering/dedup, system prompt, fingerprint, formatting, CRDT associativity (25 tests)
 85. ✅ **🎉 BROKE 1500!** — Mode controller, actuator status comprehensive, moisture boundaries (25 tests)
 
-### Current Results: 135 → 1504 tests (+1014%), 38 → 69 source modules (+82%), 17 → 89 test files (+424%)
-### God object: 754 → 521 lines (-30.9%)
+### Session 5: PiSession Wiring — Module Integration
+54. ✅ **Wire ModeController** into PiSession — replaced inline mode management with ModeController delegation
+55. ✅ **Wire ProposalManager** into PiSession — replaced inline approve/reject with ProposalManager delegation
+56. ✅ **Wire FrameIngestor** into PiSession — replaced inline handleIncomingFrame with ingestFrame/isPatternFrame
+57. ✅ **Wire SessionEventClassifier** into PiSession — replaced 45-line handleSessionEvent switch with classifyEvent
+58. ✅ **Wire PlannerPromptBuilder** into PiSession — replaced prompt construction with buildOperatorPrompt/buildPlannerPrompt
+59. ✅ **Wire SystemPromptBuilder** into PiSession — replaced 35-line buildSystemPrompt with buildPlannerSystemPrompt
+60. ✅ **Wire parseModelSpec** into PiSession — replaced inline model spec validation
+
+### Current Results: 135 → 1650 tests (+1122%), 38 → 72 source modules (+89%), 17 → 97 test files (+470%)
+### God object: 754 → 484 lines (-35.8%)
+### PiSession: 895 → 670 lines (-25.1%)
