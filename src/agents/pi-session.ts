@@ -34,7 +34,9 @@ import {
   buildPlannerPrompt,
   cleanIntentText,
   extractCitations,
+  parseModelSpec,
 } from "./planner-prompt-builder.js";
+import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -646,15 +648,7 @@ export class PiSession {
   // ─── Model resolution ───────────────────────────────────
 
   private resolveModel(spec: string): Model<any> {
-    const [provider, ...rest] = spec.split("/");
-    const modelId = rest.join("/");
-
-    if (!provider || !modelId) {
-      throw new Error(
-        `Invalid model spec "${spec}". Use "provider/model-id" (e.g. "anthropic/claude-sonnet-4-5-20250929")`,
-      );
-    }
-
+    const { provider, modelId } = parseModelSpec(spec);
     const model = getModel(provider as any, modelId as any);
     if (!model) {
       throw new Error(
@@ -668,42 +662,9 @@ export class PiSession {
   // ─── System prompt ──────────────────────────────────────
 
   private buildSystemPrompt(): string {
-    const nodeName = this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12);
-    const farm = this.farmContext;
-
-    let farmSection = "";
-    if (farm) {
-      const zones = farm.zones.map((z) =>
-        `  - ${z.zoneId}: ${z.name}${z.crops ? ` (crops: ${z.crops.join(", ")})` : ""}`,
-      ).join("\n");
-      const assets = farm.assets.map((a) =>
-        `  - ${a.assetId}: ${a.type}${a.capabilities ? ` [${a.capabilities.join(",")}]` : ""}`,
-      ).join("\n");
-      const safety = farm.safetyRules.map((r) => `  - ${r}`).join("\n");
-
-      farmSection = `
-# Farm: ${farm.siteName}
-## Zones
-${zones}
-## Assets
-${assets}
-## Safety Rules (NEVER violate)
-${safety}
-`;
-    }
-
-    return `You are the intelligent planner for a ClawMesh farm mesh network.
-
-# Your Node
-- Name: ${nodeName}
-- Role: planner / command center
-${farmSection}
-# Rules
-- LLM alone NEVER triggers physical actuation — use propose_task
-- Always cite sensor data in reasoning
-- Never fabricate sensor values
-- L0=auto, L1=bounded auto, L2=human confirm, L3=on-site verify
-
-Be concise. Be safe. Explain your reasoning.`;
+    return buildPlannerSystemPrompt({
+      nodeName: this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
+      farmContext: this.farmContext,
+    });
   }
 }
