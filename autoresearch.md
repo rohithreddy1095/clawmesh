@@ -183,6 +183,10 @@ All files under `src/` are in scope. Specifically:
 59. ✅ **Wire SystemPromptBuilder** into PiSession — replaced 35-line buildSystemPrompt with buildPlannerSystemPrompt
 60. ✅ **Wire parseModelSpec** into PiSession — replaced inline model spec validation
 
-### Current Results: 135 → 1650 tests (+1122%), 38 → 72 source modules (+89%), 17 → 97 test files (+470%)
+61. ✅ **Mesh extension integration tests** — extension state management, tool routing, proposal creation, blocking (22 tests)
+62. ✅ **Extract broadcast helpers** — buildAgentResponseFrame, buildPatternGossipFrame, error/rate-limit responses (12 tests)
+63. ✅ **🎉 100 TEST FILES!** TUI data helpers — uptime formatting, gossip column data, ANSI helpers (22 tests)
+
+### Current Results: 135 → 1706 tests (+1164%), 38 → 73 source modules (+92%), 17 → 100 test files (+488%)
 ### God object: 754 → 484 lines (-35.8%)
 ### PiSession: 895 → 670 lines (-25.1%)

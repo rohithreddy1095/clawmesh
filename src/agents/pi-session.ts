@@ -37,6 +37,7 @@ import {
   parseModelSpec,
 } from "./planner-prompt-builder.js";
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
+import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -349,24 +350,13 @@ export class PiSession {
   /**
    * Broadcast an agent response frame to UI subscribers and mesh peers.
    */
-  private broadcastAgentResponse(data: {
-    conversationId?: string;
-    requestId?: string;
-    message: string;
-    status: "complete" | "thinking" | "error";
-    proposals?: string[];
-    citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
-  }): void {
-    // Send only to UI subscribers (not via context propagator to avoid duplicates)
-    this.runtime.broadcastToUI("context.frame", {
-      kind: "agent_response",
-      frameId: `ar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      sourceDeviceId: this.runtime.identity.deviceId,
-      sourceDisplayName: this.runtime.displayName,
-      timestamp: Date.now(),
+  private broadcastAgentResponse(data: AgentResponseData): void {
+    const frame = buildAgentResponseFrame(
       data,
-      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
-    });
+      this.runtime.identity.deviceId,
+      this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
+    );
+    this.runtime.broadcastToUI("context.frame", frame);
   }
 
   async approveProposal(taskId: string, approvedBy = "operator"): Promise<TaskProposal | null> {
@@ -411,19 +401,8 @@ export class PiSession {
     const exportable = this.patternMemory.exportPatterns();
     if (exportable.length === 0) return;
 
-    this.runtime.contextPropagator.broadcast({
-      kind: "capability_update",
-      data: {
-        type: "learned_patterns",
-        patterns: exportable,
-      },
-      trust: {
-        evidence_sources: ["human", "llm"],
-        evidence_trust_tier: "T2_operational_observation",
-      },
-      note: `${exportable.length} learned patterns from operator decisions`,
-    });
-
+    const gossipFrame = buildPatternGossipFrame(exportable);
+    this.runtime.contextPropagator.broadcast(gossipFrame as any);
     this.log.info(`[pi-session] Gossiped ${exportable.length} learned patterns to mesh`);
   }
 
