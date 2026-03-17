@@ -186,7 +186,10 @@ All files under `src/` are in scope. Specifically:
 61. ✅ **Mesh extension integration tests** — extension state management, tool routing, proposal creation, blocking (22 tests)
 62. ✅ **Extract broadcast helpers** — buildAgentResponseFrame, buildPatternGossipFrame, error/rate-limit responses (12 tests)
 63. ✅ **🎉 100 TEST FILES!** TUI data helpers — uptime formatting, gossip column data, ANSI helpers (22 tests)
+64. ✅ **Wire broadcast helpers into PiSession** — broadcastAgentResponse + gossipPatternsIfReady (6 tests)
+65. ✅ **Extract LLM response helpers** — hasAssistantContent, getLastMessage, findRecentProposalIds (15 tests)
+66. ✅ **PiSession decomposition validation** — 45 structural health tests: line limits, imports, module existence
 
-### Current Results: 135 → 1706 tests (+1164%), 38 → 73 source modules (+92%), 17 → 100 test files (+488%)
+### Current Results: 135 → 1772 tests (+1213%), 38 → 74 source modules (+95%), 17 → 103 test files (+506%)
 ### God object: 754 → 484 lines (-35.8%)
-### PiSession: 895 → 670 lines (-25.1%)
+### PiSession: 895 → 638 lines (-28.7%)
