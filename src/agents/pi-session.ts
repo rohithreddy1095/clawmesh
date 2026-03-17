@@ -28,6 +28,13 @@ import { ModeController } from "./mode-controller.js";
 import { ProposalManager } from "./proposal-manager.js";
 import { ingestFrame, extractPatterns, isPatternFrame } from "./frame-ingestor.js";
 import { isPermanentLLMError } from "./threshold-checker.js";
+import { classifyEvent, extractAssistantText } from "./session-event-classifier.js";
+import {
+  buildOperatorPrompt,
+  buildPlannerPrompt,
+  cleanIntentText,
+  extractCitations,
+} from "./planner-prompt-builder.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -489,49 +496,24 @@ export class PiSession {
 
       if (operatorIntents.length > 0) {
         // Use conversational format for operator intents
-        const intent = operatorIntents[0]; // Process first intent conversationally
+        const intent = operatorIntents[0];
         activeConversationId = intent.conversationId;
         activeRequestId = intent.requestId;
-        const intentText = intent.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, "");
+        const intentText = cleanIntentText(intent.reason);
 
-        const systemContext = systemTriggers.length > 0
-          ? `\n\nAdditionally, the following system triggers occurred:\n${systemTriggers.map(t => `- ${t.reason}`).join("\n")}`
-          : "";
-
-        // Include learned patterns as context
         const allPatterns = this.patternMemory.getAllPatterns();
-        const patternContext = allPatterns.length > 0
-          ? `\n\n[LEARNED PATTERNS from past operator decisions]\n${allPatterns.slice(0, 10).map(p =>
-              `- "${p.triggerCondition}" → ${p.action.operation} on ${p.action.targetRef} ` +
-              `(confidence: ${(p.confidence * 100).toFixed(0)}%, approved ${p.approvalCount}x, rejected ${p.rejectionCount}x)`
-            ).join("\n")}`
-          : "";
-
-        prompt = `[OPERATOR MESSAGE] "${intentText}"${systemContext}${patternContext}
-
-Respond naturally to the operator's message. Use your tools to check current sensor data if relevant. If the operator is asking for information, provide it clearly with sensor citations. If they're requesting an action that requires actuation, use propose_task. Be conversational but concise. If learned patterns are relevant, mention them.`;
+        prompt = buildOperatorPrompt(intentText, systemTriggers, allPatterns);
 
         // Queue remaining operator intents for next cycle
         for (let i = 1; i < operatorIntents.length; i++) {
           const remaining = operatorIntents[i];
           this.triggerQueue.enqueueIntent(
-            remaining.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, ""),
+            cleanIntentText(remaining.reason),
             { conversationId: remaining.conversationId, requestId: remaining.requestId },
           );
         }
       } else {
-        // Standard planner cycle for system triggers
-        const triggerSummary = systemTriggers.map((t) => `- ${t.reason}`).join("\n");
-        prompt = `[PLANNER CYCLE ${new Date().toISOString()}]
-Triggers:
-${triggerSummary}
-
-Review the current mesh state using your tools, then either:
-1. Take no action if everything is within acceptable parameters
-2. Use propose_task to create proposals for actions that need human approval (L2/L3 actuation)
-3. For safe read-only operations (L0), execute them directly
-
-Always explain your reasoning. Never fabricate sensor data.`;
+        prompt = buildPlannerPrompt(systemTriggers);
       }
 
       const toolsNow = this.session.getActiveToolNames();
@@ -562,8 +544,7 @@ Always explain your reasoning. Never fabricate sensor data.`;
 
           // Extract full assistant text and broadcast as agent_response
           if (activeConversationId && lastMsg?.role === "assistant") {
-            const textBlocks = lastMsg.content?.filter?.((c: any) => c.type === "text") ?? [];
-            const fullText = textBlocks.map((c: any) => c.text?.trim()).filter(Boolean).join("\n\n");
+            const fullText = extractAssistantText(lastMsg);
 
             // Collect proposal IDs created during this turn
             const proposalIds = this.proposalManager.list()
@@ -572,15 +553,7 @@ Always explain your reasoning. Never fabricate sensor data.`;
 
             // Build sensor citations from recent world model frames
             const recentFrames = this.runtime.worldModel.getRecentFrames(10);
-            const citations = recentFrames
-              .filter(f => f.kind === "observation" && f.data.metric)
-              .slice(0, 5)
-              .map(f => ({
-                metric: String(f.data.metric),
-                value: f.data.value,
-                zone: f.data.zone as string | undefined,
-                timestamp: f.timestamp,
-              }));
+            const citations = extractCitations(recentFrames);
 
             if (fullText) {
               this.broadcastAgentResponse({
@@ -628,74 +601,45 @@ Always explain your reasoning. Never fabricate sensor data.`;
     }
   }
 
-  // ─── Session event handler ──────────────────────────────
+  // ─── Session event handler (delegates to SessionEventClassifier) ──
 
   private handleSessionEvent(event: any): void {
-    switch (event.type) {
-      // Silently skip high-frequency streaming updates
-      case "message_update":
+    const classified = classifyEvent(event);
+
+    switch (classified.type) {
+      case "skip":
         return;
-
       case "message_start":
-        if (event.message) {
-          const m = event.message;
-          if (m.role === "assistant" && m.model) {
-            this.log.info(`pi-session: LLM responding (model=${m.model})`);
-          }
-        }
+        this.log.info(`pi-session: LLM responding (model=${classified.model})`);
         break;
-
-      case "message_end":
-        if (event.message) {
-          const msg = event.message;
-          // Log errors explicitly so we catch rate limits
-          if (msg.errorMessage) {
-            this.log.error(`pi-session: message error: ${msg.errorMessage}`);
-          }
-          if (msg.role === "assistant") {
-            const textContent = msg.content?.filter?.((c: any) => c.type === "text") ?? [];
-            for (const block of textContent) {
-              if (block.text?.trim()) {
-                this.log.info(`[pi-session] ${block.text}`);
-                this.runtime.contextPropagator.broadcastInference({
-                  data: { reasoning: block.text.slice(0, 500) },
-                  note: "Pi session reasoning",
-                });
-              }
-            }
-            const toolCalls = msg.content?.filter?.((c: any) => c.type === "toolCall") ?? [];
-            if (toolCalls.length > 0) {
-              this.log.info(`pi-session: tool calls: ${toolCalls.map((t: any) => t.name).join(", ")}`);
-            }
-          }
-        }
+      case "message_error":
+        this.log.error(`pi-session: message error: ${classified.error}`);
         break;
-
-      case "tool_execution_start":
-        this.log.info(`pi-session: tool ${event.toolName}(${JSON.stringify(event.args).slice(0, 120)})`);
+      case "assistant_text":
+        this.log.info(`[pi-session] ${classified.text}`);
+        this.runtime.contextPropagator.broadcastInference({
+          data: { reasoning: classified.text.slice(0, 500) },
+          note: "Pi session reasoning",
+        });
         break;
-
-      case "tool_execution_end":
-        if (event.isError) {
-          this.log.warn(`pi-session: tool ${event.toolName} error`);
-        }
+      case "tool_calls":
+        this.log.info(`pi-session: tool calls: ${classified.names.join(", ")}`);
         break;
-
-      case "auto_retry_start":
+      case "tool_start":
+        this.log.info(`pi-session: tool ${classified.name}(${classified.args})`);
+        break;
+      case "tool_error":
+        this.log.warn(`pi-session: tool ${classified.name} error`);
+        break;
+      case "auto_retry":
         this.log.warn(`pi-session: auto-retry starting`);
         break;
-
-      case "auto_compaction_start":
+      case "compaction_start":
         this.log.info(`pi-session: auto-compaction triggered`);
         break;
-
-      case "auto_compaction_end":
-        if (event.result) {
-          this.log.info(`pi-session: compaction done`);
-        }
+      case "compaction_end":
+        this.log.info(`pi-session: compaction done`);
         break;
-
-      // agent_start, agent_end, turn_start, turn_end, auto_retry_end — skip silently
     }
   }
 
