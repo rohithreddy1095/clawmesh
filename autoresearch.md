@@ -162,5 +162,11 @@ All files under `src/` are in scope. Specifically:
 74. ✅ **Extract actuator logic** — status derivation, activation/deactivation, target ref parsing (29 tests)
 75. ✅ **Full-stack validation tests** — 8 e2e scenarios validating all extracted modules work together (17 tests)
 
-### Current Results: 135 → 1230 tests (+811%), 38 → 69 source modules (+82%), 17 → 79 test files (+365%)
+76. ✅ **Module coverage expansion** — PeerRegistry, EventBus, Transport, Capabilities, TrustAudit, RpcDispatcher edge cases (31 tests)
+77. ✅ **Boundary and stress tests** — Unicode, extreme numerics, empty inputs, long strings, stress scenarios (32 tests)
+78. ✅ **Remaining edge cases** — handshake, frame relevance, trust tiers, routing, command envelope validation (19 tests)
+79. ✅ **Core modules deep coverage** — WorldModel, IntentRouter, context sync expanded tests (20 tests)
+80. ✅ **🎉 BROKE 1400! Architecture invariant tests** — module existence, test coverage, circular dependency guards (70 tests)
+
+### Current Results: 135 → 1402 tests (+939%), 38 → 69 source modules (+82%), 17 → 84 test files (+394%)
 ### God object: 754 → 521 lines (-30.9%)
