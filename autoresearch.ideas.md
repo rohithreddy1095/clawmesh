@@ -1,20 +1,24 @@
 # Autoresearch Ideas Backlog
 
-## Done ✅ (Session 5)
-- ~~Wire ModeController, ProposalManager, FrameIngestor into PiSession~~
-- ~~Wire SessionEventClassifier, PlannerPromptBuilder into PiSession~~
-- ~~Wire SystemPromptBuilder, parseModelSpec into PiSession~~
-- ~~Extract + wire broadcast helpers (buildAgentResponseFrame, gossip, errors)~~
-- ~~TUI data helper tests~~
-- ~~Mesh extension integration tests~~
+## Done ✅ (Sessions 5-6)
+- ~~PiSession wiring (9 modules)~~
+- ~~Production hardening: retry, error logging, startup validation~~
+- ~~ConnectionHealthMonitor + RateLimiter wired into runtime~~
 
-## Medium Priority — Further Decomposition
-- **Extract WS server setup from node-runtime start()**: The WebSocketServer creation + connection handler (~40 lines) could become a helper function.
-- **Extract PiSession.start() setup**: Resource loader configuration is ~30 lines of pure setup.
-- **Extract runCycle LLM response handling**: The success/error branching after session.prompt() is ~50 lines that could be a pure handler.
+## High Priority — Production UX
+- **Wire startup validation into CLI** — run pre-flight checks before `clawmesh start`, show clear report
+- **Add --dry-run flag** to CLI — validates config without starting
+- **TUI: show connection health** — display stale/reconnecting peers, rate limit status
+- **TUI: show mode indicator** — active/observing/suspended prominently in status bar
+- **Graceful shutdown signal handling** — SIGTERM/SIGINT cleanup with timeout
 
-## Lower Priority — Coverage & Quality
-- **Structured logger adoption**: Replace console.log across codebase with MeshLogger.
-- **Peer registry transport abstraction**: Replace WebSocket refs with Transport interface.
-- **Extract TUI buildPeersColumn/buildGossipColumn** as pure data functions.
-- **Farm context schema validation**: Type-safe loading with zod or manual validation.
+## Medium Priority — Robustness
+- **Wire ConnectionHealthMonitor periodic checks** — start a timer to run checkAll() every 30s
+- **Add peer message size limits** — reject messages > 1MB
+- **Pattern memory persistence** — save/load patterns to disk across restarts
+- **World model persistence** — snapshot/restore for fast startup
+
+## Lower Priority — Architecture
+- **Structured logger adoption**: Replace console.log defaults with MeshLogger
+- **Peer registry transport abstraction**: Replace WebSocket refs with Transport interface
+- **Extract TUI data builders** as pure functions for testing
