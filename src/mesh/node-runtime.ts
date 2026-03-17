@@ -28,6 +28,7 @@ import { createChatHandlers } from "./chat-handlers.js";
 import { handleInboundDisconnect } from "./inbound-connection.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { validateMessageSize } from "./message-validation.js";
+import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -113,6 +114,8 @@ export class MeshNodeRuntime {
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   /** Rate limiter for inbound RPC requests (100 req/min per connection). */
   private readonly inboundRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60_000 });
+  /** Operational metrics for monitoring/health. */
+  readonly metrics = new MetricsCollector();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
   readonly trustAudit = new TrustAuditTrail();
@@ -262,8 +265,10 @@ export class MeshNodeRuntime {
       this.inboundSocketConnIds.set(socket, connId);
 
       socket.on("message", (raw) => {
+        this.metrics.inc(MESH_METRICS.INBOUND_MESSAGES);
         if (!this.inboundRateLimiter.allow(connId)) {
-          this.log.warn(`mesh: rate-limited inbound connection ${connId.slice(0, 8)}… (${this.inboundRateLimiter.retryAfterMs(connId)}ms until reset)`);
+          this.metrics.inc(MESH_METRICS.INBOUND_RATE_LIMITED);
+          this.log.warn(`mesh: rate-limited inbound connection ${connId.slice(0, 8)}…`);
           return;
         }
         void this.handleInboundMessage(socket, connId, rawDataToString(raw));
@@ -476,6 +481,7 @@ export class MeshNodeRuntime {
     // Reject oversized messages before parsing
     const sizeCheck = validateMessageSize(raw);
     if (!sizeCheck.valid) {
+      this.metrics.inc(MESH_METRICS.INBOUND_REJECTED);
       this.log.warn(`mesh: rejected oversized message from ${connId.slice(0, 8)}…: ${sizeCheck.error}`);
       return;
     }

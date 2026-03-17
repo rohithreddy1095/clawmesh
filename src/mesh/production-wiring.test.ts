@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { validateMessageSize, validateAndParse, MAX_MESSAGE_SIZE } from "./message-validation.js";
+import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
 
 describe("Production wiring: ConnectionHealth + PeerConnectionManager", () => {
   it("activity recording on peer event simulates the wired path", () => {
@@ -70,5 +71,45 @@ describe("Production wiring: RateLimiter + inbound handler", () => {
 
     limiter.reset("conn-1"); // Simulates socket close cleanup
     expect(limiter.size).toBe(1);
+  });
+});
+
+describe("Production wiring: MetricsCollector in runtime", () => {
+  it("tracks inbound message pipeline (simulates runtime path)", () => {
+    const m = new MetricsCollector();
+    const limiter = new RateLimiter({ maxRequests: 2, windowMs: 60_000 });
+    const connId = "conn-test";
+
+    // 3 inbound messages
+    for (let i = 0; i < 3; i++) {
+      m.inc(MESH_METRICS.INBOUND_MESSAGES);
+      if (!limiter.allow(connId)) {
+        m.inc(MESH_METRICS.INBOUND_RATE_LIMITED);
+        continue;
+      }
+      // Simulate size validation
+      const sizeOk = validateMessageSize('{"type":"req"}');
+      if (!sizeOk.valid) {
+        m.inc(MESH_METRICS.INBOUND_REJECTED);
+        continue;
+      }
+      m.inc(MESH_METRICS.FRAMES_INGESTED);
+    }
+
+    expect(m.getCounter(MESH_METRICS.INBOUND_MESSAGES)).toBe(3);
+    expect(m.getCounter(MESH_METRICS.INBOUND_RATE_LIMITED)).toBe(1); // Third was rate-limited
+    expect(m.getCounter(MESH_METRICS.FRAMES_INGESTED)).toBe(2);
+  });
+
+  it("metrics snapshot includes all tracked counters", () => {
+    const m = new MetricsCollector();
+    m.inc(MESH_METRICS.INBOUND_MESSAGES, 100);
+    m.inc(MESH_METRICS.RPC_REQUESTS, 50);
+    m.set(MESH_METRICS.PEERS_CONNECTED, 3);
+
+    const snap = m.snapshot();
+    expect(snap.length).toBe(3);
+    expect(snap.find(s => s.name === MESH_METRICS.INBOUND_MESSAGES)?.value).toBe(100);
+    expect(snap.find(s => s.name === MESH_METRICS.PEERS_CONNECTED)?.value).toBe(3);
   });
 });
