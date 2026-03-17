@@ -221,6 +221,7 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       worldModel: this.worldModel,
       getPlannerMode: () => this.piSession?.mode,
+      getMetrics: () => this.metrics.snapshot(),
     }));
 
     // ─── Chat & UI subscriber handlers (extracted) ────────

@@ -165,3 +165,22 @@ describe("Production stack: world model snapshot lifecycle", () => {
     expect(wm2.size).toBeGreaterThan(0);
   });
 });
+
+describe("Production stack: health check includes metrics", () => {
+  it("health check result contains metrics snapshot when provided", () => {
+    const deps = makeDeps();
+    deps.getMetrics = () => [
+      { name: "mesh.inbound.messages", type: "counter" as const, value: 100 },
+      { name: "mesh.peers.connected", type: "gauge" as const, value: 3 },
+    ];
+    const result = computeHealthCheck(deps);
+    expect(result.metrics).toHaveLength(2);
+    expect(result.metrics![0].name).toBe("mesh.inbound.messages");
+  });
+
+  it("health check works without metrics provider", () => {
+    const deps = makeDeps();
+    const result = computeHealthCheck(deps);
+    expect(result.metrics).toBeUndefined();
+  });
+});

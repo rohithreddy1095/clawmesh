@@ -212,6 +212,13 @@ All files under `src/` are in scope. Specifically:
 82. ✅ **MessageValidation** — size limits (1MB), structure validation, validateAndParse pipeline (19 tests)
 83. ✅ **Wire production modules** — rate limiter + message validation into inbound handler, connection health into PeerConnectionManager
 
-### Current Results: 135 → 2034 tests (+1407%), 38 → 79 source modules (+108%), 17 → 120 test files (+606%)
-### God object: 754 → 511 lines (-32.2%)
+84. ✅ **Wire startup validation + graceful shutdown into CLI** — pre-flight checks, SIGINT/SIGTERM cleanup (5 tests)
+85. ✅ **Wire MetricsCollector into node-runtime** — INBOUND_MESSAGES/RATE_LIMITED/REJECTED counters (2 tests)
+86. ✅ **Wire ConnectionHealthMonitor periodic timer** — 30s checkAll, cleanup on stopAll
+87. ✅ **WorldModel snapshot persistence** — save on stop, restore on start, 1hr age filter (16 tests)
+88. ✅ **Wire snapshot into runtime lifecycle** — fast-restart without cold-start (1 test)
+89. ✅ **Production stack integration tests** — full pipeline validation (7 tests)
+
+### Current Results: 135 → 2081 tests (+1442%), 38 → 81 source modules (+113%), 17 → 124 test files (+629%)
+### God object: 754 → 541 lines (-28.2%) — grew from production wiring (snapshot, metrics, rate limiter, validation)
 ### PiSession: 895 → 638 lines (-28.7%)
