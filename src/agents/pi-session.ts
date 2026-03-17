@@ -38,6 +38,7 @@ import {
 } from "./planner-prompt-builder.js";
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
 import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
+import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -199,14 +200,9 @@ export class PiSession {
     this.running = true;
     try {
       await this.session.prompt("Status check. Reply with one word: OK");
-      const msgs = this.session.state.messages;
-      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      const hasContent = lastMsg?.role === "assistant" &&
-        lastMsg.content?.some((c: any) =>
-          (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
-        );
+      const lastMsg = getLastMessage(this.session.state.messages);
 
-      if (hasContent) {
+      if (hasAssistantContent(lastMsg)) {
         this.modeCtrl.recordSuccess();
         if (!this.triggerQueue.isEmpty && !this.stopped) {
           setTimeout(() => void this.runCycle(), 1000);
@@ -509,14 +505,9 @@ export class PiSession {
         }
 
         // Check if the LLM actually produced content (vs rate-limit / error)
-        const msgs = this.session.state.messages;
-        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        const hasContent = lastMsg?.role === "assistant" &&
-          lastMsg.content?.some((c: any) =>
-            (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
-          );
+        const lastMsg = getLastMessage(this.session.state.messages);
 
-        if (hasContent) {
+        if (hasAssistantContent(lastMsg)) {
           // Success — reset error tracking
           if (this.modeCtrl.consecutiveErrors > 0) {
             this.log.info(`pi-session: LLM responded successfully after ${this.modeCtrl.consecutiveErrors} error(s)`);
@@ -528,9 +519,7 @@ export class PiSession {
             const fullText = extractAssistantText(lastMsg);
 
             // Collect proposal IDs created during this turn
-            const proposalIds = this.proposalManager.list()
-              .filter(p => p.createdAt >= Date.now() - 10_000)
-              .map(p => p.taskId);
+            const proposalIds = findRecentProposalIds(this.proposalManager.list());
 
             // Build sensor citations from recent world model frames
             const recentFrames = this.runtime.worldModel.getRecentFrames(10);
