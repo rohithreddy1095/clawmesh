@@ -299,8 +299,8 @@ export class MeshNodeRuntime {
             this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
             this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
           }
-        }).catch(() => {
-          // Ignore auto-connect errors
+        }).catch((err) => {
+          this.log.warn(`mesh: auto-connect evaluation failed for ${peer.deviceId.slice(0, 12)}…: ${String(err)}`);
         });
       });
     } catch (err) {
@@ -380,12 +380,23 @@ export class MeshNodeRuntime {
 
     (this as any).piSession = session;
 
-    // PiSession.start() is async (creates AgentSession)
-    session.start().then(() => {
-      this.log.info("mesh: pi-session started (createAgentSession SDK)");
-    }).catch((err) => {
-      this.log.error(`mesh: pi-session failed to start: ${err}`);
-    });
+    // PiSession.start() is async (creates AgentSession).
+    // Retry with backoff if the LLM provider is temporarily unavailable.
+    const startWithRetry = (attempt = 1, maxAttempts = 5) => {
+      session.start().then(() => {
+        this.log.info("mesh: pi-session started (createAgentSession SDK)");
+      }).catch((err) => {
+        this.log.error(`mesh: pi-session failed to start (attempt ${attempt}/${maxAttempts}): ${err}`);
+        if (attempt < maxAttempts) {
+          const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 30_000);
+          this.log.info(`mesh: pi-session will retry in ${Math.round(delayMs / 1000)}s...`);
+          setTimeout(() => startWithRetry(attempt + 1, maxAttempts), delayMs).unref();
+        } else {
+          this.log.error("mesh: pi-session start failed after all retries. Mesh continues without planner.");
+        }
+      });
+    };
+    startWithRetry();
   }
 
   listenAddress(): { host: string; port: number } {

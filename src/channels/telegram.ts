@@ -598,7 +598,9 @@ export class TelegramChannel {
 
     void this.bot.api.editMessageReplyMarkup(notif.chatId, notif.messageId, {
       reply_markup: undefined, // remove buttons
-    }).catch(() => {});
+    }).catch((err) => {
+      this.log.warn(`[telegram] Failed to remove buttons: ${String(err)}`);
+    });
 
     // We don't edit the message text to avoid race conditions — the button removal is enough.
     // The icon in the callback answer already confirms the action.

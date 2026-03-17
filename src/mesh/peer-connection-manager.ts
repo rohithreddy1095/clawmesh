@@ -142,8 +142,9 @@ export class PeerConnectionManager {
           );
         }
       }
-    }).catch(() => {
-      // Context sync is best-effort
+    }).catch((err) => {
+      // Context sync is best-effort — log but don't fail
+      this.deps.log.warn(`mesh: context sync failed for ${peerDeviceId.slice(0, 12)}…: ${String(err)}`);
     });
   }
 }
