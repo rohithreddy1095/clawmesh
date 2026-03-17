@@ -190,6 +190,10 @@ All files under `src/` are in scope. Specifically:
 65. ✅ **Extract LLM response helpers** — hasAssistantContent, getLastMessage, findRecentProposalIds (15 tests)
 66. ✅ **PiSession decomposition validation** — 45 structural health tests: line limits, imports, module existence
 
-### Current Results: 135 → 1772 tests (+1213%), 38 → 74 source modules (+95%), 17 → 103 test files (+506%)
+67. ✅ **Session 5 edge case tests** — ModeController, ProposalManager, threshold, event, prompt, response boundary conditions (30 tests)
+68. ✅ **Full pipeline validation** — 4 e2e scenarios: normal planner, degraded recovery, pattern learning, event routing
+69. ✅ **Architecture summary validation** — 13 module import health, decomposition count, wiring validation (15 tests)
+
+### Current Results: 135 → 1831 tests (+1256%), 38 → 74 source modules (+95%), 17 → 107 test files (+529%)
 ### God object: 754 → 484 lines (-35.8%)
 ### PiSession: 895 → 638 lines (-28.7%)
