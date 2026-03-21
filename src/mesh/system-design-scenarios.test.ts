@@ -71,6 +71,24 @@ describe("Scenario: dual planner conflict prevention", () => {
   });
 });
 
+describe("Scenario: propose_task dedup wired in extension", () => {
+  it("ProposalDedup blocks duplicate actions in the extension path", () => {
+    const dd = new ProposalDedup({ windowMs: 10 * 60_000 });
+
+    // Extension calls checkAndRecord before creating proposal
+    const sig = { targetRef: "actuator:pump:P1", operation: "irrigate", zone: "zone-1" };
+    expect(dd.checkAndRecord(sig)).toBe(true);
+
+    // Second call (same planner or different planner) is blocked
+    expect(dd.checkAndRecord(sig)).toBe(false);
+
+    // Different zone is allowed
+    expect(dd.checkAndRecord({
+      targetRef: "actuator:pump:P2", operation: "irrigate", zone: "zone-2",
+    })).toBe(true);
+  });
+});
+
 describe("Scenario: freshness + expiry work together", () => {
   it("stale sensor data leads to expired proposal when not acted on", () => {
     const now = Date.now();

@@ -219,6 +219,14 @@ All files under `src/` are in scope. Specifically:
 88. ✅ **Wire snapshot into runtime lifecycle** — fast-restart without cold-start (1 test)
 89. ✅ **Production stack integration tests** — full pipeline validation (7 tests)
 
-### Current Results: 135 → 2081 tests (+1442%), 38 → 81 source modules (+113%), 17 → 124 test files (+629%)
-### God object: 754 → 541 lines (-28.2%) — grew from production wiring (snapshot, metrics, rate limiter, validation)
+### Session 7: Holistic System Design
+90. ✅ **Proposal expiry** — sweepExpired auto-rejects stale proposals after 30min, prevents executing outdated actions
+91. ✅ **ProposalDedup** — prevents duplicate proposals from multi-planner setups (same targetRef+operation+zone deduped within 10min)
+92. ✅ **DataFreshness** — classifies sensor data as fresh/aging/stale/expired, warns planner about stale readings
+93. ✅ **Wire freshness into planner** — before_agent_start hook injects freshness warnings into system prompt
+94. ✅ **SystemEventLog** — ring-buffer audit log: peer lifecycle, proposals, errors, mode changes (11 tests)
+95. ✅ **Wire SystemEventLog into runtime** — captures all significant events via event bus
+
+### Current Results: 135 → 2137 tests (+1483%), 38 → 84 source modules (+121%), 17 → 128 test files (+653%)
+### God object: 754 → 571 lines (-24.3%) — grew from production wiring
 ### PiSession: 895 → 638 lines (-28.7%)

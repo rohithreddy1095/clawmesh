@@ -31,6 +31,7 @@ import {
   countPending,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
+import { ProposalDedup } from "../proposal-dedup.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -55,6 +56,9 @@ export function createClawMeshExtension(
       warn: (msg: string) => console.warn(msg),
       error: (msg: string) => console.error(msg),
     };
+
+    // Dedup prevents duplicate proposals from same or different planners
+    const proposalDedup = new ProposalDedup({ windowMs: 10 * 60_000 });
 
     // ─── Tools ──────────────────────────────────────────
 
@@ -229,6 +233,16 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           return {
             content: [{ type: "text", text: `No mesh peer with capability: ${targetRef}` }],
             details: { ok: false },
+          };
+        }
+
+        // Dedup check: prevent duplicate proposals for the same action
+        const zone = targetRef.split(":").pop(); // Extract zone hint from targetRef
+        if (!proposalDedup.checkAndRecord({ targetRef, operation, zone })) {
+          log.info(`[mesh-ext] Deduplicated proposal: ${operation} on ${targetRef} (already proposed recently)`);
+          return {
+            content: [{ type: "text", text: `A similar action was already proposed recently (${operation} on ${targetRef}). Wait for the existing proposal to be resolved.` }],
+            details: { ok: false, reason: "deduplicated" },
           };
         }
 
