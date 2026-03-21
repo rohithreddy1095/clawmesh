@@ -30,7 +30,8 @@ import { RateLimiter } from "./rate-limiter.js";
 import { validateMessageSize } from "./message-validation.js";
 import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
 import { SystemEventLog } from "./system-event-log.js";
-import { wireEventLog, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { wireEventLog, wireCorrelationTracker, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { CorrelationTracker } from "./correlation-tracker.js";
 import { createEventsHandlers } from "./events-rpc.js";
 import type {
   ClawMeshCommandEnvelopeV1,
@@ -121,6 +122,8 @@ export class MeshNodeRuntime {
   readonly metrics = new MetricsCollector();
   /** Structured event log for debugging. */
   readonly eventLog = new SystemEventLog();
+  /** Causal chain tracer for "why did X happen?" debugging. */
+  readonly correlationTracker = new CorrelationTracker();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
   readonly trustAudit = new TrustAuditTrail();
@@ -147,8 +150,9 @@ export class MeshNodeRuntime {
 
     this.eventBus = new MeshEventBus();
 
-    // Wire event bus → system event log for operational debugging
+    // Wire event bus → system event log + correlation tracker
     wireEventLog(this.eventBus, this.eventLog);
+    wireCorrelationTracker(this.eventBus, this.correlationTracker);
 
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,

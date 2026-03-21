@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { wireEventLog, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { wireEventLog, wireCorrelationTracker, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { CorrelationTracker } from "./correlation-tracker.js";
 import { MeshEventBus } from "./event-bus.js";
 import { SystemEventLog } from "./system-event-log.js";
 import { WorldModel } from "./world-model.js";
@@ -76,5 +77,52 @@ describe("saveWorldModelSnapshot", () => {
     const wm = new WorldModel({ autoEvictTtlMs: 0, log: { info: () => {} } });
     const ok = saveWorldModelSnapshot(wm, "node-01", "/tmp/empty-snap.json");
     expect(ok).toBe(false);
+  });
+});
+
+describe("wireCorrelationTracker", () => {
+  it("captures sensor ingest → starts a causal chain", () => {
+    const bus = new MeshEventBus();
+    const tracker = new CorrelationTracker();
+    wireCorrelationTracker(bus, tracker);
+
+    bus.emit("context.frame.ingested", {
+      frame: {
+        kind: "observation",
+        frameId: "f-001",
+        sourceDeviceId: "sensor-01",
+        timestamp: Date.now(),
+        data: { metric: "soil_moisture", value: 12, zone: "zone-1" },
+        trust: { evidence_sources: ["sensor"], evidence_trust_tier: "T2_operational_observation" },
+      },
+    });
+
+    const chain = tracker.get("f-001");
+    expect(chain).not.toBeUndefined();
+    expect(chain!.steps[0].stage).toBe("sensor.ingest");
+    expect(chain!.steps[0].detail).toContain("soil_moisture");
+  });
+
+  it("links proposal.created to trigger frame chain", () => {
+    const bus = new MeshEventBus();
+    const tracker = new CorrelationTracker();
+    wireCorrelationTracker(bus, tracker);
+
+    // First ingest a frame
+    tracker.start("f-002", "sensor.ingest", "zone-1:moisture=8");
+
+    // Then emit proposal.created with that frame as trigger
+    bus.emit("proposal.created", {
+      proposal: {
+        taskId: "task-abc",
+        summary: "Irrigate zone-1",
+        approvalLevel: "L2",
+        triggerFrameIds: ["f-002"],
+      },
+    } as any);
+
+    const chain = tracker.get("f-002");
+    expect(chain!.steps).toHaveLength(2);
+    expect(chain!.steps[1].stage).toBe("proposal.created");
   });
 });
