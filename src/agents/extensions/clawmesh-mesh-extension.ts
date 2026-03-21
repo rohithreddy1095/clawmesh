@@ -30,6 +30,7 @@ import {
   summarizeProposals,
   countPending,
 } from "./mesh-extension-helpers.js";
+import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -420,12 +421,27 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         ? `Most relevant frames:\n${relevantFrames.map((f) => `  [${f.kind}] ${f.data?.metric ?? f.data?.event ?? "—"}: ${JSON.stringify(f.data).slice(0, 120)}`).join("\n")}`
         : "";
 
+      // Check data freshness — warn planner about stale sensors
+      const allEntries = runtime.worldModel.getAll();
+      const freshnessEntries = allEntries
+        .filter(e => e.lastFrame.kind === "observation" && e.lastFrame.data.metric)
+        .map(e => ({
+          metric: String(e.lastFrame.data.metric),
+          zone: e.lastFrame.data.zone as string | undefined,
+          lastUpdated: e.lastUpdated,
+        }));
+      const freshnessWarnings = getDataFreshnessWarnings(freshnessEntries);
+      const freshnessSection = freshnessWarnings.length > 0
+        ? `\nDATA FRESHNESS WARNINGS:\n${freshnessWarnings.join("\n")}`
+        : "";
+
       const snapshot = [
         `\n\n# Live Mesh Snapshot (${new Date().toISOString()})`,
         `Connected peers: ${peers.length}`,
         ...peers.map((p) => `  ${p.displayName ?? p.deviceId.slice(0, 12)} [${p.capabilities.join(",")}]`),
         worldSummary,
         relevantSection,
+        freshnessSection,
         pending.length > 0
           ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.summary}`).join("\n")}`
           : "Pending proposals: 0",
