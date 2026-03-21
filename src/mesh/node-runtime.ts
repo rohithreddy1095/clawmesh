@@ -29,8 +29,8 @@ import { handleInboundDisconnect } from "./inbound-connection.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { validateMessageSize } from "./message-validation.js";
 import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
-import { createSnapshot, saveSnapshot, loadSnapshot, filterSnapshotByAge } from "./world-model-snapshot.js";
 import { SystemEventLog } from "./system-event-log.js";
+import { wireEventLog, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -147,22 +147,7 @@ export class MeshNodeRuntime {
     this.eventBus = new MeshEventBus();
 
     // Wire event bus → system event log for operational debugging
-    this.eventBus.on("peer.connected", (data) => {
-      const did = data.session?.deviceId?.slice(0, 12) ?? "?";
-      this.eventLog.record("peer.connect", `Connected: ${did}…`, { deviceId: did });
-    });
-    this.eventBus.on("peer.disconnected", (data) => {
-      const did = data.deviceId?.slice(0, 12) ?? "?";
-      this.eventLog.record("peer.disconnect", `Disconnected: ${did}… (${data.reason ?? "unknown"})`, { deviceId: did });
-    });
-    this.eventBus.on("proposal.created", (data) => {
-      const p = data.proposal;
-      this.eventLog.record("proposal.created", `${p.approvalLevel} ${p.summary}`, { taskId: p.taskId });
-    });
-    this.eventBus.on("proposal.resolved", (data) => {
-      const p = data.proposal;
-      this.eventLog.record("proposal.resolved", `${p.status}: ${p.summary}`, { taskId: p.taskId, status: p.status });
-    });
+    wireEventLog(this.eventBus, this.eventLog);
 
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
@@ -316,16 +301,7 @@ export class MeshNodeRuntime {
 
     // Restore world model from snapshot if available
     const snapshotPath = `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`;
-    const snapshot = loadSnapshot(snapshotPath);
-    if (snapshot) {
-      const frames = filterSnapshotByAge(snapshot, 3_600_000); // Keep frames < 1 hour old
-      for (const frame of frames) {
-        this.worldModel.ingest(frame);
-      }
-      if (frames.length > 0) {
-        this.log.info(`mesh: restored ${frames.length} frames from snapshot (${snapshot.nodeId.slice(0, 12)}…)`);
-      }
-    }
+    restoreWorldModelSnapshot(this.worldModel, snapshotPath, 3_600_000, this.log);
 
     const addr = this.listenAddress();
     this.log.info(
@@ -381,14 +357,11 @@ export class MeshNodeRuntime {
     });
 
     // Save world model snapshot for fast restart
-    const snapshotPath = `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`;
-    const recentFrames = this.worldModel.getRecentFrames(100);
-    if (recentFrames.length > 0) {
-      const snap = createSnapshot(recentFrames, this.identity.deviceId);
-      if (saveSnapshot(snapshotPath, snap)) {
-        this.log.info(`mesh: saved ${recentFrames.length} frames to snapshot`);
-      }
-    }
+    saveWorldModelSnapshot(
+      this.worldModel, this.identity.deviceId,
+      `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`,
+      100, this.log,
+    );
 
     // Stop planner
     if (this.piSession) {
