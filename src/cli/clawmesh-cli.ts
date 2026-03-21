@@ -838,5 +838,89 @@ export function createClawMeshCli(): Command {
       console.log("Use: clawmesh start --mock-sensor (and watch logs)");
     });
 
+  // ── status ──────────────────────────────────────────────
+  program
+    .command("status")
+    .description("Query a running node's health and recent events")
+    .option("--url <url>", "WebSocket URL of the node", "ws://localhost:18789")
+    .option("--events", "Also show recent system events")
+    .action(async (opts: { url: string; events?: boolean }) => {
+      const { WebSocket } = await import("ws");
+
+      const ws = new WebSocket(opts.url);
+      const timeout = setTimeout(() => {
+        console.error(`Timeout connecting to ${opts.url}`);
+        ws.close();
+        process.exit(1);
+      }, 5000);
+
+      ws.on("open", () => {
+        clearTimeout(timeout);
+        // Send health check RPC
+        ws.send(JSON.stringify({
+          type: "req", id: "health-1", method: "mesh.health", params: {},
+        }));
+        if (opts.events) {
+          ws.send(JSON.stringify({
+            type: "req", id: "events-1", method: "mesh.events", params: { limit: 10 },
+          }));
+        }
+      });
+
+      let responsesReceived = 0;
+      const expectedResponses = opts.events ? 2 : 1;
+
+      ws.on("message", (data) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === "res" && msg.ok && msg.id === "health-1") {
+            const h = msg.payload;
+            console.log(`\n  Status:      ${h.status.toUpperCase()}`);
+            console.log(`  Node:        ${h.displayName ?? h.nodeId}`);
+            console.log(`  Uptime:      ${Math.round(h.uptimeMs / 60_000)}min`);
+            console.log(`  Peers:       ${h.peers.connected}`);
+            if (h.peers.details?.length > 0) {
+              for (const p of h.peers.details) {
+                console.log(`    ${p.displayName ?? p.deviceId} [${p.capabilities.join(",")}]`);
+              }
+            }
+            console.log(`  World model: ${h.worldModel.entries} entries, ${h.worldModel.frameLogSize} frames`);
+            console.log(`  Planner:     ${h.plannerMode ?? "disabled"}`);
+            console.log(`  Memory:      ${h.memoryUsageMB ?? "?"}MB`);
+            console.log(`  Version:     ${h.version}`);
+            if (h.metrics?.length > 0) {
+              console.log("  Metrics:");
+              for (const m of h.metrics) {
+                console.log(`    ${m.name}: ${m.value}`);
+              }
+            }
+            console.log("");
+          } else if (msg.type === "res" && msg.ok && msg.id === "events-1") {
+            const e = msg.payload;
+            console.log(`  Recent events (${e.summary.total} in last hour):`);
+            for (const ev of e.events.slice(0, 10)) {
+              const time = new Date(ev.timestamp).toLocaleTimeString();
+              console.log(`    ${time} [${ev.type}] ${ev.message}`);
+            }
+            console.log("");
+          } else if (msg.type === "res" && !msg.ok) {
+            console.error(`  RPC error: ${msg.error?.message ?? "unknown"}`);
+          }
+        } catch { /* ignore parse errors */ }
+
+        responsesReceived++;
+        if (responsesReceived >= expectedResponses) {
+          ws.close();
+        }
+      });
+
+      ws.on("close", () => { clearTimeout(timeout); });
+      ws.on("error", (err) => {
+        clearTimeout(timeout);
+        console.error(`Failed to connect to ${opts.url}: ${err.message}`);
+        process.exit(1);
+      });
+    });
+
   return program;
 }
