@@ -559,13 +559,27 @@ export class TelegramChannel {
       .text("✅ Approve", `approve:${proposal.taskId}`)
       .text("❌ Reject", `reject:${proposal.taskId}`);
 
+    // Enrich with current sensor context
+    const recentFrames = this.runtime.worldModel.getRecentFrames(10);
+    const targetZone = proposal.targetRef.split(":").find(p => p.startsWith("zone-"));
+    const relevantReadings = recentFrames
+      .filter(f => f.kind === "observation" && (!targetZone || f.data.zone === targetZone))
+      .slice(0, 3)
+      .map(f => `${f.data.zone ?? ""}:${f.data.metric}=${f.data.value}${f.data.unit ?? ""}`)
+      .filter(Boolean);
+
+    const sensorContext = relevantReadings.length > 0
+      ? `\n*Current readings:*\n${relevantReadings.map(r => `  📊 ${this.escMd(r)}`).join("\n")}\n`
+      : "";
+
     const text =
       `⚠️ *New Proposal* \\[${this.escMd(proposal.approvalLevel)}\\]\n\n` +
       `${this.escMd(proposal.summary)}\n\n` +
       `*Target:* ${this.escMd(proposal.targetRef)}\n` +
       `*Operation:* ${this.escMd(proposal.operation)}\n` +
-      `*Task ID:* \`${proposal.taskId.slice(0, 8)}\`\n\n` +
-      `_${this.escMd(proposal.reasoning?.slice(0, 300) ?? "")}_`;
+      `*Task ID:* \`${proposal.taskId.slice(0, 8)}\`\n` +
+      sensorContext +
+      `\n_${this.escMd(proposal.reasoning?.slice(0, 300) ?? "")}_`;
 
     for (const chatId of chatIds) {
       try {

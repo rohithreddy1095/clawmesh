@@ -1,17 +1,16 @@
 # Autoresearch Ideas Backlog
 
-## High Priority — System Design Gaps
-- **Expose SystemEventLog via mesh.events RPC** — let remote nodes query event history
-- **Wire ProposalDedup into PiSession/extension** — currently module exists but isn't used in runtime
-- **Wire proposal expiry sweep into proactive timer** — ✅ DONE (wired in pi-session.ts)
-- **Handshake replay protection** — nonce challenge-response to prevent 5-min replay window
+## High Priority — System Design
+- **Handshake replay protection** — nonce challenge-response to close 5-min replay window
+- **Proposal context in TUI** — show ProposalContext when operator views a proposal
+- **Proposal context in Telegram** — enrich proposal notifications with current sensor data
 
-## Medium Priority — UX & Observability
-- **TUI: show event log tail** — add `events` command to TUI to show recent system events
-- **TUI: show data freshness** — mark stale sensor readings in gossip column
-- **CLI: add `clawmesh status` command** — queries mesh.health from a running node
+## Medium Priority — Observability
+- **TUI: event log tail** — `events` command to show recent system events
+- **TUI: data freshness indicators** — mark stale readings in gossip column
+- **CLI: add `clawmesh events` command** — query mesh.events RPC
 
 ## Lower Priority — Architecture
-- **Peer registry transport abstraction** — replace raw WebSocket refs with Transport interface
+- **God object reduction** — extract PiSession startup/wiring from node-runtime
+- **Peer registry transport abstraction** — replace raw WebSocket refs
 - **Structured logger adoption** — replace console.log defaults with MeshLogger
-- **God object reduction** — extract snapshot wiring + event log wiring from node-runtime into setup helpers

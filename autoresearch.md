@@ -232,6 +232,10 @@ All files under `src/` are in scope. Specifically:
 98. ✅ **Wire ProposalDedup** into propose_task tool — blocks duplicate proposals in extension
 99. ✅ **clawmesh status CLI** — query running node's health/events via WebSocket RPC (3 tests)
 
-### Current Results: 135 → 2153 tests (+1495%), 38 → 86 source modules (+126%), 17 → 131 test files (+671%)
+100. ✅ **ProposalContext** — enriches proposals with sensor readings, pattern history, freshness warnings (8 tests)
+101. ✅ **Proposal traceability** — trigger frame IDs linked to proposals via extensionState
+102. ✅ **E2E safety validation** — complete scenarios: happy path, stale-data safety net, multi-planner dedup (3 tests)
+
+### Current Results: 135 → 2165 tests (+1504%), 38 → 87 source modules (+129%), 17 → 133 test files (+682%)
 ### God object: 754 → 550 lines (-27.1%)
-### PiSession: 895 → 638 lines (-28.7%)
+### PiSession: 895 → 652 lines (-27.2%)
