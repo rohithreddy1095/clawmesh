@@ -39,6 +39,7 @@ import type {
   MeshForwardTrustMetadata,
 } from "./types.js";
 import { PiSession } from "../agents/pi-session.js";
+import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
 
@@ -404,50 +405,18 @@ export class MeshNodeRuntime {
   }
 
   private startPiSessionLoop(): void {
-    const session = new PiSession({
+    const session = createAndStartPiSession({
       runtime: this,
-      modelSpec: this.opts.piSessionModelSpec ?? "anthropic/claude-sonnet-4-5-20250929",
-      thinkingLevel: this.opts.piSessionThinkingLevel ?? "off",
+      modelSpec: this.opts.piSessionModelSpec,
+      thinkingLevel: this.opts.piSessionThinkingLevel,
       farmContext: this.opts.plannerFarmContext,
       thresholds: this.opts.plannerThresholds,
-      proactiveIntervalMs: this.opts.plannerProactiveIntervalMs ?? 60_000,
-      onProposalCreated: (proposal) => {
-        this.peerRegistry.broadcastEvent("planner.proposal", proposal);
-        this.broadcastToUI("planner.proposal", proposal);
-        this.eventBus.emit("proposal.created", { proposal });
-        this.opts.onProposalCreated?.(proposal);
-      },
-      onProposalResolved: (proposal) => {
-        this.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
-        this.broadcastToUI("planner.proposal.resolved", proposal);
-        this.eventBus.emit("proposal.resolved", { proposal });
-        this.opts.onProposalResolved?.(proposal);
-      },
-      onModeChange: (mode, reason) => {
-        this.log.info(`[pi-mode] ${mode.toUpperCase()} — ${reason}`);
-      },
+      proactiveIntervalMs: this.opts.plannerProactiveIntervalMs,
+      onProposalCreated: this.opts.onProposalCreated,
+      onProposalResolved: this.opts.onProposalResolved,
       log: this.log,
     });
-
     (this as any).piSession = session;
-
-    // PiSession.start() is async (creates AgentSession).
-    // Retry with backoff if the LLM provider is temporarily unavailable.
-    const startWithRetry = (attempt = 1, maxAttempts = 5) => {
-      session.start().then(() => {
-        this.log.info("mesh: pi-session started (createAgentSession SDK)");
-      }).catch((err) => {
-        this.log.error(`mesh: pi-session failed to start (attempt ${attempt}/${maxAttempts}): ${err}`);
-        if (attempt < maxAttempts) {
-          const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 30_000);
-          this.log.info(`mesh: pi-session will retry in ${Math.round(delayMs / 1000)}s...`);
-          setTimeout(() => startWithRetry(attempt + 1, maxAttempts), delayMs).unref();
-        } else {
-          this.log.error("mesh: pi-session start failed after all retries. Mesh continues without planner.");
-        }
-      });
-    };
-    startWithRetry();
   }
 
   listenAddress(): { host: string; port: number } {
