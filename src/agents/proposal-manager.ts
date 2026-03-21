@@ -154,4 +154,41 @@ export class ProposalManager {
   get size(): number {
     return this.proposals.size;
   }
+
+  // ─── Expiry ───────────────────────────────────────────
+
+  /** Default expiry window (30 minutes). */
+  static readonly DEFAULT_EXPIRY_MS = 30 * 60_000;
+
+  /**
+   * Check if a proposal has expired.
+   * A proposal expires if it's in a pending state and past its expiresAtMs.
+   */
+  isExpired(taskId: string, now = Date.now()): boolean {
+    const p = this.proposals.get(taskId);
+    if (!p) return false;
+    if (p.status !== "proposed" && p.status !== "awaiting_approval") return false;
+    const expiresAt = p.expiresAtMs ?? (p.createdAt + ProposalManager.DEFAULT_EXPIRY_MS);
+    return now >= expiresAt;
+  }
+
+  /**
+   * Sweep expired proposals. Transitions them to "rejected" with reason "expired".
+   * Returns the list of expired proposal IDs.
+   */
+  sweepExpired(now = Date.now()): string[] {
+    const expired: string[] = [];
+    for (const p of this.proposals.values()) {
+      if (p.status !== "proposed" && p.status !== "awaiting_approval") continue;
+      const expiresAt = p.expiresAtMs ?? (p.createdAt + ProposalManager.DEFAULT_EXPIRY_MS);
+      if (now >= expiresAt) {
+        p.status = "rejected";
+        p.resolvedAt = now;
+        p.resolvedBy = "system:expired";
+        expired.push(p.taskId);
+        this.onResolved?.(p);
+      }
+    }
+    return expired;
+  }
 }

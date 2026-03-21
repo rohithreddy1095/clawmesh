@@ -17,6 +17,8 @@ export type TaskProposal = {
   createdBy: "intelligence" | "operator" | "schedule";
   triggerFrameIds: string[];
   createdAt: number;
+  /** How long the proposal is valid (ms). After this, auto-expire. Default: 30 min. */
+  expiresAtMs?: number;
   resolvedAt?: number;
   result?: { ok: boolean; error?: string; payload?: unknown };
   resolvedBy?: string;
