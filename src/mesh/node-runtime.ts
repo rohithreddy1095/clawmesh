@@ -31,6 +31,7 @@ import { validateMessageSize } from "./message-validation.js";
 import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
 import { SystemEventLog } from "./system-event-log.js";
 import { wireEventLog, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { createEventsHandlers } from "./events-rpc.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -235,6 +236,11 @@ export class MeshNodeRuntime {
       uiBroadcaster: this.uiBroadcaster,
       getPiSession: () => this.piSession,
       log: this.log,
+    }));
+
+    // ─── Events RPC handler ─────────────────────────────
+    this.rpcDispatcher.registerAll(createEventsHandlers({
+      eventLog: this.eventLog,
     }));
   }
 
