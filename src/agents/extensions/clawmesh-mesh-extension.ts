@@ -40,6 +40,8 @@ export interface MeshExtensionState {
   thresholds: ThresholdRule[];
   thresholdLastFired: Map<string, number>;
   maxPendingProposals: number;
+  /** Recent trigger frame IDs from threshold breaches — used to link proposals to evidence. */
+  recentTriggerFrameIds?: string[];
   onProposalCreated?: (proposal: TaskProposal) => void;
   onProposalResolved?: (proposal: TaskProposal) => void;
 }
@@ -257,7 +259,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           approvalLevel,
           status: approvalLevel === "L1" ? "approved" : "awaiting_approval",
           createdBy: "intelligence",
-          triggerFrameIds: [],
+          triggerFrameIds: state.recentTriggerFrameIds?.slice(0, 5) ?? [],
           createdAt: Date.now(),
         };
 

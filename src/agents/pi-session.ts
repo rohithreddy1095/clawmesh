@@ -434,6 +434,15 @@ export class PiSession {
         zone: breach.zone,
         frame,
       });
+      // Track trigger frame IDs for proposal traceability
+      if (!this.extensionState.recentTriggerFrameIds) {
+        this.extensionState.recentTriggerFrameIds = [];
+      }
+      this.extensionState.recentTriggerFrameIds.push(frame.frameId);
+      // Keep only last 10
+      if (this.extensionState.recentTriggerFrameIds.length > 10) {
+        this.extensionState.recentTriggerFrameIds = this.extensionState.recentTriggerFrameIds.slice(-10);
+      }
     }
     if (!this.triggerQueue.isEmpty) {
       void this.runCycle();

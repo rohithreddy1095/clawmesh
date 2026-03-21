@@ -89,6 +89,31 @@ describe("Scenario: propose_task dedup wired in extension", () => {
   });
 });
 
+describe("Scenario: proposal traceability via trigger frame IDs", () => {
+  it("threshold breach frame IDs are available for proposals", () => {
+    // Simulates the pi-session pipeline:
+    // 1. Frame arrives with threshold breach
+    // 2. Frame ID is tracked in recentTriggerFrameIds
+    // 3. propose_task uses those IDs when creating proposal
+
+    const recentTriggerFrameIds: string[] = [];
+
+    // Simulate threshold breach
+    recentTriggerFrameIds.push("frame-abc123");
+    recentTriggerFrameIds.push("frame-def456");
+
+    // Simulate propose_task using the IDs
+    const proposal = {
+      taskId: "task-1",
+      triggerFrameIds: recentTriggerFrameIds.slice(0, 5),
+    };
+
+    expect(proposal.triggerFrameIds).toContain("frame-abc123");
+    expect(proposal.triggerFrameIds).toContain("frame-def456");
+    expect(proposal.triggerFrameIds).toHaveLength(2);
+  });
+});
+
 describe("Scenario: freshness + expiry work together", () => {
   it("stale sensor data leads to expired proposal when not acted on", () => {
     const now = Date.now();

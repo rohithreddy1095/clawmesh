@@ -227,6 +227,11 @@ All files under `src/` are in scope. Specifically:
 94. ✅ **SystemEventLog** — ring-buffer audit log: peer lifecycle, proposals, errors, mode changes (11 tests)
 95. ✅ **Wire SystemEventLog into runtime** — captures all significant events via event bus
 
-### Current Results: 135 → 2137 tests (+1483%), 38 → 84 source modules (+121%), 17 → 128 test files (+653%)
-### God object: 754 → 571 lines (-24.3%) — grew from production wiring
+96. ✅ **RuntimeSetupHelpers** — extracted event log wiring + snapshot logic from god object (571→544)
+97. ✅ **mesh.events RPC** — remote queryable event log with filtering + summary (6 tests)
+98. ✅ **Wire ProposalDedup** into propose_task tool — blocks duplicate proposals in extension
+99. ✅ **clawmesh status CLI** — query running node's health/events via WebSocket RPC (3 tests)
+
+### Current Results: 135 → 2153 tests (+1495%), 38 → 86 source modules (+126%), 17 → 131 test files (+671%)
+### God object: 754 → 550 lines (-27.1%)
 ### PiSession: 895 → 638 lines (-28.7%)
