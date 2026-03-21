@@ -15,6 +15,8 @@ import { loadBhoomiContext } from "../agents/farm-context-loader.js";
 import type { ThresholdRule } from "../agents/types.js";
 import { MeshTUI } from "../tui/mesh-tui.js";
 import { CredentialStore } from "../infra/credential-store.js";
+import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
+import { createGracefulShutdown } from "./graceful-shutdown.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -203,6 +205,30 @@ export function createClawMeshCli(): Command {
           if (!opts.capability.includes("channel:telegram")) {
             opts.capability.push("channel:telegram");
           }
+        }
+
+        // ── Pre-flight validation ──────────────────────────
+        const diagnostics = validateStartupConfig({
+          deviceId: identity.deviceId,
+          port: opts.port,
+          staticPeers,
+          capabilities: opts.capability,
+          thresholds: opts.piPlanner ? defaultThresholds : undefined,
+          enablePiSession: !!opts.piPlanner,
+          modelSpec: opts.piModel,
+          hasApiKey: !!(
+            process.env.ANTHROPIC_API_KEY ||
+            process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+            process.env.OPENAI_API_KEY
+          ),
+        });
+
+        if (diagnostics.length > 0) {
+          console.log("\n" + formatDiagnostics(diagnostics) + "\n");
+        }
+        if (hasBlockingDiagnostics(diagnostics)) {
+          console.error("Cannot start: blocking issues detected. Fix the errors above.");
+          process.exit(1);
         }
 
         const runtime = new MeshNodeRuntime({
@@ -402,20 +428,14 @@ export function createClawMeshCli(): Command {
           });
         }
 
-        await new Promise<void>((resolve) => {
-          const shutdown = async () => {
-            process.off("SIGINT", onSignal);
-            process.off("SIGTERM", onSignal);
-            if (tui) tui.stop();
-            if (telegramChannel) await telegramChannel.stop();
-            await runtime.stop();
-            resolve();
-          };
-          const onSignal = () => {
-            void shutdown();
-          };
-          process.once("SIGINT", onSignal);
-          process.once("SIGTERM", onSignal);
+        // ── Graceful shutdown (replaces raw signal handler) ──
+        const shutdown = createGracefulShutdown(async () => {
+          if (tui) tui.stop();
+          if (telegramChannel) await telegramChannel.stop().catch(() => {});
+          await runtime.stop();
+        }, { log, timeoutMs: 15_000 });
+        await new Promise<void>(() => {
+          // Keep alive — GracefulShutdown handles SIGINT/SIGTERM
         });
       },
     );
@@ -515,13 +535,20 @@ export function createClawMeshCli(): Command {
     .command("add <deviceId>")
     .description("Add a peer to the trust store")
     .option("--name <name>", "Display name for the peer")
-    .action(async (deviceId: string, opts: { name?: string }) => {
+    .option("--public-key <key>", "Public key for pinning (base64url)")
+    .action(async (deviceId: string, opts: { name?: string; publicKey?: string }) => {
       const result = await addTrustedPeer({
         deviceId,
         displayName: opts.name,
+        publicKey: opts.publicKey,
       });
       if (result.added) {
         console.log(`Trusted peer added: ${deviceId}`);
+        if (opts.publicKey) {
+          console.log(`  Public key pinned: ${opts.publicKey.slice(0, 20)}…`);
+        } else {
+          console.log("  ⚠ No public key pinned — will accept any key on first connect (TOFU)");
+        }
       } else {
         console.log(`Peer already trusted: ${deviceId}`);
       }
@@ -816,6 +843,90 @@ export function createClawMeshCli(): Command {
     .action(() => {
       console.log("World model query requires a running node.");
       console.log("Use: clawmesh start --mock-sensor (and watch logs)");
+    });
+
+  // ── status ──────────────────────────────────────────────
+  program
+    .command("status")
+    .description("Query a running node's health and recent events")
+    .option("--url <url>", "WebSocket URL of the node", "ws://localhost:18789")
+    .option("--events", "Also show recent system events")
+    .action(async (opts: { url: string; events?: boolean }) => {
+      const { WebSocket } = await import("ws");
+
+      const ws = new WebSocket(opts.url);
+      const timeout = setTimeout(() => {
+        console.error(`Timeout connecting to ${opts.url}`);
+        ws.close();
+        process.exit(1);
+      }, 5000);
+
+      ws.on("open", () => {
+        clearTimeout(timeout);
+        // Send health check RPC
+        ws.send(JSON.stringify({
+          type: "req", id: "health-1", method: "mesh.health", params: {},
+        }));
+        if (opts.events) {
+          ws.send(JSON.stringify({
+            type: "req", id: "events-1", method: "mesh.events", params: { limit: 10 },
+          }));
+        }
+      });
+
+      let responsesReceived = 0;
+      const expectedResponses = opts.events ? 2 : 1;
+
+      ws.on("message", (data) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === "res" && msg.ok && msg.id === "health-1") {
+            const h = msg.payload;
+            console.log(`\n  Status:      ${h.status.toUpperCase()}`);
+            console.log(`  Node:        ${h.displayName ?? h.nodeId}`);
+            console.log(`  Uptime:      ${Math.round(h.uptimeMs / 60_000)}min`);
+            console.log(`  Peers:       ${h.peers.connected}`);
+            if (h.peers.details?.length > 0) {
+              for (const p of h.peers.details) {
+                console.log(`    ${p.displayName ?? p.deviceId} [${p.capabilities.join(",")}]`);
+              }
+            }
+            console.log(`  World model: ${h.worldModel.entries} entries, ${h.worldModel.frameLogSize} frames`);
+            console.log(`  Planner:     ${h.plannerMode ?? "disabled"}`);
+            console.log(`  Memory:      ${h.memoryUsageMB ?? "?"}MB`);
+            console.log(`  Version:     ${h.version}`);
+            if (h.metrics?.length > 0) {
+              console.log("  Metrics:");
+              for (const m of h.metrics) {
+                console.log(`    ${m.name}: ${m.value}`);
+              }
+            }
+            console.log("");
+          } else if (msg.type === "res" && msg.ok && msg.id === "events-1") {
+            const e = msg.payload;
+            console.log(`  Recent events (${e.summary.total} in last hour):`);
+            for (const ev of e.events.slice(0, 10)) {
+              const time = new Date(ev.timestamp).toLocaleTimeString();
+              console.log(`    ${time} [${ev.type}] ${ev.message}`);
+            }
+            console.log("");
+          } else if (msg.type === "res" && !msg.ok) {
+            console.error(`  RPC error: ${msg.error?.message ?? "unknown"}`);
+          }
+        } catch { /* ignore parse errors */ }
+
+        responsesReceived++;
+        if (responsesReceived >= expectedResponses) {
+          ws.close();
+        }
+      });
+
+      ws.on("close", () => { clearTimeout(timeout); });
+      ws.on("error", (err) => {
+        clearTimeout(timeout);
+        console.error(`Failed to connect to ${opts.url}: ${err.message}`);
+        process.exit(1);
+      });
     });
 
   return program;

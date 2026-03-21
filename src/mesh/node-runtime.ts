@@ -26,12 +26,21 @@ import { sendActuation } from "./actuation-sender.js";
 import { PeerConnectionManager } from "./peer-connection-manager.js";
 import { createChatHandlers } from "./chat-handlers.js";
 import { handleInboundDisconnect } from "./inbound-connection.js";
+import { RateLimiter } from "./rate-limiter.js";
+import { validateMessageSize } from "./message-validation.js";
+import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
+import { SystemEventLog } from "./system-event-log.js";
+import { wireEventLog, wireCorrelationTracker, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
+import { CorrelationTracker } from "./correlation-tracker.js";
+import { createEventsHandlers } from "./events-rpc.js";
+import { createTraceHandlers } from "./trace-rpc.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
   MeshForwardTrustMetadata,
 } from "./types.js";
 import { PiSession } from "../agents/pi-session.js";
+import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
 
@@ -109,6 +118,14 @@ export class MeshNodeRuntime {
 
   readonly peerConnections: PeerConnectionManager;
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
+  /** Rate limiter for inbound RPC requests (100 req/min per connection). */
+  private readonly inboundRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60_000 });
+  /** Operational metrics for monitoring/health. */
+  readonly metrics = new MetricsCollector();
+  /** Structured event log for debugging. */
+  readonly eventLog = new SystemEventLog();
+  /** Causal chain tracer for "why did X happen?" debugging. */
+  readonly correlationTracker = new CorrelationTracker();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
   readonly trustAudit = new TrustAuditTrail();
@@ -134,6 +151,10 @@ export class MeshNodeRuntime {
     }
 
     this.eventBus = new MeshEventBus();
+
+    // Wire event bus → system event log + correlation tracker
+    wireEventLog(this.eventBus, this.eventLog);
+    wireCorrelationTracker(this.eventBus, this.correlationTracker);
 
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
@@ -213,6 +234,7 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       worldModel: this.worldModel,
       getPlannerMode: () => this.piSession?.mode,
+      getMetrics: () => this.metrics.snapshot(),
     }));
 
     // ─── Chat & UI subscriber handlers (extracted) ────────
@@ -220,6 +242,14 @@ export class MeshNodeRuntime {
       uiBroadcaster: this.uiBroadcaster,
       getPiSession: () => this.piSession,
       log: this.log,
+    }));
+
+    // ─── Events + Trace RPC handlers ─────────────────────
+    this.rpcDispatcher.registerAll(createEventsHandlers({
+      eventLog: this.eventLog,
+    }));
+    this.rpcDispatcher.registerAll(createTraceHandlers({
+      correlationTracker: this.correlationTracker,
     }));
   }
 
@@ -258,10 +288,17 @@ export class MeshNodeRuntime {
       this.inboundSocketConnIds.set(socket, connId);
 
       socket.on("message", (raw) => {
+        this.metrics.inc(MESH_METRICS.INBOUND_MESSAGES);
+        if (!this.inboundRateLimiter.allow(connId)) {
+          this.metrics.inc(MESH_METRICS.INBOUND_RATE_LIMITED);
+          this.log.warn(`mesh: rate-limited inbound connection ${connId.slice(0, 8)}…`);
+          return;
+        }
         void this.handleInboundMessage(socket, connId, rawDataToString(raw));
       });
 
       socket.on("close", () => {
+        this.inboundRateLimiter.reset(connId);
         this.inboundSocketConnIds.delete(socket);
         this.uiBroadcaster.removeSubscriber(socket);
         handleInboundDisconnect(connId, {
@@ -277,11 +314,19 @@ export class MeshNodeRuntime {
       });
     });
 
+    // Restore world model from snapshot if available
+    const snapshotPath = `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`;
+    restoreWorldModelSnapshot(this.worldModel, snapshotPath, 3_600_000, this.log);
+
     const addr = this.listenAddress();
     this.log.info(
       `mesh: listening on ws://${this.host}:${addr.port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
     );
     this.eventBus.emit("runtime.started", { host: this.host, port: addr.port });
+    this.eventLog.record("startup", `Listening on ws://${this.host}:${addr.port}`, {
+      deviceId: this.identity.deviceId.slice(0, 12),
+      peers: this.staticPeers.length,
+    });
 
     // Start mDNS discovery (best-effort — not all platforms support it)
     try {
@@ -299,8 +344,8 @@ export class MeshNodeRuntime {
             this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
             this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
           }
-        }).catch(() => {
-          // Ignore auto-connect errors
+        }).catch((err) => {
+          this.log.warn(`mesh: auto-connect evaluation failed for ${peer.deviceId.slice(0, 12)}…: ${String(err)}`);
         });
       });
     } catch (err) {
@@ -321,6 +366,17 @@ export class MeshNodeRuntime {
 
   async stop(): Promise<void> {
     this.eventBus.emit("runtime.stopping", {});
+    this.eventLog.record("shutdown", "Shutting down", {
+      uptime: Date.now() - this.startedAtMs,
+      peers: this.peerRegistry.listConnected().length,
+    });
+
+    // Save world model snapshot for fast restart
+    saveWorldModelSnapshot(
+      this.worldModel, this.identity.deviceId,
+      `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`,
+      100, this.log,
+    );
 
     // Stop planner
     if (this.piSession) {
@@ -353,39 +409,18 @@ export class MeshNodeRuntime {
   }
 
   private startPiSessionLoop(): void {
-    const session = new PiSession({
+    const session = createAndStartPiSession({
       runtime: this,
-      modelSpec: this.opts.piSessionModelSpec ?? "anthropic/claude-sonnet-4-5-20250929",
-      thinkingLevel: this.opts.piSessionThinkingLevel ?? "off",
+      modelSpec: this.opts.piSessionModelSpec,
+      thinkingLevel: this.opts.piSessionThinkingLevel,
       farmContext: this.opts.plannerFarmContext,
       thresholds: this.opts.plannerThresholds,
-      proactiveIntervalMs: this.opts.plannerProactiveIntervalMs ?? 60_000,
-      onProposalCreated: (proposal) => {
-        this.peerRegistry.broadcastEvent("planner.proposal", proposal);
-        this.broadcastToUI("planner.proposal", proposal);
-        this.eventBus.emit("proposal.created", { proposal });
-        this.opts.onProposalCreated?.(proposal);
-      },
-      onProposalResolved: (proposal) => {
-        this.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
-        this.broadcastToUI("planner.proposal.resolved", proposal);
-        this.eventBus.emit("proposal.resolved", { proposal });
-        this.opts.onProposalResolved?.(proposal);
-      },
-      onModeChange: (mode, reason) => {
-        this.log.info(`[pi-mode] ${mode.toUpperCase()} — ${reason}`);
-      },
+      proactiveIntervalMs: this.opts.plannerProactiveIntervalMs,
+      onProposalCreated: this.opts.onProposalCreated,
+      onProposalResolved: this.opts.onProposalResolved,
       log: this.log,
     });
-
     (this as any).piSession = session;
-
-    // PiSession.start() is async (creates AgentSession)
-    session.start().then(() => {
-      this.log.info("mesh: pi-session started (createAgentSession SDK)");
-    }).catch((err) => {
-      this.log.error(`mesh: pi-session failed to start: ${err}`);
-    });
   }
 
   listenAddress(): { host: string; port: number } {
@@ -453,6 +488,14 @@ export class MeshNodeRuntime {
   }
 
   private async handleInboundMessage(socket: WebSocket, connId: string, raw: string): Promise<void> {
+    // Reject oversized messages before parsing
+    const sizeCheck = validateMessageSize(raw);
+    if (!sizeCheck.valid) {
+      this.metrics.inc(MESH_METRICS.INBOUND_REJECTED);
+      this.log.warn(`mesh: rejected oversized message from ${connId.slice(0, 8)}…: ${sizeCheck.error}`);
+      return;
+    }
+
     await routeInboundMessage(raw, socket, connId, {
       peerRegistry: this.peerRegistry,
       contextPropagator: this.contextPropagator,

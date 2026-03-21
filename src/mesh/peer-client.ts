@@ -175,8 +175,9 @@ export class MeshPeerClient {
           error: parsed.error,
         });
       }
-    } catch {
-      // ignore parse errors
+    } catch (err) {
+      // Malformed messages from peers — log but don't crash
+      this.opts.onError?.(new Error(`mesh: malformed message from ${this.opts.remoteDeviceId.slice(0, 12)}…: ${String(err)}`));
     }
   }
 

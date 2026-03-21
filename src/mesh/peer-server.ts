@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
-import { isTrustedPeer } from "./peer-trust.js";
+import { isTrustedPeer, getTrustedPeer } from "./peer-trust.js";
 import type { MeshConnectParams, PeerSession } from "./types.js";
 import type { WebSocket } from "ws";
 
@@ -37,11 +37,20 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
       }
 
       // Verify the peer is in our trust store.
-      const trusted = await isTrustedPeer(p.deviceId);
-      if (!trusted) {
+      const trustedPeer = await getTrustedPeer(p.deviceId);
+      if (!trustedPeer) {
         respond(false, undefined, {
           code: "UNTRUSTED_PEER",
           message: `peer ${p.deviceId} is not in the trust store`,
+        });
+        return;
+      }
+
+      // If the trust store has a pinned public key, verify it matches.
+      if (trustedPeer.publicKey && trustedPeer.publicKey !== p.publicKey) {
+        respond(false, undefined, {
+          code: "PUBLIC_KEY_MISMATCH",
+          message: `peer ${p.deviceId} public key does not match trust store`,
         });
         return;
       }

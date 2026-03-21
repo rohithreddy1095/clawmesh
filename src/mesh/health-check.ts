@@ -16,6 +16,7 @@ import type { PeerRegistry } from "./peer-registry.js";
 import type { MeshCapabilityRegistry } from "./capabilities.js";
 import type { WorldModel } from "./world-model.js";
 import type { RpcHandlerFn, RpcHandlerMap } from "./rpc-dispatcher.js";
+import type { MetricSnapshot } from "./metrics-collector.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ export type HealthCheckResult = {
   };
   plannerMode?: string;
   memoryUsageMB?: number;
+  metrics?: MetricSnapshot[];
   version: string;
   timestamp: string;
 };
@@ -65,6 +67,7 @@ export type HealthCheckDeps = {
   capabilityRegistry: MeshCapabilityRegistry;
   worldModel: WorldModel;
   getPlannerMode?: () => string | undefined;
+  getMetrics?: () => MetricSnapshot[];
 };
 
 /**
@@ -124,6 +127,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     },
     plannerMode,
     memoryUsageMB,
+    metrics: deps.getMetrics?.(),
     version: deps.version,
     timestamp: new Date(now).toISOString(),
   };

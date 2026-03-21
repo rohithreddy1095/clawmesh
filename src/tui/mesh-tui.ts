@@ -216,7 +216,7 @@ export class MeshTUI {
 
     if (lc === "h" || lc === "help") {
       this.flash(
-        "a <id>=approve  r <id>=reject  w=world  s=status  resume  q=quit  [text]=send intent",
+        "a <id>=approve  r <id>=reject  w=world  s=status  e=events  resume  q=quit  [text]=send intent",
         6000,
       );
       return;
@@ -276,6 +276,19 @@ export class MeshTUI {
         return d.zone && d.metric ? `${d.zone}:${d.metric}=${d.value}` : "";
       }).filter(Boolean);
       this.flash(`World: ${parts.join(" | ") || `${entries.length} entries`}`, 6000);
+      return;
+    }
+
+    if (lc === "events" || lc === "e") {
+      const eventLog = (this.rt as any).eventLog;
+      if (!eventLog) { this.flash("Event log not available"); return; }
+      const events = eventLog.recent(5);
+      if (events.length === 0) { this.flash("No events recorded"); return; }
+      const summary = events.map((ev: any) => {
+        const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        return `${time} [${ev.type}] ${ev.message.slice(0, 45)}`;
+      }).join("  ▪  ");
+      this.flash(summary, 8000);
       return;
     }
 

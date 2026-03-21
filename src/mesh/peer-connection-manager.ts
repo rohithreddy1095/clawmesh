@@ -19,6 +19,7 @@ import type { WorldModel } from "./world-model.js";
 import type { MeshEventBus } from "./event-bus.js";
 import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
+import { ConnectionHealthMonitor } from "./connection-health.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -40,9 +41,21 @@ export type PeerConnectionManagerDeps = {
 export class PeerConnectionManager {
   private readonly clients = new Map<string, MeshPeerClient>();
   private readonly deps: PeerConnectionManagerDeps;
+  private healthTimer?: ReturnType<typeof setInterval>;
+  readonly connectionHealth = new ConnectionHealthMonitor({
+    staleThresholdMs: 90_000, // 90 seconds without activity = stale
+    onStaleDetected: (deviceId) => {
+      this.deps.log.warn(`mesh: stale connection detected for ${deviceId.slice(0, 12)}…`);
+    },
+  });
 
   constructor(deps: PeerConnectionManagerDeps) {
     this.deps = deps;
+    // Periodic health check every 30 seconds
+    this.healthTimer = setInterval(() => {
+      this.connectionHealth.checkAll();
+    }, 30_000);
+    this.healthTimer.unref(); // Don't keep process alive
   }
 
   /**
@@ -64,6 +77,7 @@ export class PeerConnectionManager {
           this.deps.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
         this.deps.autoConnect.markConnected(session.deviceId);
+        this.connectionHealth.recordActivity(session.deviceId);
         this.deps.eventBus.emit("peer.connected", { session });
         this.deps.log.info(`mesh: outbound connected ${session.deviceId.slice(0, 12)}…`);
         this.requestContextSync(session.deviceId);
@@ -71,6 +85,7 @@ export class PeerConnectionManager {
       onDisconnected: (deviceId) => {
         this.deps.capabilityRegistry.removePeer(deviceId);
         this.deps.autoConnect.markDisconnected(deviceId);
+        this.connectionHealth.removePeer(deviceId);
         this.deps.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
         this.deps.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
@@ -78,6 +93,9 @@ export class PeerConnectionManager {
         this.deps.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
       },
       onEvent: (event, payload) => {
+        // Record activity for connection health monitoring
+        this.connectionHealth.recordActivity(peer.deviceId);
+
         if (event === "context.frame") {
           const frame = payload as ContextFrame;
           const isNew = this.deps.contextPropagator.handleInbound(frame, peer.deviceId);
@@ -97,6 +115,10 @@ export class PeerConnectionManager {
    * Stop all outbound connections.
    */
   stopAll(): void {
+    if (this.healthTimer) {
+      clearInterval(this.healthTimer);
+      this.healthTimer = undefined;
+    }
     for (const client of this.clients.values()) {
       client.stop();
     }
@@ -142,8 +164,9 @@ export class PeerConnectionManager {
           );
         }
       }
-    }).catch(() => {
-      // Context sync is best-effort
+    }).catch((err) => {
+      // Context sync is best-effort — log but don't fail
+      this.deps.log.warn(`mesh: context sync failed for ${peerDeviceId.slice(0, 12)}…: ${String(err)}`);
     });
   }
 }

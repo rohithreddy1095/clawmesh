@@ -1,16 +1,13 @@
 # Autoresearch Ideas Backlog
 
-## High Priority — God Object Below 500
-- **Extract chat RPC handlers** from constructor: chat.subscribe, chat.proposal.approve/reject (~40 lines) → `createChatHandlers()` factory
-- **Extract WS server setup from start()**: The WebSocketServer creation + connection handler (~40 lines) could become a helper function.
-- **Extract stop() cleanup**: stop() teardown logic (~25 lines) could be simplified by delegating to sub-managers.
+## High Priority — Security
+- **Handshake nonce challenge-response** — close the 5-min replay window in mesh.connect
 
-## Medium Priority — Structural Improvements
-- **Wire ModeController into PiSession** — replace inline mode logic with the extracted ModeController class.
-- **Wire ProposalManager into PiSession** — replace inline proposal maps with ProposalManager.
-- **Wire FrameIngestor into PiSession** — replace inline handleIncomingFrame with FrameIngestor functions.
+## Medium Priority — Production Robustness
+- **God object reduction** — extract PiSession startup wiring from node-runtime (~30 lines)
+- **Wire CorrelationTracker** into runtime — trace sensor→threshold→proposal→execute chains live
+- **Peer registry transport abstraction** — replace raw WebSocket refs with Transport interface
 
-## Lower Priority — Coverage & Quality
-- **TUI rendering tests**: Extract buildPeersColumn/buildGossipColumn data logic from ANSI formatting.
-- **Structured logger adoption**: Replace console.log across codebase with MeshLogger.
-- **Peer registry transport abstraction**: Replace WebSocket refs with Transport interface.
+## Lower Priority
+- **Structured logger adoption** — replace console.log defaults with MeshLogger
+- **TUI data freshness indicators** — mark stale readings in gossip column

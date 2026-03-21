@@ -24,6 +24,21 @@ import {
 } from "./extensions/clawmesh-mesh-extension.js";
 import { PatternMemory } from "./pattern-memory.js";
 import { TriggerQueue, type TriggerEntry } from "./trigger-queue.js";
+import { ModeController } from "./mode-controller.js";
+import { ProposalManager } from "./proposal-manager.js";
+import { ingestFrame, extractPatterns, isPatternFrame } from "./frame-ingestor.js";
+import { isPermanentLLMError } from "./threshold-checker.js";
+import { classifyEvent, extractAssistantText } from "./session-event-classifier.js";
+import {
+  buildOperatorPrompt,
+  buildPlannerPrompt,
+  cleanIntentText,
+  extractCitations,
+  parseModelSpec,
+} from "./planner-prompt-builder.js";
+import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
+import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
+import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -78,6 +93,8 @@ export class PiSession {
   private readonly farmContext?: FarmContext;
   private readonly extensionState: MeshExtensionState;
   readonly patternMemory: PatternMemory;
+  private readonly proposalManager: ProposalManager;
+  private readonly modeCtrl: ModeController;
 
   private session!: AgentSession;
   private readonly triggerQueue = new TriggerQueue();
@@ -89,16 +106,6 @@ export class PiSession {
   private initialized = false;
   private model: Model<any>;
   private thinkingLevel: ThinkingLevel;
-
-  // ─── Rate-limit / observation mode state ────────────────
-  private _mode: SessionMode = "active";
-  private consecutiveErrors = 0;
-  private lastErrorTime = 0;
-  private suspendReason = "";
-  /** Errors before entering observing mode. */
-  private readonly errorThreshold: number;
-  /** Cooldown before probe in observing mode (ms). */
-  private readonly observingCooldownMs: number;
   private opts: PiSessionOptions;
 
   constructor(opts: PiSessionOptions) {
@@ -112,17 +119,40 @@ export class PiSession {
     this.farmContext = opts.farmContext;
     this.thinkingLevel = opts.thinkingLevel ?? "off";
     this.model = this.resolveModel(opts.modelSpec ?? "anthropic/claude-sonnet-4-5-20250929");
-    this.errorThreshold = opts.errorThreshold ?? 3;
-    this.observingCooldownMs = opts.observingCooldownMs ?? 15 * 60_000; // 15 minutes
     this.patternMemory = new PatternMemory({ log: this.log });
+
+    // Mode controller — manages active/observing/suspended transitions
+    this.modeCtrl = new ModeController({
+      errorThreshold: opts.errorThreshold,
+      observingCooldownMs: opts.observingCooldownMs,
+      onModeChange: (mode, reason) => {
+        if (mode === "observing") this.scheduleProbe();
+        if (mode === "suspended") this.clearProbeTimer();
+        opts.onModeChange?.(mode, reason);
+      },
+      log: this.log,
+    });
+
+    // Proposal manager — handles approve/reject lifecycle + pattern recording
+    this.proposalManager = new ProposalManager({
+      onDecision: (record) => {
+        this.patternMemory.recordDecision(record);
+        this.gossipPatternsIfReady();
+      },
+      onResolved: (proposal) => {
+        this.runtime.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
+        opts.onProposalResolved?.(proposal);
+      },
+    });
 
     // Shared state between extension and this session controller
     this.extensionState = {
-      proposals: new Map(),
+      proposals: this.proposalManager.getMap(),
       thresholds: opts.thresholds ?? [],
       thresholdLastFired: this.thresholdLastFired,
       maxPendingProposals: opts.maxPendingProposals ?? 10,
       onProposalCreated: (proposal) => {
+        this.proposalManager.add(proposal);
         this.runtime.peerRegistry.broadcastEvent("planner.proposal", proposal);
         opts.onProposalCreated?.(proposal);
       },
@@ -133,55 +163,23 @@ export class PiSession {
     };
   }
 
-  // ─── Mode management ───────────────────────────────────
+  // ─── Mode management (delegated to ModeController) ─────
 
   /** Current operational mode. */
   get mode(): SessionMode {
-    return this._mode;
-  }
-
-  /**
-   * Transition to a new mode. Logs the change and notifies callback.
-   * Only logs/notifies if the mode actually changed.
-   */
-  private setMode(newMode: SessionMode, reason: string): void {
-    const prev = this._mode;
-    if (prev === newMode) return;
-    this._mode = newMode;
-    this.suspendReason = newMode === "suspended" ? reason : "";
-
-    if (newMode === "active") {
-      this.log.info(`[pi-session] MODE: active — ${reason}. LLM calls resumed.`);
-    } else if (newMode === "observing") {
-      const cooldownMin = Math.round(this.observingCooldownMs / 60_000);
-      this.log.warn(
-        `[pi-session] MODE: observing — ${reason}. ` +
-        `LLM calls paused. World model still ingesting. ` +
-        `Will probe in ${cooldownMin} min.`,
-      );
-      this.scheduleProbe();
-    } else {
-      this.log.error(
-        `[pi-session] MODE: suspended — ${reason}. ` +
-        `All LLM calls stopped. Use 'resume' command to re-enable.`,
-      );
-      this.clearProbeTimer();
-    }
-
-    this.opts.onModeChange?.(newMode, reason);
+    return this.modeCtrl.mode;
   }
 
   /**
    * Schedule a single probe call after the observing cooldown.
-   * If the probe succeeds → active. If it fails → stay observing, reschedule.
    */
   private scheduleProbe(): void {
     this.clearProbeTimer();
     this.probeTimer = setTimeout(() => {
-      if (this._mode !== "observing" || this.stopped) return;
+      if (this.modeCtrl.mode !== "observing" || this.stopped) return;
       this.log.info(`[pi-session] Probe: attempting one LLM call to check availability...`);
       void this.runProbe();
-    }, this.observingCooldownMs);
+    }, this.modeCtrl.observingCooldownMs);
   }
 
   private clearProbeTimer(): void {
@@ -193,95 +191,40 @@ export class PiSession {
 
   /**
    * A lightweight probe — sends a minimal prompt to see if the provider responds.
-   * On success: transition to active and drain any queued triggers.
-   * On failure: stay observing and reschedule.
    */
   private async runProbe(): Promise<void> {
     if (this.running || !this.initialized) {
-      // If a cycle is already running somehow, reschedule
       this.scheduleProbe();
       return;
     }
     this.running = true;
     try {
       await this.session.prompt("Status check. Reply with one word: OK");
-      const msgs = this.session.state.messages;
-      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      const hasContent = lastMsg?.role === "assistant" &&
-        lastMsg.content?.some((c: any) =>
-          (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
-        );
+      const lastMsg = getLastMessage(this.session.state.messages);
 
-      if (hasContent) {
-        this.consecutiveErrors = 0;
-        this.lastErrorTime = 0;
-        this.setMode("active", "probe succeeded — provider is available");
-        // Drain queued triggers
+      if (hasAssistantContent(lastMsg)) {
+        this.modeCtrl.recordSuccess();
         if (!this.triggerQueue.isEmpty && !this.stopped) {
           setTimeout(() => void this.runCycle(), 1000);
         }
       } else {
-        this.handleLLMFailure("probe returned empty content", false);
+        this.modeCtrl.recordFailure("probe returned empty content", false);
+        if (this.modeCtrl.mode === "observing") this.scheduleProbe();
       }
     } catch (err) {
-      this.handleLLMFailure(`probe failed: ${err}`, this.isPermanentError(err));
+      this.modeCtrl.recordFailure(`probe failed: ${err}`, isPermanentLLMError(err));
+      if (this.modeCtrl.mode === "observing") this.scheduleProbe();
     } finally {
       this.running = false;
     }
   }
 
   /**
-   * Central handler for LLM failures. Decides whether to stay observing or suspend.
-   */
-  private handleLLMFailure(reason: string, permanent: boolean): void {
-    this.consecutiveErrors++;
-    this.lastErrorTime = Date.now();
-
-    if (permanent) {
-      this.setMode("suspended", reason);
-      return;
-    }
-
-    if (this._mode === "active" && this.consecutiveErrors >= this.errorThreshold) {
-      this.setMode("observing", `${this.consecutiveErrors} consecutive errors — ${reason}`);
-    } else if (this._mode === "observing") {
-      // Still observing — reschedule probe
-      this.log.warn(`[pi-session] Probe failed (${reason}). Will retry in ${Math.round(this.observingCooldownMs / 60_000)} min.`);
-      this.scheduleProbe();
-    }
-    // If still active but below threshold, just log
-    if (this._mode === "active") {
-      this.log.warn(`[pi-session] LLM error ${this.consecutiveErrors}/${this.errorThreshold}: ${reason}`);
-    }
-  }
-
-  /**
-   * Check if an error is permanent (403 / account disabled / terms violation).
-   * These should suspend the session entirely.
-   */
-  private isPermanentError(err: unknown): boolean {
-    const msg = String(err).toLowerCase();
-    return (
-      msg.includes("403") ||
-      msg.includes("forbidden") ||
-      msg.includes("disabled") ||
-      msg.includes("terms of service") ||
-      msg.includes("account") ||
-      msg.includes("unauthorized") ||
-      msg.includes("401")
-    );
-  }
-
-  /**
    * Manually resume from suspended or observing mode.
-   * Resets error counters and returns to active.
    */
   resume(reason = "manual resume"): void {
-    this.consecutiveErrors = 0;
-    this.lastErrorTime = 0;
     this.clearProbeTimer();
-    this.setMode("active", reason);
-    // Drain queued triggers
+    this.modeCtrl.resume(reason);
     if (!this.triggerQueue.isEmpty && !this.stopped) {
       setTimeout(() => void this.runCycle(), 1000);
     }
@@ -347,10 +290,15 @@ export class PiSession {
       this.handleIncomingFrame(frame);
     };
 
-    // Start proactive timer
+    // Start proactive timer (also sweeps expired proposals)
     const intervalMs = this.opts.proactiveIntervalMs ?? 60_000;
     if (intervalMs > 0) {
       this.proactiveTimer = setInterval(() => {
+        // Sweep expired proposals before proactive check
+        const expired = this.proposalManager.sweepExpired();
+        if (expired.length > 0) {
+          this.log.info(`[pi-session] Expired ${expired.length} stale proposal(s)`);
+        }
         this.triggerProactiveCheck();
       }, intervalMs);
     }
@@ -380,8 +328,8 @@ export class PiSession {
     const conversationId = opts?.conversationId;
     const requestId = opts?.requestId;
 
-    if (this._mode !== "active") {
-      this.log.warn(`[pi-session] Operator intent received but mode is '${this._mode}'. Queuing — use 'resume' to re-enable LLM calls.`);
+    if (!this.modeCtrl.canMakeLLMCalls()) {
+      this.log.warn(`[pi-session] Operator intent received but mode is '${this.modeCtrl.mode}'. Queuing — use 'resume' to re-enable LLM calls.`);
       this.triggerQueue.enqueueIntent(text, { conversationId, requestId });
       return;
     }
@@ -403,51 +351,21 @@ export class PiSession {
   /**
    * Broadcast an agent response frame to UI subscribers and mesh peers.
    */
-  private broadcastAgentResponse(data: {
-    conversationId?: string;
-    requestId?: string;
-    message: string;
-    status: "complete" | "thinking" | "error";
-    proposals?: string[];
-    citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
-  }): void {
-    // Send only to UI subscribers (not via context propagator to avoid duplicates)
-    this.runtime.broadcastToUI("context.frame", {
-      kind: "agent_response",
-      frameId: `ar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      sourceDeviceId: this.runtime.identity.deviceId,
-      sourceDisplayName: this.runtime.displayName,
-      timestamp: Date.now(),
+  private broadcastAgentResponse(data: AgentResponseData): void {
+    const frame = buildAgentResponseFrame(
       data,
-      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
-    });
+      this.runtime.identity.deviceId,
+      this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
+    );
+    this.runtime.broadcastToUI("context.frame", frame);
   }
 
   async approveProposal(taskId: string, approvedBy = "operator"): Promise<TaskProposal | null> {
-    const proposal = this.extensionState.proposals.get(taskId);
-    if (!proposal || proposal.status !== "awaiting_approval") return null;
+    const proposal = this.proposalManager.approve(taskId, approvedBy);
+    if (!proposal) return null;
 
-    proposal.status = "approved";
-    proposal.resolvedBy = approvedBy;
-
-    // Record approval in pattern memory
-    this.patternMemory.recordDecision({
-      approved: true,
-      triggerCondition: proposal.reasoning || proposal.summary,
-      action: {
-        operation: proposal.operation,
-        targetRef: proposal.targetRef,
-        operationParams: proposal.operationParams,
-        summary: proposal.summary,
-      },
-      triggerEventId: proposal.triggerFrameIds?.[0],
-    });
-
-    // Check if pattern should be gossiped
-    this.gossipPatternsIfReady();
-
-    if (this._mode !== "active") {
-      this.log.warn(`[pi-session] Proposal approved but mode is '${this._mode}'. Execution deferred — use 'resume' to re-enable LLM calls.`);
+    if (!this.modeCtrl.canMakeLLMCalls()) {
+      this.log.warn(`[pi-session] Proposal approved but mode is '${this.modeCtrl.mode}'. Execution deferred — use 'resume' to re-enable LLM calls.`);
       return proposal;
     }
 
@@ -462,37 +380,15 @@ export class PiSession {
   }
 
   rejectProposal(taskId: string, rejectedBy = "operator"): TaskProposal | null {
-    const proposal = this.extensionState.proposals.get(taskId);
-    if (!proposal || proposal.status !== "awaiting_approval") return null;
-
-    proposal.status = "rejected";
-    proposal.resolvedAt = Date.now();
-    proposal.resolvedBy = rejectedBy;
-
-    // Record rejection in pattern memory
-    this.patternMemory.recordDecision({
-      approved: false,
-      triggerCondition: proposal.reasoning || proposal.summary,
-      action: {
-        operation: proposal.operation,
-        targetRef: proposal.targetRef,
-        operationParams: proposal.operationParams,
-        summary: proposal.summary,
-      },
-      triggerEventId: proposal.triggerFrameIds?.[0],
-    });
-
-    this.extensionState.onProposalResolved?.(proposal);
-    return proposal;
+    return this.proposalManager.reject(taskId, rejectedBy);
   }
 
   getProposals(filter?: { status?: TaskProposal["status"] }): TaskProposal[] {
-    const all = [...this.extensionState.proposals.values()];
-    return filter?.status ? all.filter((p) => p.status === filter.status) : all;
+    return this.proposalManager.list(filter);
   }
 
   getProposal(taskId: string): TaskProposal | undefined {
-    return this.extensionState.proposals.get(taskId);
+    return this.proposalManager.get(taskId);
   }
 
   getSession(): AgentSession {
@@ -506,48 +402,46 @@ export class PiSession {
     const exportable = this.patternMemory.exportPatterns();
     if (exportable.length === 0) return;
 
-    this.runtime.contextPropagator.broadcast({
-      kind: "capability_update",
-      data: {
-        type: "learned_patterns",
-        patterns: exportable,
-      },
-      trust: {
-        evidence_sources: ["human", "llm"],
-        evidence_trust_tier: "T2_operational_observation",
-      },
-      note: `${exportable.length} learned patterns from operator decisions`,
-    });
-
+    const gossipFrame = buildPatternGossipFrame(exportable);
+    this.runtime.contextPropagator.broadcast(gossipFrame as any);
     this.log.info(`[pi-session] Gossiped ${exportable.length} learned patterns to mesh`);
   }
 
   // ─── Context handlers ──────────────────────────────────
 
   private handleIncomingFrame(frame: ContextFrame): void {
-    // Import learned patterns from remote peers
-    if (frame.kind === "capability_update" && frame.data.type === "learned_patterns") {
-      const patterns = frame.data.patterns as any[];
-      if (Array.isArray(patterns)) {
-        this.patternMemory.importPatterns(patterns, frame.sourceDeviceId);
+    // Use FrameIngestor for pattern import detection
+    if (isPatternFrame(frame)) {
+      const patterns = extractPatterns(frame);
+      if (patterns.length > 0) {
+        this.patternMemory.importPatterns(patterns as any[], frame.sourceDeviceId);
       }
       return;
     }
 
-    // In observing/suspended mode, only log threshold breaches (not every frame)
-    if (this._mode === "active") {
+    // Use FrameIngestor for threshold checking
+    if (this.modeCtrl.canMakeLLMCalls()) {
       this.log.info(`pi-session: incoming ${frame.kind} — metric=${frame.data.metric}, value=${frame.data.value}, thresholds=${this.extensionState.thresholds.length}`);
     }
-    for (const rule of this.extensionState.thresholds) {
-      if (this.checkThresholdRule(rule, frame)) {
-        this.log.info(`pi-session: THRESHOLD BREACH — ${rule.ruleId}: value=${frame.data.value}${this._mode !== "active" ? ` (queued — mode=${this._mode})` : ""}`);
-        this.triggerQueue.enqueueThresholdBreach({
-          ruleId: rule.ruleId,
-          promptHint: rule.promptHint,
-          metric: rule.metric,
-          zone: rule.zone,
-          frame,
-        });
+
+    const result = ingestFrame(frame, this.extensionState.thresholds, this.thresholdLastFired);
+    for (const breach of result.breaches) {
+      this.log.info(`pi-session: THRESHOLD BREACH — ${breach.ruleId}: value=${breach.value}${!this.modeCtrl.canMakeLLMCalls() ? ` (queued — mode=${this.modeCtrl.mode})` : ""}`);
+      this.triggerQueue.enqueueThresholdBreach({
+        ruleId: breach.ruleId,
+        promptHint: breach.promptHint,
+        metric: breach.metric,
+        zone: breach.zone,
+        frame,
+      });
+      // Track trigger frame IDs for proposal traceability
+      if (!this.extensionState.recentTriggerFrameIds) {
+        this.extensionState.recentTriggerFrameIds = [];
+      }
+      this.extensionState.recentTriggerFrameIds.push(frame.frameId);
+      // Keep only last 10
+      if (this.extensionState.recentTriggerFrameIds.length > 10) {
+        this.extensionState.recentTriggerFrameIds = this.extensionState.recentTriggerFrameIds.slice(-10);
       }
     }
     if (!this.triggerQueue.isEmpty) {
@@ -555,28 +449,8 @@ export class PiSession {
     }
   }
 
-  private checkThresholdRule(rule: ThresholdRule, frame: ContextFrame): boolean {
-    if (frame.kind !== "observation") return false;
-    const data = frame.data;
-    if (typeof data.metric !== "string" || data.metric !== rule.metric) return false;
-    if (rule.zone && data.zone !== rule.zone) return false;
-    const value = typeof data.value === "number" ? data.value : null;
-    if (value === null) return false;
-
-    let breached = false;
-    if (rule.belowThreshold !== undefined && value < rule.belowThreshold) breached = true;
-    if (rule.aboveThreshold !== undefined && value > rule.aboveThreshold) breached = true;
-    if (!breached) return false;
-
-    const cooldownMs = rule.cooldownMs ?? 300_000;
-    const lastFired = this.thresholdLastFired.get(rule.ruleId) ?? 0;
-    if (Date.now() - lastFired < cooldownMs) return false;
-    this.thresholdLastFired.set(rule.ruleId, Date.now());
-    return true;
-  }
-
   private triggerProactiveCheck(): void {
-    if (this._mode !== "active") return; // Silent skip in observing/suspended
+    if (!this.modeCtrl.canMakeLLMCalls()) return; // Silent skip in observing/suspended
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
     this.triggerQueue.enqueueProactiveCheck(recentFrames);
@@ -589,14 +463,12 @@ export class PiSession {
     if (this.running || this.stopped || !this.initialized) return;
 
     // Mode gate: only active mode makes LLM calls
-    if (this._mode !== "active") {
+    if (!this.modeCtrl.canMakeLLMCalls()) {
       // Silently accumulate triggers — they'll drain when we go active
       return;
     }
 
-    const pendingCount = [...this.extensionState.proposals.values()].filter(
-      (p) => p.status === "proposed" || p.status === "awaiting_approval",
-    ).length;
+    const pendingCount = this.proposalManager.countPending();
     if (pendingCount >= this.extensionState.maxPendingProposals) {
       this.log.warn(`pi-session: ${pendingCount} pending proposals — pausing`);
       return;
@@ -615,49 +487,24 @@ export class PiSession {
 
       if (operatorIntents.length > 0) {
         // Use conversational format for operator intents
-        const intent = operatorIntents[0]; // Process first intent conversationally
+        const intent = operatorIntents[0];
         activeConversationId = intent.conversationId;
         activeRequestId = intent.requestId;
-        const intentText = intent.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, "");
+        const intentText = cleanIntentText(intent.reason);
 
-        const systemContext = systemTriggers.length > 0
-          ? `\n\nAdditionally, the following system triggers occurred:\n${systemTriggers.map(t => `- ${t.reason}`).join("\n")}`
-          : "";
-
-        // Include learned patterns as context
         const allPatterns = this.patternMemory.getAllPatterns();
-        const patternContext = allPatterns.length > 0
-          ? `\n\n[LEARNED PATTERNS from past operator decisions]\n${allPatterns.slice(0, 10).map(p =>
-              `- "${p.triggerCondition}" → ${p.action.operation} on ${p.action.targetRef} ` +
-              `(confidence: ${(p.confidence * 100).toFixed(0)}%, approved ${p.approvalCount}x, rejected ${p.rejectionCount}x)`
-            ).join("\n")}`
-          : "";
-
-        prompt = `[OPERATOR MESSAGE] "${intentText}"${systemContext}${patternContext}
-
-Respond naturally to the operator's message. Use your tools to check current sensor data if relevant. If the operator is asking for information, provide it clearly with sensor citations. If they're requesting an action that requires actuation, use propose_task. Be conversational but concise. If learned patterns are relevant, mention them.`;
+        prompt = buildOperatorPrompt(intentText, systemTriggers, allPatterns);
 
         // Queue remaining operator intents for next cycle
         for (let i = 1; i < operatorIntents.length; i++) {
           const remaining = operatorIntents[i];
           this.triggerQueue.enqueueIntent(
-            remaining.reason.replace(/^operator_intent:\s*"?|"?\s*$/g, ""),
+            cleanIntentText(remaining.reason),
             { conversationId: remaining.conversationId, requestId: remaining.requestId },
           );
         }
       } else {
-        // Standard planner cycle for system triggers
-        const triggerSummary = systemTriggers.map((t) => `- ${t.reason}`).join("\n");
-        prompt = `[PLANNER CYCLE ${new Date().toISOString()}]
-Triggers:
-${triggerSummary}
-
-Review the current mesh state using your tools, then either:
-1. Take no action if everything is within acceptable parameters
-2. Use propose_task to create proposals for actions that need human approval (L2/L3 actuation)
-3. For safe read-only operations (L0), execute them directly
-
-Always explain your reasoning. Never fabricate sensor data.`;
+        prompt = buildPlannerPrompt(systemTriggers);
       }
 
       const toolsNow = this.session.getActiveToolNames();
@@ -672,45 +519,25 @@ Always explain your reasoning. Never fabricate sensor data.`;
         }
 
         // Check if the LLM actually produced content (vs rate-limit / error)
-        const msgs = this.session.state.messages;
-        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        const hasContent = lastMsg?.role === "assistant" &&
-          lastMsg.content?.some((c: any) =>
-            (c.type === "text" && c.text?.trim()) || c.type === "toolCall"
-          );
+        const lastMsg = getLastMessage(this.session.state.messages);
 
-        if (hasContent) {
+        if (hasAssistantContent(lastMsg)) {
           // Success — reset error tracking
-          if (this.consecutiveErrors > 0) {
-            this.log.info(`pi-session: LLM responded successfully after ${this.consecutiveErrors} error(s)`);
+          if (this.modeCtrl.consecutiveErrors > 0) {
+            this.log.info(`pi-session: LLM responded successfully after ${this.modeCtrl.consecutiveErrors} error(s)`);
           }
-          this.consecutiveErrors = 0;
-          this.lastErrorTime = 0;
+          this.modeCtrl.recordSuccess();
 
           // Extract full assistant text and broadcast as agent_response
           if (activeConversationId && lastMsg?.role === "assistant") {
-            const textBlocks = lastMsg.content?.filter?.((c: any) => c.type === "text") ?? [];
-            const fullText = textBlocks.map((c: any) => c.text?.trim()).filter(Boolean).join("\n\n");
+            const fullText = extractAssistantText(lastMsg);
 
             // Collect proposal IDs created during this turn
-            const proposalIds: string[] = [];
-            for (const [taskId, proposal] of this.extensionState.proposals.entries()) {
-              if (proposal.createdAt >= Date.now() - 10_000) {
-                proposalIds.push(taskId);
-              }
-            }
+            const proposalIds = findRecentProposalIds(this.proposalManager.list());
 
             // Build sensor citations from recent world model frames
             const recentFrames = this.runtime.worldModel.getRecentFrames(10);
-            const citations = recentFrames
-              .filter(f => f.kind === "observation" && f.data.metric)
-              .slice(0, 5)
-              .map(f => ({
-                metric: String(f.data.metric),
-                value: f.data.value,
-                zone: f.data.zone as string | undefined,
-                timestamp: f.timestamp,
-              }));
+            const citations = extractCitations(recentFrames);
 
             if (fullText) {
               this.broadcastAgentResponse({
@@ -725,7 +552,7 @@ Always explain your reasoning. Never fabricate sensor data.`;
           }
         } else {
           // Empty content — likely rate limit or silent error
-          this.handleLLMFailure("LLM returned no content (possible rate limit)", false);
+          this.modeCtrl.recordFailure("LLM returned no content (possible rate limit)", false);
           if (activeConversationId) {
             this.broadcastAgentResponse({
               conversationId: activeConversationId,
@@ -736,7 +563,7 @@ Always explain your reasoning. Never fabricate sensor data.`;
           }
         }
       } catch (promptErr) {
-        this.handleLLMFailure(`prompt failed: ${promptErr}`, this.isPermanentError(promptErr));
+        this.modeCtrl.recordFailure(`prompt failed: ${promptErr}`, isPermanentLLMError(promptErr));
         if (activeConversationId) {
           this.broadcastAgentResponse({
             conversationId: activeConversationId,
@@ -752,95 +579,58 @@ Always explain your reasoning. Never fabricate sensor data.`;
     } finally {
       this.running = false;
       // Only drain queue if still active
-      if (this._mode === "active" && !this.triggerQueue.isEmpty && !this.stopped) {
+      if (this.modeCtrl.canMakeLLMCalls() && !this.triggerQueue.isEmpty && !this.stopped) {
         setTimeout(() => void this.runCycle(), 2000);
       }
     }
   }
 
-  // ─── Session event handler ──────────────────────────────
+  // ─── Session event handler (delegates to SessionEventClassifier) ──
 
   private handleSessionEvent(event: any): void {
-    switch (event.type) {
-      // Silently skip high-frequency streaming updates
-      case "message_update":
+    const classified = classifyEvent(event);
+
+    switch (classified.type) {
+      case "skip":
         return;
-
       case "message_start":
-        if (event.message) {
-          const m = event.message;
-          if (m.role === "assistant" && m.model) {
-            this.log.info(`pi-session: LLM responding (model=${m.model})`);
-          }
-        }
+        this.log.info(`pi-session: LLM responding (model=${classified.model})`);
         break;
-
-      case "message_end":
-        if (event.message) {
-          const msg = event.message;
-          // Log errors explicitly so we catch rate limits
-          if (msg.errorMessage) {
-            this.log.error(`pi-session: message error: ${msg.errorMessage}`);
-          }
-          if (msg.role === "assistant") {
-            const textContent = msg.content?.filter?.((c: any) => c.type === "text") ?? [];
-            for (const block of textContent) {
-              if (block.text?.trim()) {
-                this.log.info(`[pi-session] ${block.text}`);
-                this.runtime.contextPropagator.broadcastInference({
-                  data: { reasoning: block.text.slice(0, 500) },
-                  note: "Pi session reasoning",
-                });
-              }
-            }
-            const toolCalls = msg.content?.filter?.((c: any) => c.type === "toolCall") ?? [];
-            if (toolCalls.length > 0) {
-              this.log.info(`pi-session: tool calls: ${toolCalls.map((t: any) => t.name).join(", ")}`);
-            }
-          }
-        }
+      case "message_error":
+        this.log.error(`pi-session: message error: ${classified.error}`);
         break;
-
-      case "tool_execution_start":
-        this.log.info(`pi-session: tool ${event.toolName}(${JSON.stringify(event.args).slice(0, 120)})`);
+      case "assistant_text":
+        this.log.info(`[pi-session] ${classified.text}`);
+        this.runtime.contextPropagator.broadcastInference({
+          data: { reasoning: classified.text.slice(0, 500) },
+          note: "Pi session reasoning",
+        });
         break;
-
-      case "tool_execution_end":
-        if (event.isError) {
-          this.log.warn(`pi-session: tool ${event.toolName} error`);
-        }
+      case "tool_calls":
+        this.log.info(`pi-session: tool calls: ${classified.names.join(", ")}`);
         break;
-
-      case "auto_retry_start":
+      case "tool_start":
+        this.log.info(`pi-session: tool ${classified.name}(${classified.args})`);
+        break;
+      case "tool_error":
+        this.log.warn(`pi-session: tool ${classified.name} error`);
+        break;
+      case "auto_retry":
         this.log.warn(`pi-session: auto-retry starting`);
         break;
-
-      case "auto_compaction_start":
+      case "compaction_start":
         this.log.info(`pi-session: auto-compaction triggered`);
         break;
-
-      case "auto_compaction_end":
-        if (event.result) {
-          this.log.info(`pi-session: compaction done`);
-        }
+      case "compaction_end":
+        this.log.info(`pi-session: compaction done`);
         break;
-
-      // agent_start, agent_end, turn_start, turn_end, auto_retry_end — skip silently
     }
   }
 
   // ─── Model resolution ───────────────────────────────────
 
   private resolveModel(spec: string): Model<any> {
-    const [provider, ...rest] = spec.split("/");
-    const modelId = rest.join("/");
-
-    if (!provider || !modelId) {
-      throw new Error(
-        `Invalid model spec "${spec}". Use "provider/model-id" (e.g. "anthropic/claude-sonnet-4-5-20250929")`,
-      );
-    }
-
+    const { provider, modelId } = parseModelSpec(spec);
     const model = getModel(provider as any, modelId as any);
     if (!model) {
       throw new Error(
@@ -854,42 +644,9 @@ Always explain your reasoning. Never fabricate sensor data.`;
   // ─── System prompt ──────────────────────────────────────
 
   private buildSystemPrompt(): string {
-    const nodeName = this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12);
-    const farm = this.farmContext;
-
-    let farmSection = "";
-    if (farm) {
-      const zones = farm.zones.map((z) =>
-        `  - ${z.zoneId}: ${z.name}${z.crops ? ` (crops: ${z.crops.join(", ")})` : ""}`,
-      ).join("\n");
-      const assets = farm.assets.map((a) =>
-        `  - ${a.assetId}: ${a.type}${a.capabilities ? ` [${a.capabilities.join(",")}]` : ""}`,
-      ).join("\n");
-      const safety = farm.safetyRules.map((r) => `  - ${r}`).join("\n");
-
-      farmSection = `
-# Farm: ${farm.siteName}
-## Zones
-${zones}
-## Assets
-${assets}
-## Safety Rules (NEVER violate)
-${safety}
-`;
-    }
-
-    return `You are the intelligent planner for a ClawMesh farm mesh network.
-
-# Your Node
-- Name: ${nodeName}
-- Role: planner / command center
-${farmSection}
-# Rules
-- LLM alone NEVER triggers physical actuation — use propose_task
-- Always cite sensor data in reasoning
-- Never fabricate sensor values
-- L0=auto, L1=bounded auto, L2=human confirm, L3=on-site verify
-
-Be concise. Be safe. Explain your reasoning.`;
+    return buildPlannerSystemPrompt({
+      nodeName: this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
+      farmContext: this.farmContext,
+    });
   }
 }
