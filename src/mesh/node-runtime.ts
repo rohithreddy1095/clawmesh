@@ -33,6 +33,7 @@ import { SystemEventLog } from "./system-event-log.js";
 import { wireEventLog, wireCorrelationTracker, restoreWorldModelSnapshot, saveWorldModelSnapshot } from "./runtime-setup-helpers.js";
 import { CorrelationTracker } from "./correlation-tracker.js";
 import { createEventsHandlers } from "./events-rpc.js";
+import { createTraceHandlers } from "./trace-rpc.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -243,9 +244,12 @@ export class MeshNodeRuntime {
       log: this.log,
     }));
 
-    // ─── Events RPC handler ─────────────────────────────
+    // ─── Events + Trace RPC handlers ─────────────────────
     this.rpcDispatcher.registerAll(createEventsHandlers({
       eventLog: this.eventLog,
+    }));
+    this.rpcDispatcher.registerAll(createTraceHandlers({
+      correlationTracker: this.correlationTracker,
     }));
   }
 

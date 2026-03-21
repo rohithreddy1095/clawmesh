@@ -236,6 +236,12 @@ All files under `src/` are in scope. Specifically:
 101. ✅ **Proposal traceability** — trigger frame IDs linked to proposals via extensionState
 102. ✅ **E2E safety validation** — complete scenarios: happy path, stale-data safety net, multi-planner dedup (3 tests)
 
-### Current Results: 135 → 2165 tests (+1504%), 38 → 87 source modules (+129%), 17 → 133 test files (+682%)
-### God object: 754 → 550 lines (-27.1%)
+### Session 8: Security, Tracing, Decomposition
+103. ✅ **Handshake public key pinning** — peer-server verifies public key against trust store, rejects mismatches (10 tests)
+104. ✅ **Trust CLI --public-key flag** — operators pin keys when adding trusted peers, TOFU warning (5 tests)
+105. ✅ **Wire CorrelationTracker into runtime** — sensor→proposal causal chains traced live via event bus (2 tests)
+106. ✅ **Extract PiSessionFactory** — PiSession creation + retry logic extracted from god object (554→523, -31 lines)
+
+### Current Results: 135 → 2197 tests (+1527%), 38 → 89 source modules (+134%), 17 → 138 test files (+712%)
+### God object: 754 → 523 lines (-30.6%)
 ### PiSession: 895 → 652 lines (-27.2%)
