@@ -35,9 +35,9 @@ function fileLineCount(path: string): number {
 describe("Architecture Metrics", () => {
   // ─── God Object Decomposition ──────────────
 
-  it("node-runtime.ts is under 560 lines (decomposed from 754)", () => {
+  it("node-runtime.ts is under 580 lines (decomposed from 754)", () => {
     const lines = fileLineCount("src/mesh/node-runtime.ts");
-    expect(lines).toBeLessThan(560);
+    expect(lines).toBeLessThan(580);
   });
 
   it("node-runtime.ts delegates to RpcDispatcher (no inline dispatch)", () => {

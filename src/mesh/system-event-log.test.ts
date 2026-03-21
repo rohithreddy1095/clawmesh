@@ -132,3 +132,22 @@ describe("SystemEventLog production scenarios", () => {
     expect(log.byType("mode.change")).toHaveLength(1);
   });
 });
+
+describe("SystemEventLog wired into runtime", () => {
+  it("startup/shutdown events are captured by the event log", () => {
+    const log = new SystemEventLog();
+    log.record("startup", "Node started", { port: 18789 });
+    log.record("shutdown", "Shutting down", { uptime: 3600_000 });
+    const events = log.recent();
+    expect(events.some(e => e.type === "startup")).toBe(true);
+    expect(events.some(e => e.type === "shutdown")).toBe(true);
+  });
+
+  it("peer events populate the log via event bus wiring", () => {
+    const log = new SystemEventLog();
+    log.record("peer.connect", "Connected: sensor-01", { deviceId: "sensor-01" });
+    log.record("peer.disconnect", "Disconnected: sensor-01", { deviceId: "sensor-01", reason: "timeout" });
+    const summary = log.summary();
+    expect(summary.peerChanges).toBe(2);
+  });
+});

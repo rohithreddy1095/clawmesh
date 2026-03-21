@@ -67,9 +67,10 @@ describe("Peer Lifecycle via MeshNodeRuntime", () => {
     expect(runtime.autoConnect.getAttemptCount("any")).toBe(0);
   });
 
-  it("event bus has no peer listeners initially", () => {
-    expect(runtime.eventBus.listenerCount("peer.connected")).toBe(0);
-    expect(runtime.eventBus.listenerCount("peer.disconnected")).toBe(0);
+  it("event bus has system listeners for peer events (event log wiring)", () => {
+    // Runtime now wires system event log listeners during construction
+    expect(runtime.eventBus.listenerCount("peer.connected")).toBeGreaterThanOrEqual(1);
+    expect(runtime.eventBus.listenerCount("peer.disconnected")).toBeGreaterThanOrEqual(1);
   });
 
   it("can subscribe to peer events via event bus", () => {
@@ -77,8 +78,8 @@ describe("Peer Lifecycle via MeshNodeRuntime", () => {
     runtime.eventBus.on("peer.connected", () => events.push("connected"));
     runtime.eventBus.on("peer.disconnected", () => events.push("disconnected"));
 
-    expect(runtime.eventBus.listenerCount("peer.connected")).toBe(1);
-    expect(runtime.eventBus.listenerCount("peer.disconnected")).toBe(1);
+    expect(runtime.eventBus.listenerCount("peer.connected")).toBeGreaterThanOrEqual(2);
+    expect(runtime.eventBus.listenerCount("peer.disconnected")).toBeGreaterThanOrEqual(2);
   });
 });
 

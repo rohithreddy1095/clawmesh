@@ -30,6 +30,7 @@ import { RateLimiter } from "./rate-limiter.js";
 import { validateMessageSize } from "./message-validation.js";
 import { MetricsCollector, MESH_METRICS } from "./metrics-collector.js";
 import { createSnapshot, saveSnapshot, loadSnapshot, filterSnapshotByAge } from "./world-model-snapshot.js";
+import { SystemEventLog } from "./system-event-log.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -117,6 +118,8 @@ export class MeshNodeRuntime {
   private readonly inboundRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60_000 });
   /** Operational metrics for monitoring/health. */
   readonly metrics = new MetricsCollector();
+  /** Structured event log for debugging. */
+  readonly eventLog = new SystemEventLog();
   readonly uiBroadcaster = new UIBroadcaster();
   readonly autoConnect = new AutoConnectManager();
   readonly trustAudit = new TrustAuditTrail();
@@ -142,6 +145,24 @@ export class MeshNodeRuntime {
     }
 
     this.eventBus = new MeshEventBus();
+
+    // Wire event bus → system event log for operational debugging
+    this.eventBus.on("peer.connected", (data) => {
+      const did = data.session?.deviceId?.slice(0, 12) ?? "?";
+      this.eventLog.record("peer.connect", `Connected: ${did}…`, { deviceId: did });
+    });
+    this.eventBus.on("peer.disconnected", (data) => {
+      const did = data.deviceId?.slice(0, 12) ?? "?";
+      this.eventLog.record("peer.disconnect", `Disconnected: ${did}… (${data.reason ?? "unknown"})`, { deviceId: did });
+    });
+    this.eventBus.on("proposal.created", (data) => {
+      const p = data.proposal;
+      this.eventLog.record("proposal.created", `${p.approvalLevel} ${p.summary}`, { taskId: p.taskId });
+    });
+    this.eventBus.on("proposal.resolved", (data) => {
+      const p = data.proposal;
+      this.eventLog.record("proposal.resolved", `${p.status}: ${p.summary}`, { taskId: p.taskId, status: p.status });
+    });
 
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
@@ -311,6 +332,10 @@ export class MeshNodeRuntime {
       `mesh: listening on ws://${this.host}:${addr.port} (deviceId=${this.identity.deviceId.slice(0, 12)}…)`,
     );
     this.eventBus.emit("runtime.started", { host: this.host, port: addr.port });
+    this.eventLog.record("startup", `Listening on ws://${this.host}:${addr.port}`, {
+      deviceId: this.identity.deviceId.slice(0, 12),
+      peers: this.staticPeers.length,
+    });
 
     // Start mDNS discovery (best-effort — not all platforms support it)
     try {
@@ -350,6 +375,10 @@ export class MeshNodeRuntime {
 
   async stop(): Promise<void> {
     this.eventBus.emit("runtime.stopping", {});
+    this.eventLog.record("shutdown", "Shutting down", {
+      uptime: Date.now() - this.startedAtMs,
+      peers: this.peerRegistry.listConnected().length,
+    });
 
     // Save world model snapshot for fast restart
     const snapshotPath = `${process.env.HOME ?? "."}/.clawmesh/world-model-snapshot.json`;
