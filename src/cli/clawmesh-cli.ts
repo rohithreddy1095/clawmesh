@@ -535,13 +535,20 @@ export function createClawMeshCli(): Command {
     .command("add <deviceId>")
     .description("Add a peer to the trust store")
     .option("--name <name>", "Display name for the peer")
-    .action(async (deviceId: string, opts: { name?: string }) => {
+    .option("--public-key <key>", "Public key for pinning (base64url)")
+    .action(async (deviceId: string, opts: { name?: string; publicKey?: string }) => {
       const result = await addTrustedPeer({
         deviceId,
         displayName: opts.name,
+        publicKey: opts.publicKey,
       });
       if (result.added) {
         console.log(`Trusted peer added: ${deviceId}`);
+        if (opts.publicKey) {
+          console.log(`  Public key pinned: ${opts.publicKey.slice(0, 20)}…`);
+        } else {
+          console.log("  ⚠ No public key pinned — will accept any key on first connect (TOFU)");
+        }
       } else {
         console.log(`Peer already trusted: ${deviceId}`);
       }
