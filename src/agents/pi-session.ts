@@ -290,10 +290,15 @@ export class PiSession {
       this.handleIncomingFrame(frame);
     };
 
-    // Start proactive timer
+    // Start proactive timer (also sweeps expired proposals)
     const intervalMs = this.opts.proactiveIntervalMs ?? 60_000;
     if (intervalMs > 0) {
       this.proactiveTimer = setInterval(() => {
+        // Sweep expired proposals before proactive check
+        const expired = this.proposalManager.sweepExpired();
+        if (expired.length > 0) {
+          this.log.info(`[pi-session] Expired ${expired.length} stale proposal(s)`);
+        }
         this.triggerProactiveCheck();
       }, intervalMs);
     }
