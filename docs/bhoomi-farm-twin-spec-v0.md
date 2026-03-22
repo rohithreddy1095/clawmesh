@@ -4,7 +4,7 @@ Status: Draft (working spec)
 
 Date: 2026-02-26
 
-Primary goal: define a farm intelligence + mesh execution system for Bhoomi Natural, where a Mac-based planner agent and a Jetson Nano field agent coordinate trusted devices ("claws") and human work to operate a food forest safely and effectively.
+Primary goal: define a farm intelligence + mesh execution system for Bhoomi Natural, where a Jetson Orin NX edge node runs a local LLM planner (Qwen2.5-1.5B via llama.cpp) and coordinates trusted devices ("claws") and human work to operate a food forest safely and effectively.
 
 ## 1. Purpose
 
@@ -85,7 +85,7 @@ Data quality notes (important for agent reasoning):
   - audit/history review
   - human approval interface
 
-- `Jetson Nano Agent` (field brain)
+- `Jetson Orin NX Agent` (field brain)
   - local execution orchestration
   - low-latency control loops
   - local sensor fusion / camera inference
