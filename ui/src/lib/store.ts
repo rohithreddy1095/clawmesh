@@ -115,6 +115,9 @@ export const useMeshStore = create<MeshState>((set, get) => ({
     chatMessages: [],
     addChatMessage: (msg) =>
         set((state) => {
+            // Skip if we already have a message with the same id (dedup gossip)
+            if (state.chatMessages.some((m) => m.id === msg.id)) return state;
+
             // For "thinking" status, replace existing thinking message for same conversationId
             if (msg.status === "thinking") {
                 const existing = state.chatMessages.find(

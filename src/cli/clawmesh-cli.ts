@@ -825,10 +825,10 @@ export function createClawMeshCli(): Command {
       console.log("No gateway running. Start with `clawmesh start` first.");
     });
 
-  // ── status ───────────────────────────────────────────────
+  // ── info (local identity) ────────────────────────────────
   program
-    .command("status")
-    .description("Show gateway and mesh status")
+    .command("info")
+    .description("Show local device identity and mesh info")
     .action(() => {
       const identity = loadOrCreateDeviceIdentity();
       console.log(`Device ID:  ${identity.deviceId}`);

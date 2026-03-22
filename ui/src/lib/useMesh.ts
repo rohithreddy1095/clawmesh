@@ -3,7 +3,20 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useMeshStore, type ContextFrame, type MeshPeer, type Proposal } from "./store";
 
-const WS_URL = "ws://localhost:18789"; // Local Mac node
+const WS_URL = typeof window !== "undefined"
+  ? `ws://${window.location.hostname}:18789`
+  : "ws://localhost:18789";
+
+/** Fallback for mobile browsers on non-HTTPS where uuid() is unavailable. */
+function uuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return uuid();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 type MeshCommandParams = {
     to: string;
@@ -39,10 +52,10 @@ export function useMesh() {
                 setConnected(true);
 
                 // Subscribe to chat events
-                ws.send(JSON.stringify({ type: "req", id: crypto.randomUUID(), method: "chat.subscribe" }));
+                ws.send(JSON.stringify({ type: "req", id: uuid(), method: "chat.subscribe" }));
 
                 // Ask for currently connected peers on open
-                ws.send(JSON.stringify({ type: "req", id: crypto.randomUUID(), method: "mesh.peers" }));
+                ws.send(JSON.stringify({ type: "req", id: uuid(), method: "mesh.peers" }));
             };
 
             ws.onclose = () => {
@@ -118,13 +131,13 @@ export function useMesh() {
 
         wsRef.current.send(JSON.stringify({
             type: "req",
-            id: crypto.randomUUID(),
+            id: uuid(),
             method: "mesh.message.forward",
             params: {
                 channel: "clawmesh",
                 to: params.to,
                 originGatewayId: "ui-client",
-                idempotencyKey: crypto.randomUUID(),
+                idempotencyKey: uuid(),
                 commandDraft: {
                     source: { nodeId: "ui-client", role: "operator" },
                     target: { kind: "capability", ref: params.targetRef },
@@ -139,8 +152,8 @@ export function useMesh() {
      * Send a chat message to the Pi agent. Returns the conversationId.
      */
     const sendChat = useCallback((text: string, existingConversationId?: string): string => {
-        const conversationId = existingConversationId || crypto.randomUUID();
-        const requestId = crypto.randomUUID();
+        const conversationId = existingConversationId || uuid();
+        const requestId = uuid();
 
         // Add optimistic human message to store
         addChatMessage({
@@ -156,13 +169,13 @@ export function useMesh() {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({
                 type: "req",
-                id: crypto.randomUUID(),
+                id: uuid(),
                 method: "mesh.message.forward",
                 params: {
                     channel: "clawmesh",
                     to: "agent:pi",
                     originGatewayId: "ui-client",
-                    idempotencyKey: crypto.randomUUID(),
+                    idempotencyKey: uuid(),
                     commandDraft: {
                         source: { nodeId: "ui-client", role: "operator" },
                         target: { kind: "capability", ref: "agent:pi" },
@@ -185,7 +198,7 @@ export function useMesh() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
         wsRef.current.send(JSON.stringify({
             type: "req",
-            id: crypto.randomUUID(),
+            id: uuid(),
             method: "chat.proposal.approve",
             params: { taskId },
         }));
@@ -198,7 +211,7 @@ export function useMesh() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
         wsRef.current.send(JSON.stringify({
             type: "req",
-            id: crypto.randomUUID(),
+            id: uuid(),
             method: "chat.proposal.reject",
             params: { taskId },
         }));
