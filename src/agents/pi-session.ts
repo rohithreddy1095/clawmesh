@@ -631,6 +631,35 @@ export class PiSession {
 
   private resolveModel(spec: string): Model<any> {
     const { provider, modelId } = parseModelSpec(spec);
+
+    // Local NanoChat model — connects to the NanoChat inference server on this device.
+    // Uses provider "openai" so the SDK resolves OPENAI_API_KEY for auth (set to any
+    // non-empty value since NanoChat ignores it).
+    if (provider === "nanochat") {
+      const port = process.env.NANOCHAT_PORT ?? "8000";
+      const host = process.env.NANOCHAT_HOST ?? "127.0.0.1";
+      if (!process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = "local";
+      }
+      this.log.info(`pi-session: using local NanoChat model "${modelId}" at http://${host}:${port}`);
+      return {
+        id: `nanochat-${modelId}`,
+        name: `NanoChat ${modelId.toUpperCase()} (local)`,
+        api: "openai-completions",
+        provider: "openai",
+        baseUrl: `http://${host}:${port}/v1`,
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 2048,
+        maxTokens: 512,
+        compat: {
+          supportsStore: false,
+          supportsStreamOptions: false,
+        },
+      } satisfies Model<"openai-completions">;
+    }
+
     const model = getModel(provider as any, modelId as any);
     if (!model) {
       throw new Error(
