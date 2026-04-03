@@ -65,6 +65,7 @@ describe("mesh.peers handler", () => {
       outbound: true,
       capabilities: ["channel:telegram"],
       role: "viewer",
+      transportLabel: "relay",
       connectedAtMs: 1000,
     });
 
@@ -77,6 +78,7 @@ describe("mesh.peers handler", () => {
         outbound: boolean;
         capabilities: string[];
         role?: string;
+        transportLabel?: string;
       }>;
     };
     expect(p.peers).toHaveLength(1);
@@ -85,6 +87,7 @@ describe("mesh.peers handler", () => {
     expect(p.peers[0].outbound).toBe(true);
     expect(p.peers[0].capabilities).toEqual(["channel:telegram"]);
     expect(p.peers[0].role).toBe("viewer");
+    expect(p.peers[0].transportLabel).toBe("relay");
   });
 
   it("mesh.status returns localDeviceId and peerCount", async () => {

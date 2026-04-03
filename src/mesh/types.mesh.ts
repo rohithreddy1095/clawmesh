@@ -5,6 +5,8 @@ export type MeshStaticPeer = {
   deviceId: string;
   /** Optional TLS certificate fingerprint for pinning. */
   tlsFingerprint?: string;
+  /** Optional operator-visible transport label (e.g. relay, lan, vpn). */
+  transportLabel?: string;
 };
 
 export type MeshGatewayTarget = {

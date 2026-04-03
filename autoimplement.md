@@ -153,18 +153,22 @@ Example:
   - message: `feat(mesh): expose proposal owners in mesh status RPC`
 
 - ✅ Discovery-disabled static/WAN mode
-  - commit: pending
+  - commit: `1b2a6a2`
   - message: `feat(mesh): support static-only mode without discovery`
+
+- ✅ Discovery mode visibility in status surfaces
+  - commit: pending
+  - message: `feat(mesh): expose discovery mode in status surfaces`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Discovery mode visibility in status surfaces**
+**Peer transport labeling**
 
 Desired behavior:
-- status/health surfaces should show whether discovery is enabled or disabled
-- make WAN/static-only deployments obvious during operations
-- keep LAN/trust behavior unchanged
+- static peer configuration should be able to declare an operator-visible transport label
+- status surfaces should expose that label for WAN/relay debugging
+- keep actual connection behavior unchanged for now
 
 This is the next practical WAN bridge slice.
 

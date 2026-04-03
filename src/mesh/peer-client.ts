@@ -18,6 +18,8 @@ export type MeshPeerClientOptions = {
   peerRegistry: PeerRegistry;
   /** Optional TLS fingerprint for certificate pinning. */
   tlsFingerprint?: string;
+  /** Optional operator-visible transport label. */
+  transportLabel?: string;
   /** Local display name to send during handshake. */
   displayName?: string;
   /** Capabilities to advertise. */
@@ -230,6 +232,7 @@ export class MeshPeerClient {
       outbound: true,
       capabilities: result.capabilities ?? [],
       role: result.role,
+      transportLabel: this.opts.transportLabel,
       connectedAtMs: Date.now(),
     };
     this.opts.peerRegistry.register(session);
