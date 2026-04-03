@@ -12,6 +12,7 @@ export function createMeshPeersHandlers(deps: {
   capabilityRegistry: MeshCapabilityRegistry;
   localDeviceId: string;
   getPlannerActivity?: () => PlannerActivity;
+  isDiscoveryEnabled?: () => boolean;
   getPendingProposals?: () => Array<{
     taskId: string;
     summary: string;
@@ -30,6 +31,7 @@ export function createMeshPeersHandlers(deps: {
         outbound: p.outbound,
         capabilities: p.capabilities,
         role: p.role,
+        transportLabel: p.transportLabel,
         connectedAtMs: p.connectedAtMs,
       }));
       respond(true, { peers });
@@ -45,9 +47,11 @@ export function createMeshPeersHandlers(deps: {
           displayName: p.displayName,
           outbound: p.outbound,
           role: p.role,
+          transportLabel: p.transportLabel,
           connectedAtMs: p.connectedAtMs,
         })),
         plannerActivity: deps.getPlannerActivity?.(),
+        discoveryEnabled: deps.isDiscoveryEnabled?.(),
         pendingProposals: deps.getPendingProposals?.(),
       });
     },

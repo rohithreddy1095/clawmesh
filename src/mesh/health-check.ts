@@ -29,6 +29,7 @@ export type PeerHealthInfo = {
   displayName?: string;
   capabilities: string[];
   role?: MeshNodeRole;
+  transportLabel?: string;
   connectedMs: number;
   outbound: boolean;
 };
@@ -54,6 +55,7 @@ export type HealthCheckResult = {
   plannerMode?: string;
   plannerLeader?: PlannerLeader;
   plannerActivity?: PlannerActivity;
+  discoveryEnabled?: boolean;
   memoryUsageMB?: number;
   metrics?: MetricSnapshot[];
   version: string;
@@ -74,6 +76,7 @@ export type HealthCheckDeps = {
   getPlannerMode?: () => string | undefined;
   getPlannerLeader?: () => PlannerLeader;
   getPlannerActivity?: () => PlannerActivity;
+  isDiscoveryEnabled?: () => boolean;
   getMetrics?: () => MetricSnapshot[];
 };
 
@@ -89,6 +92,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     displayName: p.displayName,
     capabilities: p.capabilities,
     role: p.role,
+    transportLabel: p.transportLabel,
     connectedMs: now - p.connectedAtMs,
     outbound: p.outbound,
   }));
@@ -136,6 +140,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     plannerMode,
     plannerLeader: deps.getPlannerLeader?.(),
     plannerActivity: deps.getPlannerActivity?.(),
+    discoveryEnabled: deps.isDiscoveryEnabled?.(),
     memoryUsageMB,
     metrics: deps.getMetrics?.(),
     version: deps.version,

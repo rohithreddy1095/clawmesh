@@ -26,6 +26,8 @@ export type PeerSession = {
   capabilities: string[];
   /** Declared node role for routing / policy decisions. */
   role?: MeshNodeRole;
+  /** Optional operator-visible transport label (e.g. relay, lan, vpn). */
+  transportLabel?: string;
   /** Timestamp when this peer connected. */
   connectedAtMs: number;
 };

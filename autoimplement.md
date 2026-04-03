@@ -149,20 +149,44 @@ Example:
   - message: `feat(mesh): show proposal owners in status surfaces`
 
 - ✅ Planner-owner visibility in RPC summaries
-  - commit: pending
+  - commit: `5531bca`
   - message: `feat(mesh): expose proposal owners in mesh status RPC`
+
+- ✅ Discovery-disabled static/WAN mode
+  - commit: `1b2a6a2`
+  - message: `feat(mesh): support static-only mode without discovery`
+
+- ✅ Discovery mode visibility in status surfaces
+  - commit: `1d8f82a`
+  - message: `feat(mesh): expose discovery mode in status surfaces`
+
+- ✅ Peer transport labeling
+  - commit: `26b8979`
+  - message: `feat(mesh): add operator-visible peer transport labels`
+
+- ✅ WAN peer labeling in health surfaces
+  - commit: `99fd264`
+  - message: `feat(mesh): expose peer transport labels in health`
+
+- ✅ WAN peer labeling in runtime status commands
+  - commit: `6de6e93`
+  - message: `feat(mesh): show discovery mode in operator status views`
+
+- ✅ CLI startup WAN visibility
+  - commit: `7f671b5`
+  - message: `feat(cli): show discovery mode and peer transport at startup`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay/WAN investigation slice**
+**Transport-label visibility in startup validation/reporting**
 
 Desired behavior:
-- begin the next milestone with a small, test-backed transport/WAN step
-- keep LAN/trust behavior unchanged
-- preserve all current planner HA work
+- preflight/startup surfaces should make WAN transport intent obvious before connect attempts
+- keep behavior observational only
+- preserve current static/LAN behavior
 
-This is the next practical milestone bridge.
+This is the next practical WAN bridge slice.
 
 ## Milestone Plan
 

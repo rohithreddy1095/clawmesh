@@ -57,6 +57,7 @@ export type MeshNodeRuntimeOptions = {
   meshId?: string;
   meshName?: string;
   role?: MeshNodeRole;
+  disableDiscovery?: boolean;
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
@@ -224,6 +225,7 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       localDeviceId: this.identity.deviceId,
       getPlannerActivity: () => this.getPlannerActivity(),
+      isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getPendingProposals: () => this.getPendingProposalSummaries(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
@@ -254,6 +256,7 @@ export class MeshNodeRuntime {
       getPlannerMode: () => this.piSession?.mode,
       getPlannerLeader: () => this.getPlannerLeader(),
       getPlannerActivity: () => this.getPlannerActivity(),
+      isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getMetrics: () => this.metrics.snapshot(),
     }));
     this.rpcDispatcher.registerAll(createChatHandlers({
@@ -344,28 +347,28 @@ export class MeshNodeRuntime {
       peers: this.staticPeers.length,
     });
 
-    // Start mDNS discovery (best-effort — not all platforms support it)
-    try {
-      (this as any).discovery = new MeshDiscovery({
-        localDeviceId: this.identity.deviceId,
-        localPort: this.listenAddress().port,
-        displayName: this.displayName,
-      });
-      this.discovery?.start();
-      this.discovery?.on("peer-discovered", (peer) => {
-        this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
-        // Auto-connect to discovered peers that are already trusted
-        void this.autoConnect.evaluateWithTrust(peer).then((decision) => {
-          if (decision.action === "connect") {
-            this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
-            this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
-          }
-        }).catch((err) => {
-          this.log.warn(`mesh: auto-connect evaluation failed for ${peer.deviceId.slice(0, 12)}…: ${String(err)}`);
+    if (!this.opts.disableDiscovery) {
+      try {
+        (this as any).discovery = new MeshDiscovery({
+          localDeviceId: this.identity.deviceId,
+          localPort: this.listenAddress().port,
+          displayName: this.displayName,
         });
-      });
-    } catch (err) {
-      this.log.warn(`mesh: mDNS discovery unavailable (${err}). Using static peers only.`);
+        this.discovery?.start();
+        this.discovery?.on("peer-discovered", (peer) => {
+          this.log.info(`mesh: discovered peer ${peer.deviceId.slice(0, 12)}… via mDNS`);
+          void this.autoConnect.evaluateWithTrust(peer).then((decision) => {
+            if (decision.action === "connect") {
+              this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
+              this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
+            }
+          }).catch((err) => {
+            this.log.warn(`mesh: auto-connect evaluation failed for ${peer.deviceId.slice(0, 12)}…: ${String(err)}`);
+          });
+        });
+      } catch (err) {
+        this.log.warn(`mesh: mDNS discovery unavailable (${err}). Using static peers only.`);
+      }
     }
 
     for (const peer of this.staticPeers) {
@@ -516,6 +519,10 @@ export class MeshNodeRuntime {
         plannerRole: proposal.plannerRole,
         plannerOwner: formatProposalOwner(proposal),
       }));
+  }
+
+  isDiscoveryEnabled(): boolean {
+    return !this.opts.disableDiscovery;
   }
 
   getAdvertisedCapabilities(): string[] {

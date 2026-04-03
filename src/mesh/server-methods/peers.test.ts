@@ -43,6 +43,7 @@ describe("mesh.peers handler", () => {
         role: "planner",
         leader: { kind: "local", deviceId: "local-device", role: "planner" },
       }),
+      isDiscoveryEnabled: () => false,
       getPendingProposals: () => ([{
         taskId: "task-1234...",
         summary: "Irrigate zone-1",
@@ -64,6 +65,7 @@ describe("mesh.peers handler", () => {
       outbound: true,
       capabilities: ["channel:telegram"],
       role: "viewer",
+      transportLabel: "relay",
       connectedAtMs: 1000,
     });
 
@@ -76,6 +78,7 @@ describe("mesh.peers handler", () => {
         outbound: boolean;
         capabilities: string[];
         role?: string;
+        transportLabel?: string;
       }>;
     };
     expect(p.peers).toHaveLength(1);
@@ -84,6 +87,7 @@ describe("mesh.peers handler", () => {
     expect(p.peers[0].outbound).toBe(true);
     expect(p.peers[0].capabilities).toEqual(["channel:telegram"]);
     expect(p.peers[0].role).toBe("viewer");
+    expect(p.peers[0].transportLabel).toBe("relay");
   });
 
   it("mesh.status returns localDeviceId and peerCount", async () => {
@@ -103,6 +107,7 @@ describe("mesh.peers handler", () => {
       localDeviceId: string;
       connectedPeers: number;
       peers: unknown[];
+      discoveryEnabled?: boolean;
       plannerActivity?: { state: string; leader: { kind: string } };
       pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
@@ -110,6 +115,7 @@ describe("mesh.peers handler", () => {
     expect(s.connectedPeers).toBe(1);
     expect(s.peers).toHaveLength(1);
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
+    expect(s.discoveryEnabled).toBe(false);
     expect(s.plannerActivity?.state).toBe("active");
     expect(s.plannerActivity?.leader.kind).toBe("local");
     expect(s.pendingProposals?.[0].summary).toBe("Irrigate zone-1");

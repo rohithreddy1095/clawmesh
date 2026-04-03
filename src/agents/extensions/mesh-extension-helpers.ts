@@ -106,6 +106,22 @@ export function buildDuplicateProposalNotice(
   return `${base} Owned by planner ${ownerPlannerDeviceId.slice(0, 12)}….`;
 }
 
+export function formatDiscoveryModeStatus(enabled: boolean): string {
+  return enabled ? "enabled (mDNS)" : "disabled (static/WAN)";
+}
+
+export function formatOperatorPeerLine(peer: {
+  deviceId: string;
+  displayName?: string;
+  capabilities: string[];
+  transportLabel?: string;
+}): string {
+  const name = peer.displayName ?? peer.deviceId.slice(0, 12);
+  const capabilities = peer.capabilities.length > 0 ? peer.capabilities.join(", ") : "(none)";
+  const transport = peer.transportLabel ? ` via ${peer.transportLabel}` : "";
+  return `${name} — ${capabilities}${transport}`;
+}
+
 /**
  * Format uptime in a compact human-readable format.
  * Extracted from mesh-tui.ts for reuse and testability.

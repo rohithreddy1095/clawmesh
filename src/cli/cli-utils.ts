@@ -25,7 +25,7 @@ export function parsePeerSpec(spec: string): MeshStaticPeer {
   }
   const deviceIdRaw = trimmed.slice(0, sepIndex);
   const restRaw = trimmed.slice(sepIndex + 1);
-  const [urlRaw, tlsFingerprint] = restRaw.split("|");
+  const [urlRaw, tlsFingerprint, transportLabel] = restRaw.split("|");
   const deviceId = deviceIdRaw.trim();
   const url = urlRaw?.trim();
   if (!deviceId || !url) {
@@ -35,6 +35,7 @@ export function parsePeerSpec(spec: string): MeshStaticPeer {
     deviceId,
     url,
     tlsFingerprint: tlsFingerprint?.trim() || undefined,
+    transportLabel: transportLabel?.trim() || undefined,
   };
 }
 

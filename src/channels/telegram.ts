@@ -21,6 +21,7 @@ import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
 import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
+import { formatDiscoveryModeStatus, formatOperatorPeerLine } from "../agents/extensions/mesh-extension-helpers.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -219,7 +220,7 @@ export class TelegramChannel {
           };
 
       const peerLines = peers.length > 0
-        ? peers.map(p => `  • ${p.displayName ?? p.deviceId.slice(0, 12)} [${p.capabilities.join(", ")}]`).join("\n")
+        ? peers.map(p => `  • ${formatOperatorPeerLine(p)}`).join("\n")
         : "  (no peers connected)";
       const pendingLines = formatPendingProposalStatusLines(proposals, { leader });
       const pendingSection = pendingLines.length > 0
@@ -229,6 +230,7 @@ export class TelegramChannel {
       await ctx.reply(
         `📊 Mesh Status\n\n` +
         `Mode: ${mode}\n` +
+        `Discovery: ${formatDiscoveryModeStatus(this.runtime.isDiscoveryEnabled())}\n` +
         `Peers (${peers.length}):\n${peerLines}\n` +
         `Local capabilities: ${caps.join(", ")}\n` +
         `World model: ${frameCount} frames\n` +

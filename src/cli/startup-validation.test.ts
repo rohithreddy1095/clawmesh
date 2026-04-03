@@ -65,6 +65,16 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "NO_STATIC_PEERS")).toBe(true);
   });
 
+  it("warns when discovery is disabled and no static peers are configured", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [],
+      discoveryEnabled: false,
+    });
+    expect(diagnostics.some(d => d.code === "ISOLATED_NODE")).toBe(true);
+    expect(diagnostics.some(d => d.code === "NO_STATIC_PEERS")).toBe(false);
+  });
+
   it("info on no capabilities", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",

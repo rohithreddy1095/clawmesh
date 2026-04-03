@@ -16,6 +16,11 @@ describe("parsePeerSpec", () => {
     expect(result.tlsFingerprint).toBe("sha256:AABBCCDD");
   });
 
+  it("parses optional transport label after fingerprint", () => {
+    const result = parsePeerSpec("abc123=wss://jetson.local:18789|sha256:AABBCCDD|relay");
+    expect(result.transportLabel).toBe("relay");
+  });
+
   it("parses deviceId@ws://host:port format", () => {
     const result = parsePeerSpec("abc123@ws://10.0.0.5:18789");
     expect(result.deviceId).toBe("abc123");

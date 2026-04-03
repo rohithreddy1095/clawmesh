@@ -21,6 +21,7 @@ export interface StartupValidationInput {
   deviceId?: string;
   port?: number;
   staticPeers?: Array<{ deviceId: string; url: string }>;
+  discoveryEnabled?: boolean;
   capabilities?: string[];
   thresholds?: Array<{ ruleId?: string; metric?: string }>;
   enablePiSession?: boolean;
@@ -80,11 +81,17 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
       }
     }
     if (input.staticPeers.length === 0) {
-      diagnostics.push({
-        level: "info",
-        code: "NO_STATIC_PEERS",
-        message: "No static peers configured. Will rely on mDNS discovery.",
-      });
+      diagnostics.push(input.discoveryEnabled === false
+        ? {
+            level: "warn",
+            code: "ISOLATED_NODE",
+            message: "Discovery is disabled and no static peers are configured. Node will run isolated until peers are added manually.",
+          }
+        : {
+            level: "info",
+            code: "NO_STATIC_PEERS",
+            message: "No static peers configured. Will rely on mDNS discovery.",
+          });
     }
   }
 

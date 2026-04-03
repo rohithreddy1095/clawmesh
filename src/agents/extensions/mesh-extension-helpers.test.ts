@@ -7,6 +7,8 @@ import {
   countPending,
   fmtUptime,
   compactDataSummary,
+  formatDiscoveryModeStatus,
+  formatOperatorPeerLine,
 } from "./mesh-extension-helpers.js";
 import type { ContextFrame } from "../../mesh/context-types.js";
 import type { TaskProposal } from "../types.js";
@@ -269,6 +271,32 @@ describe("fmtUptime", () => {
 });
 
 // ─── compactDataSummary ─────────────────────────────────
+
+describe("operator-facing status formatting", () => {
+  it("formats discovery enabled state", () => {
+    expect(formatDiscoveryModeStatus(true)).toBe("enabled (mDNS)");
+  });
+
+  it("formats discovery disabled state", () => {
+    expect(formatDiscoveryModeStatus(false)).toBe("disabled (static/WAN)");
+  });
+
+  it("formats peer line with transport label", () => {
+    expect(formatOperatorPeerLine({
+      displayName: "Jetson",
+      deviceId: "abcdef1234567890",
+      capabilities: ["channel:clawmesh", "sensor:mock"],
+      transportLabel: "relay",
+    })).toBe("Jetson — channel:clawmesh, sensor:mock via relay");
+  });
+
+  it("formats peer line without transport label", () => {
+    expect(formatOperatorPeerLine({
+      deviceId: "abcdef1234567890",
+      capabilities: [],
+    })).toBe("abcdef123456 — (none)");
+  });
+});
 
 describe("compactDataSummary", () => {
   it("formats zone+metric+value", () => {

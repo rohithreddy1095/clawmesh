@@ -75,6 +75,7 @@ export class PeerConnectionManager {
       identity: this.deps.identity,
       peerRegistry: this.deps.peerRegistry,
       tlsFingerprint: peer.tlsFingerprint,
+      transportLabel: peer.transportLabel,
       displayName: this.deps.displayName,
       capabilities: this.deps.capabilities,
       meshId: this.deps.meshId,

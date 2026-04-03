@@ -17,7 +17,7 @@ import { MeshTUI } from "../tui/mesh-tui.js";
 import { CredentialStore } from "../infra/credential-store.js";
 import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
 import { createGracefulShutdown } from "./graceful-shutdown.js";
-import { resolveRuntimeRole, normalizeMeshName } from "./cli-config.js";
+import { resolveRuntimeRole, normalizeMeshName, formatDiscoveryMode, formatStaticPeerSummary } from "./cli-config.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -58,7 +58,7 @@ function parsePeerSpec(spec: string): MeshStaticPeer {
   }
   const deviceIdRaw = trimmed.slice(0, sepIndex);
   const restRaw = trimmed.slice(sepIndex + 1);
-  const [urlRaw, tlsFingerprint] = restRaw.split("|");
+  const [urlRaw, tlsFingerprint, transportLabel] = restRaw.split("|");
   const deviceId = deviceIdRaw.trim();
   const url = urlRaw?.trim();
   if (!deviceId || !url) {
@@ -68,6 +68,7 @@ function parsePeerSpec(spec: string): MeshStaticPeer {
     deviceId,
     url,
     tlsFingerprint: tlsFingerprint?.trim() || undefined,
+    transportLabel: transportLabel?.trim() || undefined,
   };
 }
 
@@ -99,6 +100,7 @@ export function createClawMeshCli(): Command {
     .option("--name <name>", "Display name for this node")
     .option("--role <role>", "Runtime node role (node|planner|field|sensor|actuator|viewer|standby-planner)", "node")
     .option("--mesh-name <name>", "Stable named mesh identity")
+    .option("--no-discovery", "Disable mDNS discovery and use static peers only")
     .option(
       "--capability <capability>",
       "Capability to advertise (repeatable)",
@@ -133,6 +135,7 @@ export function createClawMeshCli(): Command {
         name?: string;
         role: string;
         meshName?: string;
+        noDiscovery?: boolean;
         capability: string[];
         peer: string[];
         mockActuator?: boolean;
@@ -217,6 +220,7 @@ export function createClawMeshCli(): Command {
           deviceId: identity.deviceId,
           port: opts.port,
           staticPeers,
+          discoveryEnabled: !opts.noDiscovery,
           capabilities: opts.capability,
           thresholds: opts.piPlanner ? defaultThresholds : undefined,
           enablePiSession: !!opts.piPlanner,
@@ -243,6 +247,7 @@ export function createClawMeshCli(): Command {
           displayName: opts.name,
           role: resolveRuntimeRole(opts.role),
           meshName: normalizeMeshName(opts.meshName),
+          disableDiscovery: !!opts.noDiscovery,
           capabilities: opts.capability,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,
@@ -317,8 +322,12 @@ export function createClawMeshCli(): Command {
           console.log(`Telegram: enabled (${allowedChatIds.length > 0 ? `${allowedChatIds.length} allowed chats` : "all chats"})`);
         }
 
+        console.log(`Discovery:   ${formatDiscoveryMode(!opts.noDiscovery)}`);
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);
+          for (const peer of staticPeers) {
+            console.log(`  - ${formatStaticPeerSummary(peer)}`);
+          }
         }
         console.log("Press Ctrl+C to stop.");
 
