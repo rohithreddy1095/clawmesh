@@ -101,6 +101,13 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
         message: `Static peer transport labels configured: ${transportLabels.join(", ")}`,
       });
     }
+    if (input.discoveryEnabled === false && input.staticPeers.some((peer) => !peer.transportLabel)) {
+      diagnostics.push({
+        level: "warn",
+        code: "UNLABELED_STATIC_PEER_TRANSPORT",
+        message: "Discovery is disabled but one or more static peers have no transport label. Add labels like relay, vpn, or lan for clearer WAN debugging.",
+      });
+    }
   }
 
   // Capabilities
