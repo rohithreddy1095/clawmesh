@@ -245,18 +245,22 @@ Example:
   - message: `feat(mesh): enforce vpn transport safety like relay`
 
 - ✅ Generic WAN-labeled transport enforcement
-  - commit: pending
+  - commit: `b516975`
   - message: `feat(mesh): treat unknown transport labels as wan`
+
+- ✅ Explicit local transport alias support
+  - commit: pending
+  - message: `feat(mesh): treat local transport label as local`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Explicit local transport alias support**
+**Local transport alias review**
 
 Desired behavior:
-- keep explicit local labels like `lan`, `mdns`, and `local` permissive
-- avoid surprising enforcement when operators use `local` for nearby/static peers
-- continue WAN safety without overreaching into clearly local transport labels
+- decide whether any additional local aliases beyond `lan`, `mdns`, and `local` are worth supporting
+- keep WAN enforcement strict for everything else
+- continue policy refinement without weakening the new safety defaults
 
 This is the next practical WAN milestone slice.
 

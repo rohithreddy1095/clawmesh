@@ -1,6 +1,6 @@
 import type { MeshStaticPeer, MeshStaticPeerSecurityPosture } from "./types.mesh.js";
 
-const LOCAL_TRANSPORT_LABELS = new Set(["lan", "mdns"]);
+const LOCAL_TRANSPORT_LABELS = new Set(["lan", "local", "mdns"]);
 
 export function normalizeMeshPeerUrl(url: string): string {
   if (url.startsWith("https://")) {

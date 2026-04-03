@@ -266,6 +266,18 @@ describe("PeerConnectionManager", () => {
     );
   });
 
+  it("allows ws connections for local-labeled peers", () => {
+    manager.connectToPeer({
+      deviceId: "local-peer",
+      url: "ws://10.0.0.5:18789",
+      transportLabel: "local",
+    });
+
+    expect(manager.has("local-peer")).toBe(true);
+    expect(peerClientInstances).toHaveLength(1);
+    manager.stopAll();
+  });
+
   it("normalizes https relay URLs before creating the client", () => {
     manager.connectToPeer({
       deviceId: "secure-peer",

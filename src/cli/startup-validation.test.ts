@@ -226,6 +226,21 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(false);
   });
 
+  it("does not warn about insecure transport for local-labeled ws peers", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://10.0.0.5:18789",
+          transportLabel: "local",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(false);
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(false);
+  });
+
   it("info on no capabilities", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",
