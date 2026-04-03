@@ -101,20 +101,24 @@ Example:
   - message: `feat(mesh): add deterministic planner election primitive`
 
 - ✅ Expose peer roles in operational RPC/status surfaces
-  - commit: pending
+  - commit: `30afe1f`
   - message: `feat(mesh): expose peer roles in mesh status RPCs`
+
+- ✅ Planner leadership observable in health/runtime surfaces
+  - commit: pending
+  - message: `feat(mesh): surface planner leadership in health status`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner standby promotion wiring**
+**CLI support for mesh role / mesh name**
 
 Desired behavior:
-- use planner-election results to identify whether local node should be active or standby
-- lay foundation for preventing duplicate planner work
-- keep the change observational/minimal before changing proposal flow
+- `clawmesh start` can set `--role` and `--mesh-name`
+- the new runtime features become usable outside tests
+- operational deployment can opt into the new mesh identity / role model
 
-This is the next Milestone 5 bridge slice.
+This is the next practical enablement slice.
 
 ## Milestone Plan
 

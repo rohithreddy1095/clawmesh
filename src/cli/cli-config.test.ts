@@ -7,6 +7,8 @@ import {
   resolveDisplayName,
   formatDeviceId,
   buildDefaultCapabilities,
+  resolveRuntimeRole,
+  normalizeMeshName,
 } from "./cli-config.js";
 
 // ─── expandShorthandFlags ───────────────────────────
@@ -225,5 +227,32 @@ describe("buildDefaultCapabilities", () => {
     expect(caps).toContain("channel:clawmesh");
     expect(caps).toContain("actuator:mock");
     expect(caps).toContain("sensor:mock");
+  });
+});
+
+// ─── resolveRuntimeRole / normalizeMeshName ───────────────
+
+describe("resolveRuntimeRole", () => {
+  it("keeps valid roles", () => {
+    expect(resolveRuntimeRole("planner")).toBe("planner");
+    expect(resolveRuntimeRole("viewer")).toBe("viewer");
+  });
+
+  it("defaults invalid roles to node", () => {
+    expect(resolveRuntimeRole("admin")).toBe("node");
+  });
+
+  it("defaults undefined role to node", () => {
+    expect(resolveRuntimeRole(undefined)).toBe("node");
+  });
+});
+
+describe("normalizeMeshName", () => {
+  it("trims valid names", () => {
+    expect(normalizeMeshName("  bhoomi-main  ")).toBe("bhoomi-main");
+  });
+
+  it("returns undefined for blank names", () => {
+    expect(normalizeMeshName("   ")).toBeUndefined();
   });
 });

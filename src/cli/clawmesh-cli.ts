@@ -17,6 +17,7 @@ import { MeshTUI } from "../tui/mesh-tui.js";
 import { CredentialStore } from "../infra/credential-store.js";
 import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
 import { createGracefulShutdown } from "./graceful-shutdown.js";
+import { resolveRuntimeRole, normalizeMeshName } from "./cli-config.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -96,6 +97,8 @@ export function createClawMeshCli(): Command {
     .option("--host <host>", "Host interface to bind", "0.0.0.0")
     .option("--port <port>", "Port to listen on", (v) => Number(v), 18789)
     .option("--name <name>", "Display name for this node")
+    .option("--role <role>", "Runtime node role (node|planner|field|sensor|actuator|viewer|standby-planner)", "node")
+    .option("--mesh-name <name>", "Stable named mesh identity")
     .option(
       "--capability <capability>",
       "Capability to advertise (repeatable)",
@@ -128,6 +131,8 @@ export function createClawMeshCli(): Command {
         host: string;
         port: number;
         name?: string;
+        role: string;
+        meshName?: string;
         capability: string[];
         peer: string[];
         mockActuator?: boolean;
@@ -236,6 +241,8 @@ export function createClawMeshCli(): Command {
           host: opts.host,
           port: opts.port,
           displayName: opts.name,
+          role: resolveRuntimeRole(opts.role),
+          meshName: normalizeMeshName(opts.meshName),
           capabilities: opts.capability,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,
