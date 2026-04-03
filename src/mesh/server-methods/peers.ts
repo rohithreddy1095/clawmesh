@@ -12,6 +12,15 @@ export function createMeshPeersHandlers(deps: {
   capabilityRegistry: MeshCapabilityRegistry;
   localDeviceId: string;
   getPlannerActivity?: () => PlannerActivity;
+  getPendingProposals?: () => Array<{
+    taskId: string;
+    summary: string;
+    approvalLevel: string;
+    status: string;
+    plannerDeviceId?: string;
+    plannerRole?: string;
+    plannerOwner?: string;
+  }>;
 }): GatewayRequestHandlers {
   return {
     "mesh.peers": async ({ respond }) => {
@@ -39,6 +48,7 @@ export function createMeshPeersHandlers(deps: {
           connectedAtMs: p.connectedAtMs,
         })),
         plannerActivity: deps.getPlannerActivity?.(),
+        pendingProposals: deps.getPendingProposals?.(),
       });
     },
   };

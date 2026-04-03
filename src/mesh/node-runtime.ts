@@ -43,6 +43,7 @@ import type {
 import { PiSession } from "../agents/pi-session.js";
 import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
+import { formatProposalOwner } from "../agents/proposal-formatting.js";
 import { MeshDiscovery } from "./discovery.js";
 import { loadOrCreateMeshId } from "./mesh-identity.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
@@ -223,6 +224,7 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       localDeviceId: this.identity.deviceId,
       getPlannerActivity: () => this.getPlannerActivity(),
+      getPendingProposals: () => this.getPendingProposalSummaries(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
       identity: this.identity,
@@ -500,6 +502,20 @@ export class MeshNodeRuntime {
 
   shouldHandleAutonomousPlanner(): boolean {
     return this.getPlannerActivity().shouldHandleAutonomous;
+  }
+
+  getPendingProposalSummaries() {
+    return (this.piSession?.getProposals() ?? [])
+      .filter((proposal) => proposal.status === "proposed" || proposal.status === "awaiting_approval")
+      .map((proposal) => ({
+        taskId: `${proposal.taskId.slice(0, 8)}...`,
+        summary: proposal.summary,
+        approvalLevel: proposal.approvalLevel,
+        status: proposal.status,
+        plannerDeviceId: proposal.plannerDeviceId,
+        plannerRole: proposal.plannerRole,
+        plannerOwner: formatProposalOwner(proposal),
+      }));
   }
 
   getAdvertisedCapabilities(): string[] {

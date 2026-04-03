@@ -43,6 +43,15 @@ describe("mesh.peers handler", () => {
         role: "planner",
         leader: { kind: "local", deviceId: "local-device", role: "planner" },
       }),
+      getPendingProposals: () => ([{
+        taskId: "task-1234...",
+        summary: "Irrigate zone-1",
+        approvalLevel: "L2",
+        status: "awaiting_approval",
+        plannerDeviceId: "planner-abcdef1234567890",
+        plannerRole: "planner",
+        plannerOwner: "planner:planner-abcd…",
+      }]),
     });
   });
 
@@ -95,6 +104,7 @@ describe("mesh.peers handler", () => {
       connectedPeers: number;
       peers: unknown[];
       plannerActivity?: { state: string; leader: { kind: string } };
+      pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
     expect(s.localDeviceId).toBe("local-device");
     expect(s.connectedPeers).toBe(1);
@@ -102,6 +112,8 @@ describe("mesh.peers handler", () => {
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
     expect(s.plannerActivity?.state).toBe("active");
     expect(s.plannerActivity?.leader.kind).toBe("local");
+    expect(s.pendingProposals?.[0].summary).toBe("Irrigate zone-1");
+    expect(s.pendingProposals?.[0].plannerOwner).toBe("planner:planner-abcd…");
   });
 
   it("no peers returns empty list", async () => {

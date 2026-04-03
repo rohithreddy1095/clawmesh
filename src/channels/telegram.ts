@@ -20,6 +20,7 @@ import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
+import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -207,10 +208,23 @@ export class TelegramChannel {
       const frameCount = this.runtime.worldModel.getRecentFrames(100).length;
       const proposals = pi ? pi.getProposals() : [];
       const pending = proposals.filter(p => p.status === "awaiting_approval").length;
+      const plannerLeader = this.runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
 
       const peerLines = peers.length > 0
         ? peers.map(p => `  • ${p.displayName ?? p.deviceId.slice(0, 12)} [${p.capabilities.join(", ")}]`).join("\n")
         : "  (no peers connected)";
+      const pendingLines = formatPendingProposalStatusLines(proposals, { leader });
+      const pendingSection = pendingLines.length > 0
+        ? `\nTop pending:\n${pendingLines.join("\n")}`
+        : "";
 
       await ctx.reply(
         `📊 Mesh Status\n\n` +
@@ -218,7 +232,7 @@ export class TelegramChannel {
         `Peers (${peers.length}):\n${peerLines}\n` +
         `Local capabilities: ${caps.join(", ")}\n` +
         `World model: ${frameCount} frames\n` +
-        `Proposals: ${proposals.length} total, ${pending} awaiting approval`,
+        `Proposals: ${proposals.length} total, ${pending} awaiting approval${pendingSection}`,
       );
     });
 
@@ -261,13 +275,22 @@ export class TelegramChannel {
         return;
       }
 
+      const plannerLeader = this.runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
       const lines = proposals.slice(-10).map(p => {
         const icon = p.status === "awaiting_approval" ? "⚠️"
           : p.status === "approved" || p.status === "completed" ? "✅"
           : p.status === "rejected" ? "❌"
           : p.status === "executing" ? "⏳"
           : "·";
-        return `${icon} [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.status}\n   ${p.summary}`;
+        return `${icon} ${formatProposalSummaryLine(p, { leader })}`;
       });
 
       await ctx.reply(`📋 Proposals (${proposals.length})\n\n${lines.join("\n\n")}`);
@@ -290,7 +313,7 @@ export class TelegramChannel {
 
       const result = await pi.approveProposal(match.taskId, `telegram:${ctx.from?.id ?? "unknown"}`);
       if (result) {
-        await ctx.reply(`✅ Approved: ${match.summary}\nTask: ${match.taskId.slice(0, 8)}`);
+        await ctx.reply(`✅ ${buildProposalDecisionNotice("Approved", match)}\nTask: ${match.taskId.slice(0, 8)}`);
         this.updateProposalNotification(match.taskId, "approved");
       } else {
         await ctx.reply("Approval failed.");
@@ -314,7 +337,7 @@ export class TelegramChannel {
 
       const result = pi.rejectProposal(match.taskId, `telegram:${ctx.from?.id ?? "unknown"}`);
       if (result) {
-        await ctx.reply(`❌ Rejected: ${match.summary}\nTask: ${match.taskId.slice(0, 8)}`);
+        await ctx.reply(`❌ ${buildProposalDecisionNotice("Rejected", match)}\nTask: ${match.taskId.slice(0, 8)}`);
         this.updateProposalNotification(match.taskId, "rejected");
       } else {
         await ctx.reply("Rejection failed.");

@@ -33,6 +33,7 @@ import {
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
+import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../proposal-formatting.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -358,12 +359,23 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         const frameCount = runtime.worldModel.getRecentFrames(100).length;
         const pending = countPending(state.proposals);
 
+        const plannerLeader = runtime.getPlannerLeader();
+        const leader = plannerLeader.kind === "none"
+          ? undefined
+          : {
+              deviceId: plannerLeader.deviceId,
+              role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+                ? plannerLeader.role
+                : undefined,
+            };
+        const pendingLines = formatPendingProposalStatusLines([...state.proposals.values()], { leader });
         const lines = [
           `Mesh Status:`,
           `  Connected peers: ${peers.length}`,
           ...peers.map((p) => `    ${p.displayName ?? p.deviceId.slice(0, 12)} — ${p.capabilities.join(", ")}`),
           `  World model frames: ${frameCount}`,
           `  Pending proposals: ${pending}`,
+          ...pendingLines,
         ];
         ctx.ui.notify(lines.join("\n"), "info");
       },
@@ -377,9 +389,16 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           ctx.ui.notify("No proposals.", "info");
           return;
         }
-        const lines = proposals.map((p) =>
-          `[${p.taskId.slice(0, 8)}] ${p.status.toUpperCase()} ${p.approvalLevel} — ${p.summary}`,
-        );
+        const plannerLeader = runtime.getPlannerLeader();
+        const leader = plannerLeader.kind === "none"
+          ? undefined
+          : {
+              deviceId: plannerLeader.deviceId,
+              role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+                ? plannerLeader.role
+                : undefined,
+            };
+        const lines = proposals.map((p) => formatProposalSummaryLine(p, { leader }));
         ctx.ui.notify(lines.join("\n"), "info");
       },
     });
@@ -404,7 +423,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         proposal.status = "approved";
         proposal.resolvedBy = "operator";
         await executeProposal(proposal);
-        ctx.ui.notify(`Approved and executing: ${proposal.summary}`, "info");
+        ctx.ui.notify(buildProposalDecisionNotice("Approved and executing", proposal), "info");
       },
     });
 
@@ -429,7 +448,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         proposal.resolvedAt = Date.now();
         proposal.resolvedBy = "operator";
         state.onProposalResolved?.(proposal);
-        ctx.ui.notify(`Rejected: ${proposal.summary}`, "info");
+        ctx.ui.notify(buildProposalDecisionNotice("Rejected", proposal), "info");
       },
     });
 
@@ -465,6 +484,16 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         ? `\nDATA FRESHNESS WARNINGS:\n${freshnessWarnings.join("\n")}`
         : "";
 
+      const plannerLeader = runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
+
       const snapshot = [
         `\n\n# Live Mesh Snapshot (${new Date().toISOString()})`,
         `Connected peers: ${peers.length}`,
@@ -473,7 +502,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         relevantSection,
         freshnessSection,
         pending.length > 0
-          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.summary}`).join("\n")}`
+          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  ${formatProposalSummaryLine(p, { includeStatus: false, leader })}`).join("\n")}`
           : "Pending proposals: 0",
       ].filter(Boolean).join("\n");
 
