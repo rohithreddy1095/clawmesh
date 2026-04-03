@@ -125,8 +125,6 @@ export class PiSession {
     this.model = this.resolveModel(opts.modelSpec ?? "anthropic/claude-sonnet-4-5-20250929");
     this.patternMemory = new PatternMemory({ log: this.log });
     this.plannerActivity = this.runtime.getPlannerActivity();
-
-    // Mode controller — manages active/observing/suspended transitions
     this.modeCtrl = new ModeController({
       errorThreshold: opts.errorThreshold,
       observingCooldownMs: opts.observingCooldownMs,
@@ -137,8 +135,6 @@ export class PiSession {
       },
       log: this.log,
     });
-
-    // Proposal manager — handles approve/reject lifecycle + pattern recording
     this.proposalManager = new ProposalManager({
       onDecision: (record) => {
         this.patternMemory.recordDecision(record);
@@ -149,8 +145,6 @@ export class PiSession {
         opts.onProposalResolved?.(proposal);
       },
     });
-
-    // Shared state between extension and this session controller
     this.extensionState = {
       proposals: this.proposalManager.getMap(),
       thresholds: opts.thresholds ?? [],
@@ -168,16 +162,11 @@ export class PiSession {
     };
   }
 
-  // ─── Mode management (delegated to ModeController) ─────
-
   /** Current operational mode. */
   get mode(): SessionMode {
     return this.modeCtrl.mode;
   }
 
-  /**
-   * Schedule a single probe call after the observing cooldown.
-   */
   private scheduleProbe(): void {
     this.clearProbeTimer();
     this.probeTimer = setTimeout(() => {
@@ -194,9 +183,6 @@ export class PiSession {
     }
   }
 
-  /**
-   * A lightweight probe — sends a minimal prompt to see if the provider responds.
-   */
   private async runProbe(): Promise<void> {
     if (this.running || !this.initialized) {
       this.scheduleProbe();
@@ -224,9 +210,6 @@ export class PiSession {
     }
   }
 
-  /**
-   * Manually resume from suspended or observing mode.
-   */
   resume(reason = "manual resume"): void {
     this.clearProbeTimer();
     this.modeCtrl.resume(reason);
@@ -234,8 +217,6 @@ export class PiSession {
       setTimeout(() => void this.runCycle(), 1000);
     }
   }
-
-  // ─── Lifecycle ──────────────────────────────────────────
 
   async start(): Promise<void> {
     this.stopped = false;
@@ -343,8 +324,6 @@ export class PiSession {
     this.log.info("pi-session: stopped");
   }
 
-  // ─── External triggers ─────────────────────────────────
-
   handleOperatorIntent(text: string, opts?: { conversationId?: string; requestId?: string }): void {
     const conversationId = opts?.conversationId;
     const requestId = opts?.requestId;
@@ -369,9 +348,6 @@ export class PiSession {
     void this.runCycle();
   }
 
-  /**
-   * Broadcast an agent response frame to UI subscribers and mesh peers.
-   */
   private broadcastAgentResponse(data: AgentResponseData): void {
     const frame = buildAgentResponseFrame(
       data,
@@ -479,8 +455,6 @@ export class PiSession {
     this.triggerQueue.enqueueProactiveCheck(recentFrames);
     void this.runCycle();
   }
-
-  // ─── Planner cycle ─────────────────────────────────────
 
   private async runCycle(): Promise<void> {
     if (this.running || this.stopped || !this.initialized) return;
@@ -613,8 +587,6 @@ export class PiSession {
       }
     }
   }
-
-  // ─── Session event handler (delegates to SessionEventClassifier) ──
 
   private handleSessionEvent(event: any): void {
     const classified = classifyEvent(event);

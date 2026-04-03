@@ -101,7 +101,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 export class MeshNodeRuntime {
   readonly identity: DeviceIdentity;
   readonly peerRegistry = new PeerRegistry();
@@ -124,7 +123,6 @@ export class MeshNodeRuntime {
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
   readonly rpcDispatcher: RpcDispatcher;
-
   readonly peerConnections: PeerConnectionManager;
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   /** Rate limiter for inbound RPC requests (100 req/min per connection). */
@@ -165,11 +163,8 @@ export class MeshNodeRuntime {
     }
 
     this.eventBus = new MeshEventBus();
-
-    // Wire event bus → system event log + correlation tracker
     wireEventLog(this.eventBus, this.eventLog);
     wireCorrelationTracker(this.eventBus, this.correlationTracker);
-
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
@@ -181,14 +176,10 @@ export class MeshNodeRuntime {
       maxHistory: 1000,
       log: this.log,
     });
-
-    // Wire locally-originated frames into the world model + event bus
     this.contextPropagator.onLocalBroadcast = (frame) => {
       this.worldModel.ingest(frame);
       this.eventBus.emit("context.frame.broadcast", { frame });
     };
-
-    // ─── Peer Connection Manager ───
     this.peerConnections = new PeerConnectionManager({
       identity: this.identity,
       displayName: this.displayName,
@@ -212,10 +203,7 @@ export class MeshNodeRuntime {
       },
       log: this.log,
     });
-
-    // ─── RPC Handler Registration (via extracted RpcDispatcher) ───
     this.rpcDispatcher = new RpcDispatcher();
-
     this.rpcDispatcher.registerAll(createMeshServerHandlers({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
@@ -266,15 +254,11 @@ export class MeshNodeRuntime {
       getPlannerActivity: () => this.getPlannerActivity(),
       getMetrics: () => this.metrics.snapshot(),
     }));
-
-    // ─── Chat & UI subscriber handlers (extracted) ────────
     this.rpcDispatcher.registerAll(createChatHandlers({
       uiBroadcaster: this.uiBroadcaster,
       getPiSession: () => this.piSession,
       log: this.log,
     }));
-
-    // ─── Events + Trace RPC handlers ─────────────────────
     this.rpcDispatcher.registerAll(createEventsHandlers({
       eventLog: this.eventLog,
     }));
