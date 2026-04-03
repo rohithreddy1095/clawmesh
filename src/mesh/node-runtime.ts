@@ -521,6 +521,10 @@ export class MeshNodeRuntime {
       }));
   }
 
+  isDiscoveryEnabled(): boolean {
+    return !this.opts.disableDiscovery;
+  }
+
   getAdvertisedCapabilities(): string[] {
     return [...this.capabilities];
   }
