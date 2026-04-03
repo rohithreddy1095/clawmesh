@@ -18,6 +18,7 @@ export function createMeshPeersHandlers(deps: {
         displayName: p.displayName,
         outbound: p.outbound,
         capabilities: p.capabilities,
+        role: p.role,
         connectedAtMs: p.connectedAtMs,
       }));
       respond(true, { peers });
@@ -32,6 +33,7 @@ export function createMeshPeersHandlers(deps: {
           deviceId: p.deviceId,
           displayName: p.displayName,
           outbound: p.outbound,
+          role: p.role,
           connectedAtMs: p.connectedAtMs,
         })),
       });

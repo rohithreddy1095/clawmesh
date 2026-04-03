@@ -48,6 +48,7 @@ describe("mesh.peers handler", () => {
       socket: createMockSocket(),
       outbound: true,
       capabilities: ["channel:telegram"],
+      role: "viewer",
       connectedAtMs: 1000,
     });
 
@@ -59,6 +60,7 @@ describe("mesh.peers handler", () => {
         displayName: string;
         outbound: boolean;
         capabilities: string[];
+        role?: string;
       }>;
     };
     expect(p.peers).toHaveLength(1);
@@ -66,6 +68,7 @@ describe("mesh.peers handler", () => {
     expect(p.peers[0].displayName).toBe("Mac");
     expect(p.peers[0].outbound).toBe(true);
     expect(p.peers[0].capabilities).toEqual(["channel:telegram"]);
+    expect(p.peers[0].role).toBe("viewer");
   });
 
   it("mesh.status returns localDeviceId and peerCount", async () => {
@@ -74,6 +77,7 @@ describe("mesh.peers handler", () => {
       connId: "c1",
       socket: createMockSocket(),
       outbound: false,
+      role: "planner",
       capabilities: [],
       connectedAtMs: 1000,
     });
@@ -84,6 +88,7 @@ describe("mesh.peers handler", () => {
     expect(s.localDeviceId).toBe("local-device");
     expect(s.connectedPeers).toBe(1);
     expect(s.peers).toHaveLength(1);
+    expect((s.peers[0] as { role?: string }).role).toBe("planner");
   });
 
   it("no peers returns empty list", async () => {
