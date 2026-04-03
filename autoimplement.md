@@ -165,17 +165,21 @@ Example:
   - message: `feat(mesh): add operator-visible peer transport labels`
 
 - ✅ WAN peer labeling in health surfaces
-  - commit: pending
+  - commit: `99fd264`
   - message: `feat(mesh): expose peer transport labels in health`
+
+- ✅ WAN peer labeling in runtime status commands
+  - commit: pending
+  - message: `feat(mesh): show discovery mode in operator status views`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**WAN peer labeling in runtime status commands**
+**CLI startup WAN visibility**
 
 Desired behavior:
-- operator-facing status views should show discovery mode plus transport labels together
-- make relay/static/LAN topology obvious at a glance
+- `clawmesh start` output should make discovery/static mode obvious
+- static peer transport labels should be visible at startup for relay/WAN debugging
 - keep behavior observational only
 
 This is the next practical WAN bridge slice.

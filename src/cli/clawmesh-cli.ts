@@ -17,7 +17,7 @@ import { MeshTUI } from "../tui/mesh-tui.js";
 import { CredentialStore } from "../infra/credential-store.js";
 import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
 import { createGracefulShutdown } from "./graceful-shutdown.js";
-import { resolveRuntimeRole, normalizeMeshName } from "./cli-config.js";
+import { resolveRuntimeRole, normalizeMeshName, formatDiscoveryMode, formatStaticPeerSummary } from "./cli-config.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -322,8 +322,12 @@ export function createClawMeshCli(): Command {
           console.log(`Telegram: enabled (${allowedChatIds.length > 0 ? `${allowedChatIds.length} allowed chats` : "all chats"})`);
         }
 
+        console.log(`Discovery:   ${formatDiscoveryMode(!opts.noDiscovery)}`);
         if (staticPeers.length > 0) {
           console.log(`Static peers: ${staticPeers.length}`);
+          for (const peer of staticPeers) {
+            console.log(`  - ${formatStaticPeerSummary(peer)}`);
+          }
         }
         console.log("Press Ctrl+C to stop.");
 

@@ -9,6 +9,7 @@
 
 import type { ThresholdRule } from "../agents/types.js";
 import type { MeshNodeRole } from "../mesh/types.js";
+import type { MeshStaticPeer } from "../mesh/types.mesh.js";
 
 export interface CLIShorthandOpts {
   fieldNode?: boolean;
@@ -146,4 +147,12 @@ export function resolveRuntimeRole(role: string | undefined): MeshNodeRole {
 export function normalizeMeshName(name: string | undefined): string | undefined {
   const trimmed = name?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+export function formatDiscoveryMode(enabled: boolean): string {
+  return enabled ? "enabled (mDNS)" : "disabled (static/WAN)";
+}
+
+export function formatStaticPeerSummary(peer: Pick<MeshStaticPeer, "deviceId" | "url" | "transportLabel">): string {
+  return `${formatDeviceId(peer.deviceId)}  ${peer.url}${peer.transportLabel ? `  via ${peer.transportLabel}` : ""}`;
 }

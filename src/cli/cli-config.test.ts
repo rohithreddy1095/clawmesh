@@ -9,6 +9,8 @@ import {
   buildDefaultCapabilities,
   resolveRuntimeRole,
   normalizeMeshName,
+  formatDiscoveryMode,
+  formatStaticPeerSummary,
 } from "./cli-config.js";
 
 // ─── expandShorthandFlags ───────────────────────────
@@ -254,5 +256,32 @@ describe("normalizeMeshName", () => {
 
   it("returns undefined for blank names", () => {
     expect(normalizeMeshName("   ")).toBeUndefined();
+  });
+});
+
+describe("formatDiscoveryMode", () => {
+  it("formats enabled discovery", () => {
+    expect(formatDiscoveryMode(true)).toBe("enabled (mDNS)");
+  });
+
+  it("formats disabled discovery", () => {
+    expect(formatDiscoveryMode(false)).toBe("disabled (static/WAN)");
+  });
+});
+
+describe("formatStaticPeerSummary", () => {
+  it("includes transport label when present", () => {
+    expect(formatStaticPeerSummary({
+      deviceId: "abcdef1234567890",
+      url: "wss://relay.example.com/mesh",
+      transportLabel: "relay",
+    })).toBe("abcdef123456…  wss://relay.example.com/mesh  via relay");
+  });
+
+  it("omits transport label when absent", () => {
+    expect(formatStaticPeerSummary({
+      deviceId: "abcdef1234567890",
+      url: "ws://10.0.0.5:18789",
+    })).toBe("abcdef123456…  ws://10.0.0.5:18789");
   });
 });
