@@ -99,6 +99,7 @@ export function createClawMeshCli(): Command {
     .option("--name <name>", "Display name for this node")
     .option("--role <role>", "Runtime node role (node|planner|field|sensor|actuator|viewer|standby-planner)", "node")
     .option("--mesh-name <name>", "Stable named mesh identity")
+    .option("--no-discovery", "Disable mDNS discovery and use static peers only")
     .option(
       "--capability <capability>",
       "Capability to advertise (repeatable)",
@@ -133,6 +134,7 @@ export function createClawMeshCli(): Command {
         name?: string;
         role: string;
         meshName?: string;
+        noDiscovery?: boolean;
         capability: string[];
         peer: string[];
         mockActuator?: boolean;
@@ -217,6 +219,7 @@ export function createClawMeshCli(): Command {
           deviceId: identity.deviceId,
           port: opts.port,
           staticPeers,
+          discoveryEnabled: !opts.noDiscovery,
           capabilities: opts.capability,
           thresholds: opts.piPlanner ? defaultThresholds : undefined,
           enablePiSession: !!opts.piPlanner,
@@ -243,6 +246,7 @@ export function createClawMeshCli(): Command {
           displayName: opts.name,
           role: resolveRuntimeRole(opts.role),
           meshName: normalizeMeshName(opts.meshName),
+          disableDiscovery: !!opts.noDiscovery,
           capabilities: opts.capability,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,

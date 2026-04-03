@@ -311,4 +311,16 @@ describe("MeshNodeRuntime", () => {
       leader: { kind: "local", deviceId: leader.identity.deviceId, role: "planner" },
     });
   });
+
+  it("can start with discovery disabled for static or relay-only deployments", async () => {
+    const node = await harness.startNode({
+      name: "static-only-node",
+      disableDiscovery: true,
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!node) return;
+
+    expect(node.runtime.discovery).toBeUndefined();
+  });
 });
