@@ -97,20 +97,24 @@ Example:
   - message: `feat(mesh): exclude viewer peers from capability routing`
 
 - ✅ Planner election primitive
-  - commit: pending
+  - commit: `741e62b`
   - message: `feat(mesh): add deterministic planner election primitive`
+
+- ✅ Expose peer roles in operational RPC/status surfaces
+  - commit: pending
+  - message: `feat(mesh): expose peer roles in mesh status RPCs`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Expose peer roles in operational RPC/status surfaces**
+**Planner standby promotion wiring**
 
 Desired behavior:
-- `mesh.peers` and `mesh.status` include peer role
-- operators and future planner orchestration can inspect role information remotely
-- role model becomes observable, not just internal
+- use planner-election results to identify whether local node should be active or standby
+- lay foundation for preventing duplicate planner work
+- keep the change observational/minimal before changing proposal flow
 
-This is a small operational follow-up slice.
+This is the next Milestone 5 bridge slice.
 
 ## Milestone Plan
 

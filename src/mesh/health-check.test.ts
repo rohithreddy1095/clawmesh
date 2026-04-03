@@ -54,6 +54,7 @@ describe("computeHealthCheck", () => {
       socket: null as any,
       outbound: true,
       capabilities: ["channel:telegram"],
+      role: "viewer",
       connectedAtMs: Date.now() - 30_000,
     });
 
@@ -61,6 +62,7 @@ describe("computeHealthCheck", () => {
     expect(result.peers.connected).toBe(1);
     expect(result.peers.details).toHaveLength(1);
     expect(result.peers.details[0].outbound).toBe(true);
+    expect(result.peers.details[0].role).toBe("viewer");
     expect(result.peers.details[0].connectedMs).toBeGreaterThan(20_000);
   });
 
@@ -132,6 +134,14 @@ describe("computeHealthCheck", () => {
     const result = computeHealthCheck(deps);
     expect(result.status).toBe("healthy");
     expect(result.plannerMode).toBe("active");
+  });
+
+  it("reports planner leader when provided", () => {
+    const deps = createDeps({
+      getPlannerLeader: () => ({ kind: "local", deviceId: "local-device", role: "planner" }),
+    });
+    const result = computeHealthCheck(deps);
+    expect(result.plannerLeader).toEqual({ kind: "local", deviceId: "local-device", role: "planner" });
   });
 
   it("includes memory usage", () => {
