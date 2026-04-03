@@ -259,4 +259,27 @@ describe("MeshNodeRuntime", () => {
     expect(peerSeenByA?.role).toBe("field");
     expect(peerSeenByB?.role).toBe("planner");
   });
+
+  it("allows viewer peers to connect without contributing capabilities to routing", async () => {
+    const viewer = await harness.startNode({
+      name: "viewer-1",
+      role: "viewer",
+      capabilities: ["channel:telegram"],
+    });
+    const planner = await harness.startNode({
+      name: "planner-1",
+      role: "planner",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!viewer || !planner) return;
+
+    const connected = await harness.connect(planner, viewer);
+    expect(connected).toBe(true);
+
+    const peerSeenByPlanner = planner.runtime.listConnectedPeers().find((p) => p.deviceId === viewer.identity.deviceId);
+    expect(peerSeenByPlanner?.role).toBe("viewer");
+    expect(planner.runtime.capabilityRegistry.findPeerWithChannel("telegram")).toBe(null);
+    expect(planner.runtime.capabilityRegistry.getPeerCapabilities(viewer.identity.deviceId)).toEqual([]);
+  });
 });

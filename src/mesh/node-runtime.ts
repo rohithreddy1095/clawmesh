@@ -223,7 +223,7 @@ export class MeshNodeRuntime {
       meshId: this.meshId,
       role: this.role,
       onPeerConnected: (session) => {
-        if (session.capabilities.length > 0) {
+        if (session.role !== "viewer" && session.capabilities.length > 0) {
           this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
         this.eventBus.emit("peer.connected", { session });

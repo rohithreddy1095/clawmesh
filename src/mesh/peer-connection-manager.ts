@@ -80,7 +80,7 @@ export class PeerConnectionManager {
       meshId: this.deps.meshId,
       role: this.deps.role,
       onConnected: (session) => {
-        if (session.capabilities.length > 0) {
+        if (session.role !== "viewer" && session.capabilities.length > 0) {
           this.deps.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
         this.deps.autoConnect.markConnected(session.deviceId);
