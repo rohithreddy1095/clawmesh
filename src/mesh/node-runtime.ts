@@ -47,6 +47,7 @@ import { formatProposalOwner } from "../agents/proposal-formatting.js";
 import { MeshDiscovery } from "./discovery.js";
 import { loadOrCreateMeshId } from "./mesh-identity.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
+import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl } from "./peer-url.js";
 import { choosePlannerLeader, getPlannerActivity, type PlannerActivity, type PlannerLeader } from "./planner-election.js";
 
 export type MeshNodeRuntimeOptions = {
@@ -151,7 +152,10 @@ export class MeshNodeRuntime {
       originatorDeviceId: this.identity.deviceId,
     });
     this.capabilities = [...(opts.capabilities ?? [])];
-    this.staticPeers = [...(opts.staticPeers ?? [])];
+    this.staticPeers = (opts.staticPeers ?? []).map((peer) => ({
+      ...peer,
+      url: normalizeMeshPeerUrl(peer.url),
+    }));
     this.log = opts.log ?? DEFAULT_LOGGER;
 
     if (opts.enableMockActuator) {
@@ -528,6 +532,7 @@ export class MeshNodeRuntime {
       deviceId: peer.deviceId,
       url: peer.url,
       transportLabel: peer.transportLabel,
+      securityPosture: getMeshStaticPeerSecurityPosture(peer),
     }));
   }
 

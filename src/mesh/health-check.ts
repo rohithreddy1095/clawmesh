@@ -60,6 +60,7 @@ export type HealthCheckResult = {
     deviceId: string;
     url: string;
     transportLabel?: string;
+    securityPosture?: string;
   }>;
   memoryUsageMB?: number;
   metrics?: MetricSnapshot[];
@@ -86,6 +87,7 @@ export type HealthCheckDeps = {
     deviceId: string;
     url: string;
     transportLabel?: string;
+    securityPosture?: string;
   }>;
   getMetrics?: () => MetricSnapshot[];
 };

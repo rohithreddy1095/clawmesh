@@ -324,6 +324,25 @@ describe("MeshNodeRuntime", () => {
     expect(node.runtime.discovery).toBeUndefined();
   });
 
+  it("normalizes configured static peer urls at runtime boundary", async () => {
+    const node = await harness.startNode({
+      name: "static-normalize-node",
+      disableDiscovery: true,
+      staticPeers: [{
+        deviceId: "peer-relay",
+        url: "https://relay.example.com/mesh",
+        transportLabel: "relay",
+      }],
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!node) return;
+
+    expect(node.runtime.getConfiguredStaticPeers()[0]?.url).toBe("wss://relay.example.com/mesh");
+    expect(node.runtime.getConfiguredStaticPeers()[0]?.transportLabel).toBe("relay");
+    expect(node.runtime.getConfiguredStaticPeers()[0]?.securityPosture).toBe("tls-unpinned");
+  });
+
   it("labels auto-connected discovery peers as mdns", async () => {
     const nodeB = await harness.startNode({
       name: "node-b-mdns",

@@ -10,6 +10,7 @@
 import type { ThresholdRule } from "../agents/types.js";
 import type { MeshNodeRole } from "../mesh/types.js";
 import type { MeshStaticPeer } from "../mesh/types.mesh.js";
+import { getMeshStaticPeerSecurityPosture } from "../mesh/peer-url.js";
 
 export interface CLIShorthandOpts {
   fieldNode?: boolean;
@@ -153,6 +154,6 @@ export function formatDiscoveryMode(enabled: boolean): string {
   return enabled ? "enabled (mDNS)" : "disabled (static/WAN)";
 }
 
-export function formatStaticPeerSummary(peer: Pick<MeshStaticPeer, "deviceId" | "url" | "transportLabel">): string {
-  return `${formatDeviceId(peer.deviceId)}  ${peer.url}${peer.transportLabel ? `  via ${peer.transportLabel}` : ""}`;
+export function formatStaticPeerSummary(peer: Pick<MeshStaticPeer, "deviceId" | "url" | "transportLabel" | "tlsFingerprint">): string {
+  return `${formatDeviceId(peer.deviceId)}  ${peer.url}${peer.transportLabel ? `  via ${peer.transportLabel}` : ""}  ${getMeshStaticPeerSecurityPosture(peer)}`;
 }

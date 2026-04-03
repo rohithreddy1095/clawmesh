@@ -44,7 +44,7 @@ describe("validateStartupConfig", () => {
   it("errors on invalid peer URL", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",
-      staticPeers: [{ deviceId: "d2", url: "http://wrong-protocol" }],
+      staticPeers: [{ deviceId: "d2", url: "ftp://wrong-protocol" }],
     });
     expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(true);
   });
@@ -86,6 +86,26 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "STATIC_PEER_TRANSPORTS" && d.message.includes("relay, lan"))).toBe(true);
   });
 
+  it("accepts normalized relay peer websocket URLs", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(false);
+  });
+
+  it("accepts relay peer URLs normalized from https", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "https://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(false);
+  });
+
   it("warns when discovery is disabled and static peers have no transport labels", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",
@@ -95,6 +115,59 @@ describe("validateStartupConfig", () => {
       ],
     });
     expect(diagnostics.some(d => d.code === "UNLABELED_STATIC_PEER_TRANSPORT")).toBe(true);
+  });
+
+  it("warns when a relay peer has no TLS fingerprint", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(true);
+  });
+
+  it("does not warn when a relay peer includes TLS fingerprint pinning", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "wss://relay.example.com/mesh",
+          transportLabel: "relay",
+          tlsFingerprint: "sha256:AABBCCDD",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(false);
+  });
+
+  it("warns when a relay peer uses insecure ws transport", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://relay.example.com/mesh",
+          transportLabel: "relay",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(true);
+  });
+
+  it("does not warn about insecure relay transport for non-relay ws peers", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://10.0.0.5:18789",
+          transportLabel: "lan",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(false);
   });
 
   it("info on no capabilities", () => {

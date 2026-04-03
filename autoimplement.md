@@ -193,18 +193,54 @@ Example:
   - message: `feat(mesh): expose configured static peers in mesh status`
 
 - ✅ Configured static peers in health parity
-  - commit: pending
+  - commit: `248bab4`
   - message: `feat(mesh): expose configured static peers in health`
+
+- ✅ Relay/static peer URL normalization at CLI boundary
+  - commit: `05e1642`
+  - message: `feat(cli): normalize relay peer https URLs to wss`
+
+- ✅ Relay/static peer URL normalization in runtime path
+  - commit: `e55744d`
+  - message: `feat(mesh): normalize static peer http URLs at runtime boundary`
+
+- ✅ Relay/WSS TLS pinning diagnostics
+  - commit: `5d0fae2`
+  - message: `feat(cli): warn on unpinned relay and wss peers`
+
+- ✅ Insecure relay transport diagnostics
+  - commit: `5de49c7`
+  - message: `feat(cli): warn on insecure relay ws peers`
+
+- ✅ Static peer security posture in status surfaces
+  - commit: `801431c`
+  - message: `feat(mesh): expose static peer security posture in status`
+
+- ✅ Static peer security posture in operator views
+  - commit: `f9ed287`
+  - message: `feat(mesh): show static peer posture in operator status views`
+
+- ✅ Static peer security posture in CLI startup output
+  - commit: `db7e8e7`
+  - message: `feat(cli): show static peer posture at startup`
+
+- ✅ Static peer posture in connection logs
+  - commit: `d9356b8`
+  - message: `feat(mesh): log static peer posture on connect`
+
+- ✅ Static peer posture in outbound error logs
+  - commit: pending
+  - message: `feat(mesh): include static peer posture in outbound errors`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay transport execution slice**
+**Relay transport enforcement slice**
 
 Desired behavior:
-- start actual transport behavior beyond pure visibility/labeling
-- keep trust and existing LAN/static behavior unchanged
-- prefer smallest test-backed bridge step toward relay-backed connectivity
+- begin moving from pure observability toward a small behavior-enforcement step
+- keep LAN/static compatibility intact
+- prefer the smallest test-backed WAN safety or transport gate next
 
 This is the next practical WAN milestone slice.
 
