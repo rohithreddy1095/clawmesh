@@ -225,6 +225,7 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       localDeviceId: this.identity.deviceId,
       getPlannerActivity: () => this.getPlannerActivity(),
+      isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getPendingProposals: () => this.getPendingProposalSummaries(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
@@ -255,6 +256,7 @@ export class MeshNodeRuntime {
       getPlannerMode: () => this.piSession?.mode,
       getPlannerLeader: () => this.getPlannerLeader(),
       getPlannerActivity: () => this.getPlannerActivity(),
+      isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getMetrics: () => this.metrics.snapshot(),
     }));
     this.rpcDispatcher.registerAll(createChatHandlers({

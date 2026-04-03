@@ -149,20 +149,24 @@ Example:
   - message: `feat(mesh): show proposal owners in status surfaces`
 
 - ✅ Planner-owner visibility in RPC summaries
-  - commit: pending
+  - commit: `5531bca`
   - message: `feat(mesh): expose proposal owners in mesh status RPC`
+
+- ✅ Discovery-disabled static/WAN mode
+  - commit: pending
+  - message: `feat(mesh): support static-only mode without discovery`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay/WAN investigation slice**
+**Discovery mode visibility in status surfaces**
 
 Desired behavior:
-- begin the next milestone with a small, test-backed transport/WAN step
+- status/health surfaces should show whether discovery is enabled or disabled
+- make WAN/static-only deployments obvious during operations
 - keep LAN/trust behavior unchanged
-- preserve all current planner HA work
 
-This is the next practical milestone bridge.
+This is the next practical WAN bridge slice.
 
 ## Milestone Plan
 

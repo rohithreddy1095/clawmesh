@@ -12,6 +12,7 @@ export function createMeshPeersHandlers(deps: {
   capabilityRegistry: MeshCapabilityRegistry;
   localDeviceId: string;
   getPlannerActivity?: () => PlannerActivity;
+  isDiscoveryEnabled?: () => boolean;
   getPendingProposals?: () => Array<{
     taskId: string;
     summary: string;
@@ -48,6 +49,7 @@ export function createMeshPeersHandlers(deps: {
           connectedAtMs: p.connectedAtMs,
         })),
         plannerActivity: deps.getPlannerActivity?.(),
+        discoveryEnabled: deps.isDiscoveryEnabled?.(),
         pendingProposals: deps.getPendingProposals?.(),
       });
     },

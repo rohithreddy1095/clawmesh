@@ -43,6 +43,7 @@ describe("mesh.peers handler", () => {
         role: "planner",
         leader: { kind: "local", deviceId: "local-device", role: "planner" },
       }),
+      isDiscoveryEnabled: () => false,
       getPendingProposals: () => ([{
         taskId: "task-1234...",
         summary: "Irrigate zone-1",
@@ -103,6 +104,7 @@ describe("mesh.peers handler", () => {
       localDeviceId: string;
       connectedPeers: number;
       peers: unknown[];
+      discoveryEnabled?: boolean;
       plannerActivity?: { state: string; leader: { kind: string } };
       pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
@@ -110,6 +112,7 @@ describe("mesh.peers handler", () => {
     expect(s.connectedPeers).toBe(1);
     expect(s.peers).toHaveLength(1);
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
+    expect(s.discoveryEnabled).toBe(false);
     expect(s.plannerActivity?.state).toBe("active");
     expect(s.plannerActivity?.leader.kind).toBe("local");
     expect(s.pendingProposals?.[0].summary).toBe("Irrigate zone-1");

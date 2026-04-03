@@ -162,6 +162,14 @@ describe("computeHealthCheck", () => {
     });
   });
 
+  it("reports whether discovery is enabled", () => {
+    const deps = createDeps({
+      isDiscoveryEnabled: () => false,
+    } as any);
+    const result = computeHealthCheck(deps as any);
+    expect(result.discoveryEnabled).toBe(false);
+  });
+
   it("includes memory usage", () => {
     const deps = createDeps();
     const result = computeHealthCheck(deps);
