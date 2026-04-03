@@ -17,7 +17,7 @@ import type { MeshCapabilityRegistry } from "./capabilities.js";
 import type { WorldModel } from "./world-model.js";
 import type { RpcHandlerFn, RpcHandlerMap } from "./rpc-dispatcher.js";
 import type { MetricSnapshot } from "./metrics-collector.js";
-import type { PlannerLeader } from "./planner-election.js";
+import type { PlannerActivity, PlannerLeader } from "./planner-election.js";
 import type { MeshNodeRole } from "./types.js";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -53,6 +53,7 @@ export type HealthCheckResult = {
   };
   plannerMode?: string;
   plannerLeader?: PlannerLeader;
+  plannerActivity?: PlannerActivity;
   memoryUsageMB?: number;
   metrics?: MetricSnapshot[];
   version: string;
@@ -72,6 +73,7 @@ export type HealthCheckDeps = {
   worldModel: WorldModel;
   getPlannerMode?: () => string | undefined;
   getPlannerLeader?: () => PlannerLeader;
+  getPlannerActivity?: () => PlannerActivity;
   getMetrics?: () => MetricSnapshot[];
 };
 
@@ -133,6 +135,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     },
     plannerMode,
     plannerLeader: deps.getPlannerLeader?.(),
+    plannerActivity: deps.getPlannerActivity?.(),
     memoryUsageMB,
     metrics: deps.getMetrics?.(),
     version: deps.version,

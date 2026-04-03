@@ -46,7 +46,7 @@ import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.j
 import { MeshDiscovery } from "./discovery.js";
 import { loadOrCreateMeshId } from "./mesh-identity.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
-import { choosePlannerLeader, type PlannerLeader } from "./planner-election.js";
+import { choosePlannerLeader, getPlannerActivity, type PlannerActivity, type PlannerLeader } from "./planner-election.js";
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
@@ -234,6 +234,7 @@ export class MeshNodeRuntime {
       peerRegistry: this.peerRegistry,
       capabilityRegistry: this.capabilityRegistry,
       localDeviceId: this.identity.deviceId,
+      getPlannerActivity: () => this.getPlannerActivity(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
       identity: this.identity,
@@ -262,6 +263,7 @@ export class MeshNodeRuntime {
       worldModel: this.worldModel,
       getPlannerMode: () => this.piSession?.mode,
       getPlannerLeader: () => this.getPlannerLeader(),
+      getPlannerActivity: () => this.getPlannerActivity(),
       getMetrics: () => this.metrics.snapshot(),
     }));
 
@@ -500,6 +502,20 @@ export class MeshNodeRuntime {
         role: peer.role,
       })),
     });
+  }
+
+  getPlannerActivity(): PlannerActivity {
+    return getPlannerActivity({
+      self: { deviceId: this.identity.deviceId, role: this.role },
+      peers: this.peerRegistry.listConnected().map((peer) => ({
+        deviceId: peer.deviceId,
+        role: peer.role,
+      })),
+    });
+  }
+
+  shouldHandleAutonomousPlanner(): boolean {
+    return this.getPlannerActivity().shouldHandleAutonomous;
   }
 
   getAdvertisedCapabilities(): string[] {

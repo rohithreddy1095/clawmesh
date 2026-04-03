@@ -109,18 +109,22 @@ Example:
   - message: `feat(mesh): surface planner leadership in health status`
 
 - ✅ CLI support for mesh role / mesh name
-  - commit: pending
+  - commit: `ab4c729`
   - message: `feat(cli): add runtime role and mesh name options`
+
+- ✅ Planner activity gating
+  - commit: pending
+  - message: `feat(mesh): gate autonomous planner activity by election`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner activity gating**
+**Standby promotion wake-up**
 
 Desired behavior:
-- expose whether the local node should be considered active or standby based on planner election
-- keep the first step observational or minimally enforced
-- foundation for duplicate-proposal prevention in multi-planner meshes
+- when the elected planner disappears, a standby planner should begin autonomous planning without needing a manual nudge
+- queued threshold/proactive work should resume after promotion
+- keep operator-intent handling unchanged
 
 This is the next practical HA slice.
 

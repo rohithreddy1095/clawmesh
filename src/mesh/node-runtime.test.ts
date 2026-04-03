@@ -282,4 +282,33 @@ describe("MeshNodeRuntime", () => {
     expect(planner.runtime.capabilityRegistry.findPeerWithChannel("telegram")).toBe(null);
     expect(planner.runtime.capabilityRegistry.getPeerCapabilities(viewer.identity.deviceId)).toEqual([]);
   });
+
+  it("reports standby planner activity when a higher-priority planner peer is connected", async () => {
+    const leader = await harness.startNode({
+      name: "planner-leader",
+      role: "planner",
+      capabilities: ["channel:clawmesh"],
+    });
+    const standby = await harness.startNode({
+      name: "planner-standby",
+      role: "standby-planner",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!leader || !standby) return;
+
+    const connected = await harness.connect(standby, leader);
+    expect(connected).toBe(true);
+
+    expect(standby.runtime.getPlannerActivity()).toMatchObject({
+      state: "standby",
+      shouldHandleAutonomous: false,
+      leader: { kind: "peer", deviceId: leader.identity.deviceId, role: "planner" },
+    });
+    expect(leader.runtime.getPlannerActivity()).toMatchObject({
+      state: "active",
+      shouldHandleAutonomous: true,
+      leader: { kind: "local", deviceId: leader.identity.deviceId, role: "planner" },
+    });
+  });
 });

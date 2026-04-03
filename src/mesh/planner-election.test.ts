@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosePlannerLeader, isPlannerEligible } from "./planner-election.js";
+import { choosePlannerLeader, getPlannerActivity, isPlannerEligible } from "./planner-election.js";
 import type { MeshNodeRole } from "./types.js";
 
 function candidate(deviceId: string, role: MeshNodeRole) {
@@ -49,5 +49,34 @@ describe("planner election", () => {
       peers: [candidate("aaa-peer", "planner")],
     });
     expect(leader).toEqual({ kind: "peer", deviceId: "aaa-peer", role: "planner" });
+  });
+
+  it("marks local planner leader as active", () => {
+    const activity = getPlannerActivity({
+      self: candidate("aaa-self", "planner"),
+      peers: [candidate("zzz-peer", "standby-planner")],
+    });
+    expect(activity.state).toBe("active");
+    expect(activity.shouldHandleAutonomous).toBe(true);
+    expect(activity.leader).toEqual({ kind: "local", deviceId: "aaa-self", role: "planner" });
+  });
+
+  it("marks lower-priority local planner as standby", () => {
+    const activity = getPlannerActivity({
+      self: candidate("zzz-self", "standby-planner"),
+      peers: [candidate("aaa-peer", "planner")],
+    });
+    expect(activity.state).toBe("standby");
+    expect(activity.shouldHandleAutonomous).toBe(false);
+    expect(activity.leader).toEqual({ kind: "peer", deviceId: "aaa-peer", role: "planner" });
+  });
+
+  it("marks non-planner roles as ineligible", () => {
+    const activity = getPlannerActivity({
+      self: candidate("node-1", "field"),
+      peers: [candidate("planner-1", "planner")],
+    });
+    expect(activity.state).toBe("ineligible");
+    expect(activity.shouldHandleAutonomous).toBe(false);
   });
 });

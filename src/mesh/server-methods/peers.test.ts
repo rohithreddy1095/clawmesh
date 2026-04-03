@@ -37,6 +37,12 @@ describe("mesh.peers handler", () => {
       peerRegistry,
       capabilityRegistry,
       localDeviceId: "local-device",
+      getPlannerActivity: () => ({
+        state: "active",
+        shouldHandleAutonomous: true,
+        role: "planner",
+        leader: { kind: "local", deviceId: "local-device", role: "planner" },
+      }),
     });
   });
 
@@ -84,11 +90,18 @@ describe("mesh.peers handler", () => {
 
     const { ok, payload } = await callHandler(handlers, "mesh.status");
     expect(ok).toBe(true);
-    const s = payload as { localDeviceId: string; connectedPeers: number; peers: unknown[] };
+    const s = payload as {
+      localDeviceId: string;
+      connectedPeers: number;
+      peers: unknown[];
+      plannerActivity?: { state: string; leader: { kind: string } };
+    };
     expect(s.localDeviceId).toBe("local-device");
     expect(s.connectedPeers).toBe(1);
     expect(s.peers).toHaveLength(1);
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
+    expect(s.plannerActivity?.state).toBe("active");
+    expect(s.plannerActivity?.leader.kind).toBe("local");
   });
 
   it("no peers returns empty list", async () => {

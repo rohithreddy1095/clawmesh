@@ -451,6 +451,7 @@ export class PiSession {
 
   private triggerProactiveCheck(): void {
     if (!this.modeCtrl.canMakeLLMCalls()) return; // Silent skip in observing/suspended
+    if (!this.runtime.shouldHandleAutonomousPlanner()) return;
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
     this.triggerQueue.enqueueProactiveCheck(recentFrames);
@@ -465,6 +466,11 @@ export class PiSession {
     // Mode gate: only active mode makes LLM calls
     if (!this.modeCtrl.canMakeLLMCalls()) {
       // Silently accumulate triggers — they'll drain when we go active
+      return;
+    }
+
+    const nextTrigger = this.triggerQueue.peek();
+    if (nextTrigger && nextTrigger.type !== "operator_intent" && !this.runtime.shouldHandleAutonomousPlanner()) {
       return;
     }
 

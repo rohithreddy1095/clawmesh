@@ -144,6 +144,24 @@ describe("computeHealthCheck", () => {
     expect(result.plannerLeader).toEqual({ kind: "local", deviceId: "local-device", role: "planner" });
   });
 
+  it("reports planner activity when provided", () => {
+    const deps = createDeps({
+      getPlannerActivity: () => ({
+        state: "standby",
+        shouldHandleAutonomous: false,
+        role: "standby-planner",
+        leader: { kind: "peer", deviceId: "planner-1", role: "planner" },
+      }),
+    });
+    const result = computeHealthCheck(deps);
+    expect(result.plannerActivity).toEqual({
+      state: "standby",
+      shouldHandleAutonomous: false,
+      role: "standby-planner",
+      leader: { kind: "peer", deviceId: "planner-1", role: "planner" },
+    });
+  });
+
   it("includes memory usage", () => {
     const deps = createDeps();
     const result = computeHealthCheck(deps);

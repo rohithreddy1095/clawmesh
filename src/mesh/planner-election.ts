@@ -10,6 +10,13 @@ export type PlannerLeader =
   | { kind: "local"; deviceId: string; role: MeshNodeRole }
   | { kind: "peer"; deviceId: string; role: MeshNodeRole };
 
+export type PlannerActivity = {
+  state: "active" | "standby" | "ineligible";
+  role?: MeshNodeRole;
+  leader: PlannerLeader;
+  shouldHandleAutonomous: boolean;
+};
+
 export function isPlannerEligible(role?: MeshNodeRole): role is "planner" | "standby-planner" {
   return role === "planner" || role === "standby-planner";
 }
@@ -49,4 +56,35 @@ export function choosePlannerLeader(params: {
     return { kind: "local", deviceId: winner.deviceId, role: winner.role };
   }
   return { kind: "peer", deviceId: winner.deviceId, role: winner.role };
+}
+
+export function getPlannerActivity(params: {
+  self: PlannerCandidate;
+  peers: PlannerCandidate[];
+}): PlannerActivity {
+  const leader = choosePlannerLeader(params);
+  if (!isPlannerEligible(params.self.role)) {
+    return {
+      state: "ineligible",
+      role: params.self.role,
+      leader,
+      shouldHandleAutonomous: false,
+    };
+  }
+
+  if (leader.kind === "local") {
+    return {
+      state: "active",
+      role: params.self.role,
+      leader,
+      shouldHandleAutonomous: true,
+    };
+  }
+
+  return {
+    state: "standby",
+    role: params.self.role,
+    leader,
+    shouldHandleAutonomous: false,
+  };
 }

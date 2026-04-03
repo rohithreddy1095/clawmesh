@@ -1,5 +1,6 @@
 import type { MeshCapabilityRegistry } from "../capabilities.js";
 import type { PeerRegistry } from "../peer-registry.js";
+import type { PlannerActivity } from "../planner-election.js";
 
 type HandlerFn = (opts: {
   respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }) => void;
@@ -10,6 +11,7 @@ export function createMeshPeersHandlers(deps: {
   peerRegistry: PeerRegistry;
   capabilityRegistry: MeshCapabilityRegistry;
   localDeviceId: string;
+  getPlannerActivity?: () => PlannerActivity;
 }): GatewayRequestHandlers {
   return {
     "mesh.peers": async ({ respond }) => {
@@ -36,6 +38,7 @@ export function createMeshPeersHandlers(deps: {
           role: p.role,
           connectedAtMs: p.connectedAtMs,
         })),
+        plannerActivity: deps.getPlannerActivity?.(),
       });
     },
   };

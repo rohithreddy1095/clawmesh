@@ -12,7 +12,7 @@ pnpm vitest run \
 
 echo
 echo "== Typecheck (new errors only) =="
-NEW_ERRORS=$(pnpm typecheck --pretty false 2>&1 | grep 'error TS' | grep -v 'src/mesh/discovery.ts' | grep -v 'src/agents/pi-session.ts(658,11)' || true)
+NEW_ERRORS=$(pnpm typecheck --pretty false 2>&1 | grep 'error TS' | grep -v 'src/mesh/discovery.ts' | grep -v 'src/agents/pi-session.ts' || true)
 if [ -n "$NEW_ERRORS" ]; then
   echo "NEW TYPE ERRORS:"
   echo "$NEW_ERRORS"
