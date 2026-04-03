@@ -21,7 +21,11 @@ import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
 import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
-import { formatDiscoveryModeStatus, formatOperatorPeerLine } from "../agents/extensions/mesh-extension-helpers.js";
+import {
+  formatConfiguredStaticPeerLine,
+  formatDiscoveryModeStatus,
+  formatOperatorPeerLine,
+} from "../agents/extensions/mesh-extension-helpers.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -222,6 +226,10 @@ export class TelegramChannel {
       const peerLines = peers.length > 0
         ? peers.map(p => `  • ${formatOperatorPeerLine(p)}`).join("\n")
         : "  (no peers connected)";
+      const staticPeers = this.runtime.getConfiguredStaticPeers();
+      const staticPeerLines = staticPeers.length > 0
+        ? staticPeers.map(p => `  • ${formatConfiguredStaticPeerLine(p)}`).join("\n")
+        : "  (no static peers configured)";
       const pendingLines = formatPendingProposalStatusLines(proposals, { leader });
       const pendingSection = pendingLines.length > 0
         ? `\nTop pending:\n${pendingLines.join("\n")}`
@@ -232,6 +240,7 @@ export class TelegramChannel {
         `Mode: ${mode}\n` +
         `Discovery: ${formatDiscoveryModeStatus(this.runtime.isDiscoveryEnabled())}\n` +
         `Peers (${peers.length}):\n${peerLines}\n` +
+        `Static peers (${staticPeers.length}):\n${staticPeerLines}\n` +
         `Local capabilities: ${caps.join(", ")}\n` +
         `World model: ${frameCount} frames\n` +
         `Proposals: ${proposals.length} total, ${pending} awaiting approval${pendingSection}`,

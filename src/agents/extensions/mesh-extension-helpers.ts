@@ -122,6 +122,20 @@ export function formatOperatorPeerLine(peer: {
   return `${name} — ${capabilities}${transport}`;
 }
 
+export function formatConfiguredStaticPeerLine(peer: {
+  deviceId: string;
+  url: string;
+  transportLabel?: string;
+  securityPosture?: string;
+}): string {
+  const name = `${peer.deviceId.slice(0, 12)}…`;
+  const extras = [
+    peer.transportLabel ? `via ${peer.transportLabel}` : undefined,
+    peer.securityPosture,
+  ].filter(Boolean);
+  return `${name} — ${peer.url}${extras.length > 0 ? ` (${extras.join(", ")})` : ""}`;
+}
+
 /**
  * Format uptime in a compact human-readable format.
  * Extracted from mesh-tui.ts for reuse and testability.

@@ -32,6 +32,7 @@ import {
   buildDuplicateProposalNotice,
   formatDiscoveryModeStatus,
   formatOperatorPeerLine,
+  formatConfiguredStaticPeerLine,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
@@ -358,6 +359,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
       description: "Show mesh connectivity and world model summary",
       handler: async (_args, ctx) => {
         const peers = runtime.listConnectedPeers();
+        const configuredStaticPeers = runtime.getConfiguredStaticPeers();
         const frameCount = runtime.worldModel.getRecentFrames(100).length;
         const pending = countPending(state.proposals);
 
@@ -376,6 +378,8 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           `  Discovery: ${formatDiscoveryModeStatus(runtime.isDiscoveryEnabled())}`,
           `  Connected peers: ${peers.length}`,
           ...peers.map((p) => `    ${formatOperatorPeerLine(p)}`),
+          `  Static peers: ${configuredStaticPeers.length}`,
+          ...configuredStaticPeers.map((p) => `    ${formatConfiguredStaticPeerLine(p)}`),
           `  World model frames: ${frameCount}`,
           `  Pending proposals: ${pending}`,
           ...pendingLines,

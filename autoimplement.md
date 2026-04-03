@@ -213,18 +213,22 @@ Example:
   - message: `feat(cli): warn on insecure relay ws peers`
 
 - ✅ Static peer security posture in status surfaces
-  - commit: pending
+  - commit: `801431c`
   - message: `feat(mesh): expose static peer security posture in status`
+
+- ✅ Static peer security posture in operator views
+  - commit: pending
+  - message: `feat(mesh): show static peer posture in operator status views`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Static peer security posture in operator views**
+**Static peer security posture in CLI startup output**
 
 Desired behavior:
-- show configured static peer security posture in operator-facing status output
+- show configured static peer security posture in CLI startup summaries
 - keep connection behavior unchanged
-- make WAN peer posture visible after startup, not just via RPC/health
+- make WAN peer posture visible both before and after startup
 
 This is the next practical WAN milestone slice.
 

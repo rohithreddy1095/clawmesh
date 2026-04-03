@@ -9,6 +9,7 @@ import {
   compactDataSummary,
   formatDiscoveryModeStatus,
   formatOperatorPeerLine,
+  formatConfiguredStaticPeerLine,
 } from "./mesh-extension-helpers.js";
 import type { ContextFrame } from "../../mesh/context-types.js";
 import type { TaskProposal } from "../types.js";
@@ -295,6 +296,22 @@ describe("operator-facing status formatting", () => {
       deviceId: "abcdef1234567890",
       capabilities: [],
     })).toBe("abcdef123456 — (none)");
+  });
+
+  it("formats configured static peer line with posture", () => {
+    expect(formatConfiguredStaticPeerLine({
+      deviceId: "abcdef1234567890",
+      url: "wss://relay.example.com/mesh",
+      transportLabel: "relay",
+      securityPosture: "tls-pinned",
+    })).toBe("abcdef123456… — wss://relay.example.com/mesh (via relay, tls-pinned)");
+  });
+
+  it("formats configured static peer line without extra labels", () => {
+    expect(formatConfiguredStaticPeerLine({
+      deviceId: "abcdef1234567890",
+      url: "ws://10.0.0.5:18789",
+    })).toBe("abcdef123456… — ws://10.0.0.5:18789");
   });
 });
 
