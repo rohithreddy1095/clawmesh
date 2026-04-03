@@ -157,18 +157,22 @@ Example:
   - message: `feat(mesh): support static-only mode without discovery`
 
 - ✅ Discovery mode visibility in status surfaces
-  - commit: pending
+  - commit: `1d8f82a`
   - message: `feat(mesh): expose discovery mode in status surfaces`
+
+- ✅ Peer transport labeling
+  - commit: pending
+  - message: `feat(mesh): add operator-visible peer transport labels`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Peer transport labeling**
+**WAN peer labeling in health surfaces**
 
 Desired behavior:
-- static peer configuration should be able to declare an operator-visible transport label
-- status surfaces should expose that label for WAN/relay debugging
-- keep actual connection behavior unchanged for now
+- health and peer detail surfaces should expose transport labels consistently
+- help operators distinguish LAN vs relay/static peers at a glance
+- keep the slice observational only
 
 This is the next practical WAN bridge slice.
 

@@ -29,6 +29,7 @@ export type PeerHealthInfo = {
   displayName?: string;
   capabilities: string[];
   role?: MeshNodeRole;
+  transportLabel?: string;
   connectedMs: number;
   outbound: boolean;
 };
@@ -91,6 +92,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     displayName: p.displayName,
     capabilities: p.capabilities,
     role: p.role,
+    transportLabel: p.transportLabel,
     connectedMs: now - p.connectedAtMs,
     outbound: p.outbound,
   }));

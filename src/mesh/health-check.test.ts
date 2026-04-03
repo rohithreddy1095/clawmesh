@@ -55,6 +55,7 @@ describe("computeHealthCheck", () => {
       outbound: true,
       capabilities: ["channel:telegram"],
       role: "viewer",
+      transportLabel: "relay",
       connectedAtMs: Date.now() - 30_000,
     });
 
@@ -63,6 +64,7 @@ describe("computeHealthCheck", () => {
     expect(result.peers.details).toHaveLength(1);
     expect(result.peers.details[0].outbound).toBe(true);
     expect(result.peers.details[0].role).toBe("viewer");
+    expect(result.peers.details[0].transportLabel).toBe("relay");
     expect(result.peers.details[0].connectedMs).toBeGreaterThan(20_000);
   });
 
