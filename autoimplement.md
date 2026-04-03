@@ -229,18 +229,38 @@ Example:
   - message: `feat(mesh): log static peer posture on connect`
 
 - ✅ Static peer posture in outbound error logs
-  - commit: pending
+  - commit: `057315d`
   - message: `feat(mesh): include static peer posture in outbound errors`
+
+- ✅ Relay transport enforcement slice
+  - commit: `d518ef9`
+  - message: `feat(mesh): refuse insecure relay ws connections`
+
+- ✅ Pinned relay enforcement slice
+  - commit: `47a7ba3`
+  - message: `feat(mesh): refuse unpinned relay tls connections`
+
+- ✅ WAN pinning policy broadening review
+  - commit: `4087028`
+  - message: `feat(mesh): enforce vpn transport safety like relay`
+
+- ✅ Generic WAN-labeled transport enforcement
+  - commit: `b516975`
+  - message: `feat(mesh): treat unknown transport labels as wan`
+
+- ✅ Explicit local transport alias support
+  - commit: pending
+  - message: `feat(mesh): treat local transport label as local`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay transport enforcement slice**
+**Local transport alias review**
 
 Desired behavior:
-- begin moving from pure observability toward a small behavior-enforcement step
-- keep LAN/static compatibility intact
-- prefer the smallest test-backed WAN safety or transport gate next
+- decide whether any additional local aliases beyond `lan`, `mdns`, and `local` are worth supporting
+- keep WAN enforcement strict for everything else
+- continue policy refinement without weakening the new safety defaults
 
 This is the next practical WAN milestone slice.
 

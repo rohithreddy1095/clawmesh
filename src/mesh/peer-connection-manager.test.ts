@@ -158,6 +158,126 @@ describe("PeerConnectionManager", () => {
     manager.stopAll();
   });
 
+  it("refuses insecure ws connections for relay-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "relay-peer",
+      url: "ws://relay.example.com/mesh",
+      transportLabel: "relay",
+    });
+
+    expect(manager.has("relay-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure relay connection"),
+    );
+  });
+
+  it("refuses unpinned tls connections for relay-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "relay-peer",
+      url: "wss://relay.example.com/mesh",
+      transportLabel: "relay",
+    });
+
+    expect(manager.has("relay-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing unpinned relay connection"),
+    );
+  });
+
+  it("refuses insecure ws connections for vpn-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "vpn-peer",
+      url: "ws://vpn.example.com/mesh",
+      transportLabel: "vpn",
+    });
+
+    expect(manager.has("vpn-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure vpn connection"),
+    );
+  });
+
+  it("refuses unpinned tls connections for vpn-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "vpn-peer",
+      url: "wss://vpn.example.com/mesh",
+      transportLabel: "vpn",
+    });
+
+    expect(manager.has("vpn-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing unpinned vpn connection"),
+    );
+  });
+
+  it("refuses insecure ws connections for custom wan-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "wan-peer",
+      url: "ws://tailscale.example.com/mesh",
+      transportLabel: "tailscale",
+    });
+
+    expect(manager.has("wan-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure tailscale connection"),
+    );
+  });
+
+  it("refuses unpinned tls connections for custom wan-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "wan-peer",
+      url: "wss://tailscale.example.com/mesh",
+      transportLabel: "tailscale",
+    });
+
+    expect(manager.has("wan-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing unpinned tailscale connection"),
+    );
+  });
+
+  it("allows ws connections for local-labeled peers", () => {
+    manager.connectToPeer({
+      deviceId: "local-peer",
+      url: "ws://10.0.0.5:18789",
+      transportLabel: "local",
+    });
+
+    expect(manager.has("local-peer")).toBe(true);
+    expect(peerClientInstances).toHaveLength(1);
+    manager.stopAll();
+  });
+
   it("normalizes https relay URLs before creating the client", () => {
     manager.connectToPeer({
       deviceId: "secure-peer",

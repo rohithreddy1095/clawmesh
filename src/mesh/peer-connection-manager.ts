@@ -21,7 +21,7 @@ import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
-import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl } from "./peer-url.js";
+import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl, requiresPinnedWanTransport } from "./peer-url.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -77,6 +77,20 @@ export class PeerConnectionManager {
       peer.transportLabel ? `via ${peer.transportLabel}` : undefined,
       `(${securityPosture})`,
     ].filter(Boolean).join(" ");
+
+    if (requiresPinnedWanTransport(peer) && securityPosture === "insecure") {
+      this.deps.log.warn(
+        `mesh: refusing insecure ${peer.transportLabel} connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+      );
+      return;
+    }
+    if (requiresPinnedWanTransport(peer) && securityPosture === "tls-unpinned") {
+      this.deps.log.warn(
+        `mesh: refusing unpinned ${peer.transportLabel} connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+      );
+      return;
+    }
+
     this.deps.log.info(`mesh: outbound connecting ${peer.deviceId.slice(0, 12)}… ${transportContext}`);
 
     const client = new MeshPeerClient({

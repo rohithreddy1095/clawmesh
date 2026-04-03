@@ -11,6 +11,8 @@
  * Returns a list of warnings/errors so the CLI can report them clearly.
  */
 
+import { requiresPinnedWanTransport } from "../mesh/peer-url.js";
+
 export type StartupDiagnostic = {
   level: "info" | "warn" | "error";
   code: string;
@@ -89,22 +91,22 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
           message: `Peer spec points to own device ID — will be ignored`,
         });
       }
-      if (peer.transportLabel === "relay" && peer.url.startsWith("ws://")) {
+      if (requiresPinnedWanTransport(peer) && peer.url.startsWith("ws://")) {
         diagnostics.push({
           level: "warn",
           code: "INSECURE_RELAY_TRANSPORT",
-          message: `Peer ${peer.deviceId.slice(0, 12)}… is labeled relay but uses ws:// without TLS. Prefer wss:// or https:// for WAN/static relay links.`,
+          message: `Peer ${peer.deviceId.slice(0, 12)}… is labeled ${peer.transportLabel} but uses ws:// without TLS. Prefer wss:// or https:// for WAN/static ${peer.transportLabel} links.`,
         });
       }
       const expectsTlsPinning =
-        peer.transportLabel === "relay" ||
+        requiresPinnedWanTransport(peer) ||
         peer.url.startsWith("wss://") ||
         peer.url.startsWith("https://");
       if (expectsTlsPinning && !peer.tlsFingerprint) {
         diagnostics.push({
           level: "warn",
           code: "MISSING_TLS_FINGERPRINT",
-          message: `Peer ${peer.deviceId.slice(0, 12)}… uses relay/TLS transport without a pinned fingerprint. Add |sha256:... to harden WAN connections.`,
+          message: `Peer ${peer.deviceId.slice(0, 12)}… uses ${peer.transportLabel ?? "tls"}/TLS transport without a pinned fingerprint. Add |sha256:... to harden WAN connections.`,
         });
       }
     }
