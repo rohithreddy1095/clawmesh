@@ -65,6 +65,7 @@ export function summarizeProposals(
   operation: string;
   approvalLevel: string;
   status: string;
+  plannerDeviceId?: string;
   createdAt: string;
 }> {
   return proposals.map((p) => ({
@@ -74,6 +75,7 @@ export function summarizeProposals(
     operation: p.operation,
     approvalLevel: p.approvalLevel,
     status: p.status,
+    plannerDeviceId: p.plannerDeviceId,
     createdAt: new Date(p.createdAt).toISOString(),
   }));
 }

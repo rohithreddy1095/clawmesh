@@ -41,6 +41,8 @@ function makeProposal(overrides?: Partial<TaskProposal>): TaskProposal {
     operation: "irrigate",
     targetRef: "actuator:pump-01",
     peerDeviceId: "peer-01",
+    plannerDeviceId: "planner-01",
+    plannerRole: "planner",
     approvalLevel: "L2",
     status: "awaiting_approval",
     createdBy: "intelligence",
@@ -199,6 +201,7 @@ describe("summarizeProposals in list_proposals tool", () => {
     expect(summary).toHaveLength(2);
     expect(summary[0]).toHaveProperty("summary");
     expect(summary[0]).toHaveProperty("status");
+    expect(summary[0]).toHaveProperty("plannerDeviceId");
   });
 
   it("returns empty array for no proposals", () => {

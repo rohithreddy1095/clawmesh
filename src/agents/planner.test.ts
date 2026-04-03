@@ -60,6 +60,8 @@ describe("planner types", () => {
       operation: "start",
       operationParams: { durationSec: 1800 },
       peerDeviceId: "abc123",
+      plannerDeviceId: "planner-abc",
+      plannerRole: "planner",
       approvalLevel: "L2",
       status: "awaiting_approval",
       createdBy: "intelligence",
@@ -70,6 +72,8 @@ describe("planner types", () => {
     expect(proposal.status).toBe("awaiting_approval");
     expect(proposal.approvalLevel).toBe("L2");
     expect(proposal.targetRef).toContain("actuator:");
+    expect(proposal.plannerDeviceId).toBe("planner-abc");
+    expect(proposal.plannerRole).toBe("planner");
   });
 
   it("ThresholdRule triggers correctly on below threshold", () => {

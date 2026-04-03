@@ -256,6 +256,10 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           operation,
           operationParams,
           peerDeviceId,
+          plannerDeviceId: runtime.identity.deviceId,
+          plannerRole: runtime.role === "planner" || runtime.role === "standby-planner"
+            ? runtime.role
+            : undefined,
           approvalLevel,
           status: approvalLevel === "L1" ? "approved" : "awaiting_approval",
           createdBy: "intelligence",
@@ -268,6 +272,8 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         runtime.contextPropagator.broadcastInference({
           data: {
             proposalId: proposal.taskId,
+            plannerDeviceId: proposal.plannerDeviceId,
+            plannerRole: proposal.plannerRole,
             summary, targetRef, operation, approvalLevel,
             status: proposal.status,
           },

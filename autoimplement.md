@@ -113,18 +113,22 @@ Example:
   - message: `feat(cli): add runtime role and mesh name options`
 
 - ✅ Planner activity gating
-  - commit: pending
+  - commit: `cc1225e`
   - message: `feat(mesh): gate autonomous planner activity by election`
+
+- ✅ Standby promotion wake-up
+  - commit: pending
+  - message: `feat(mesh): wake standby planners on promotion`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Standby promotion wake-up**
+**Planner identity broadcast for duplicate suppression**
 
 Desired behavior:
-- when the elected planner disappears, a standby planner should begin autonomous planning without needing a manual nudge
-- queued threshold/proactive work should resume after promotion
-- keep operator-intent handling unchanged
+- proposals should identify which planner node originated them
+- runtime/event surfaces should expose proposal origin clearly
+- foundation for stronger cross-planner duplicate suppression and sticky ownership
 
 This is the next practical HA slice.
 

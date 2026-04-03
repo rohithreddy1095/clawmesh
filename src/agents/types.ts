@@ -12,6 +12,10 @@ export type TaskProposal = {
   operation: string;
   operationParams?: Record<string, unknown>;
   peerDeviceId: string;
+  /** Planner node that originated this proposal, when available. */
+  plannerDeviceId?: string;
+  /** Declared role of the originating planner. */
+  plannerRole?: "planner" | "standby-planner";
   approvalLevel: ApprovalLevel;
   status: "proposed" | "awaiting_approval" | "approved" | "executing" | "completed" | "rejected" | "failed";
   createdBy: "intelligence" | "operator" | "schedule";
