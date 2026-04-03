@@ -44,6 +44,7 @@ import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
 import { loadOrCreateMeshId } from "./mesh-identity.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
@@ -392,6 +393,7 @@ export class MeshNodeRuntime {
 
     // Tell peers we are leaving before sockets close so they can clean up immediately.
     this.peerRegistry.broadcastEvent("peer.leaving", {
+      gen: NODE_PROTOCOL_GENERATION,
       deviceId: this.identity.deviceId,
       timestamp: Date.now(),
     });

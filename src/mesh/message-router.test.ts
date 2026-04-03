@@ -117,6 +117,25 @@ describe("routeInboundMessage", () => {
     expect(received[0].frameId).toBe("f-456");
   });
 
+  it("rejects context frames with unsupported generation", async () => {
+    const frame: ContextFrame = {
+      gen: 99,
+      kind: "observation",
+      frameId: "f-bad-gen",
+      sourceDeviceId: "remote-device",
+      timestamp: Date.now(),
+      data: { metric: "moisture", value: 25, zone: "z1" },
+      trust: { evidence_sources: ["sensor"], evidence_trust_tier: "T2_operational_observation" },
+    };
+
+    const msg = JSON.stringify({ type: "event", event: "context.frame", payload: frame });
+    const result = await routeInboundMessage(msg, mockSocket(), "c1", deps);
+
+    expect(result.handled).toBe(false);
+    if (!result.handled) expect(result.reason).toBe("bad_generation");
+    expect(deps.worldModel.size).toBe(0);
+  });
+
   it("deduplicates context frames", async () => {
     const frame: ContextFrame = {
       kind: "observation",

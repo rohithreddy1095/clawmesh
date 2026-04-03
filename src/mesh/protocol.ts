@@ -1,0 +1,1 @@
+export const NODE_PROTOCOL_GENERATION = 1;

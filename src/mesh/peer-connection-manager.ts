@@ -20,6 +20,7 @@ import type { MeshEventBus } from "./event-bus.js";
 import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ export class PeerConnectionManager {
         this.connectionHealth.removePeer(deviceId);
         this.deps.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
         this.deps.peerRegistry.broadcastEvent("peer.down", {
+          gen: NODE_PROTOCOL_GENERATION,
           deviceId,
           reportedAtMs: Date.now(),
         });
@@ -105,6 +107,13 @@ export class PeerConnectionManager {
         this.connectionHealth.recordActivity(peer.deviceId);
 
         if (event === "peer.leaving") {
+          if (
+            payload && typeof payload === "object" &&
+            typeof (payload as { gen?: unknown }).gen === "number" &&
+            (payload as { gen: number }).gen !== NODE_PROTOCOL_GENERATION
+          ) {
+            return;
+          }
           const removed = this.deps.peerRegistry.unregisterDevice(peer.deviceId);
           if (removed) {
             this.deps.capabilityRegistry.removePeer(peer.deviceId);
@@ -117,6 +126,13 @@ export class PeerConnectionManager {
         }
 
         if (event === "peer.down") {
+          if (
+            payload && typeof payload === "object" &&
+            typeof (payload as { gen?: unknown }).gen === "number" &&
+            (payload as { gen: number }).gen !== NODE_PROTOCOL_GENERATION
+          ) {
+            return;
+          }
           const targetDeviceId =
             payload && typeof payload === "object" && typeof (payload as { deviceId?: unknown }).deviceId === "string"
               ? (payload as { deviceId: string }).deviceId

@@ -81,20 +81,24 @@ Example:
   - message: `feat(mesh): suppress auto-connect for confirmed dead peers`
 
 - ✅ Stable mesh identity (`meshId`) in peer handshake
-  - commit: pending
+  - commit: `463e13f`
   - message: `feat(mesh): add stable mesh identity to handshake`
+
+- ✅ Protocol generation (`gen`) on mesh messages
+  - commit: pending
+  - message: `feat(mesh): add protocol generation checks to mesh events`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Protocol generation (`gen`) on mesh messages**
+**Explicit node roles in peer handshake**
 
 Desired behavior:
-- control-plane messages and context frames carry a protocol generation
-- unsupported generations are rejected safely
-- nodes can evolve protocol shape without silent corruption
+- peers declare a role (`planner`, `field`, `sensor`, `actuator`, `viewer`, etc.)
+- the role is available to routing / lifecycle logic
+- this becomes the foundation for passive clients and planner leadership
 
-This is the second Milestone 2 slice.
+This is the first Milestone 3 slice.
 
 ## Milestone Plan
 
@@ -106,10 +110,10 @@ This is the second Milestone 2 slice.
 - ✅ dead-peer suppression / ghost reconnect prevention
 
 ### Milestone 2 — Identity & protocol safety
-- `meshId`
-- protocol generation / version field
-- reject mismatched mesh IDs
-- reject unsupported generations
+- ✅ `meshId`
+- ✅ protocol generation / version field
+- ✅ reject mismatched mesh IDs
+- ✅ reject unsupported generations
 
 ### Milestone 3 — Role separation
 - explicit node roles

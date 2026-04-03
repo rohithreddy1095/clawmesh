@@ -211,4 +211,16 @@ describe("PeerConnectionManager", () => {
     expect(deps.peerRegistry.get("healthy-peer")).toBeDefined();
     expect(disconnected).toHaveLength(0);
   });
+
+  it("ignores peer.down events with unsupported generation", async () => {
+    deps.peerRegistry.register(makeSession("reporter"));
+    deps.peerRegistry.register(makeSession("healthy-peer"));
+
+    manager.connectToPeer({ deviceId: "reporter", url: "ws://127.0.0.1:19999" });
+    const reporterClient = peerClientInstances[0];
+
+    await reporterClient.__emitEvent("peer.down", { deviceId: "healthy-peer", gen: 99 });
+
+    expect(deps.peerRegistry.get("healthy-peer")).toBeDefined();
+  });
 });

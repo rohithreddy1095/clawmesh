@@ -57,6 +57,7 @@ describe("ContextPropagator", () => {
 
     expect(frame.sourceDeviceId).toBe(fakeIdentity.deviceId);
     expect(frame.sourceDisplayName).toBe("test-local");
+    expect(frame.gen).toBe(1);
     expect(frame.hops).toBe(0);
     expect(frame.frameId).toBeTruthy();
     expect(frame.timestamp).toBeGreaterThan(0);
