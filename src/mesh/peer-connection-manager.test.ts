@@ -158,6 +158,24 @@ describe("PeerConnectionManager", () => {
     manager.stopAll();
   });
 
+  it("refuses insecure ws connections for relay-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "relay-peer",
+      url: "ws://relay.example.com/mesh",
+      transportLabel: "relay",
+    });
+
+    expect(manager.has("relay-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure relay connection"),
+    );
+  });
+
   it("normalizes https relay URLs before creating the client", () => {
     manager.connectToPeer({
       deviceId: "secure-peer",

@@ -77,6 +77,14 @@ export class PeerConnectionManager {
       peer.transportLabel ? `via ${peer.transportLabel}` : undefined,
       `(${securityPosture})`,
     ].filter(Boolean).join(" ");
+
+    if (peer.transportLabel === "relay" && securityPosture === "insecure") {
+      this.deps.log.warn(
+        `mesh: refusing insecure relay connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+      );
+      return;
+    }
+
     this.deps.log.info(`mesh: outbound connecting ${peer.deviceId.slice(0, 12)}… ${transportContext}`);
 
     const client = new MeshPeerClient({

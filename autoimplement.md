@@ -229,18 +229,22 @@ Example:
   - message: `feat(mesh): log static peer posture on connect`
 
 - ✅ Static peer posture in outbound error logs
-  - commit: pending
+  - commit: `057315d`
   - message: `feat(mesh): include static peer posture in outbound errors`
+
+- ✅ Relay transport enforcement slice
+  - commit: pending
+  - message: `feat(mesh): refuse insecure relay ws connections`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay transport enforcement slice**
+**Pinned relay enforcement slice**
 
 Desired behavior:
-- begin moving from pure observability toward a small behavior-enforcement step
+- enforce fingerprint pinning for peers explicitly labeled `relay` over TLS
 - keep LAN/static compatibility intact
-- prefer the smallest test-backed WAN safety or transport gate next
+- continue transport safety enforcement one narrow step at a time
 
 This is the next practical WAN milestone slice.
 
