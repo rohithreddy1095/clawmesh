@@ -233,18 +233,22 @@ Example:
   - message: `feat(mesh): include static peer posture in outbound errors`
 
 - ✅ Relay transport enforcement slice
-  - commit: pending
+  - commit: `d518ef9`
   - message: `feat(mesh): refuse insecure relay ws connections`
+
+- ✅ Pinned relay enforcement slice
+  - commit: pending
+  - message: `feat(mesh): refuse unpinned relay tls connections`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Pinned relay enforcement slice**
+**WAN pinning policy broadening review**
 
 Desired behavior:
-- enforce fingerprint pinning for peers explicitly labeled `relay` over TLS
+- decide whether TLS pinning enforcement should remain relay-only or widen to other WAN-labeled peers
 - keep LAN/static compatibility intact
-- continue transport safety enforcement one narrow step at a time
+- continue with the smallest policy-backed enforcement step next
 
 This is the next practical WAN milestone slice.
 

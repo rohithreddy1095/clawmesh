@@ -84,6 +84,12 @@ export class PeerConnectionManager {
       );
       return;
     }
+    if (peer.transportLabel === "relay" && securityPosture === "tls-unpinned") {
+      this.deps.log.warn(
+        `mesh: refusing unpinned relay connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+      );
+      return;
+    }
 
     this.deps.log.info(`mesh: outbound connecting ${peer.deviceId.slice(0, 12)}… ${transportContext}`);
 
