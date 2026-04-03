@@ -189,20 +189,24 @@ Example:
   - message: `feat(mesh): label discovery auto-connect peers as mdns`
 
 - ✅ Configured static peers in mesh.status
-  - commit: pending
+  - commit: `18816e1`
   - message: `feat(mesh): expose configured static peers in mesh status`
+
+- ✅ Configured static peers in health parity
+  - commit: pending
+  - message: `feat(mesh): expose configured static peers in health`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Configured static peers in health parity**
+**Relay transport execution slice**
 
 Desired behavior:
-- health and status surfaces should present configured static peers consistently
-- close another observational gap before actual relay transport work
-- keep behavior observational only
+- start actual transport behavior beyond pure visibility/labeling
+- keep trust and existing LAN/static behavior unchanged
+- prefer smallest test-backed bridge step toward relay-backed connectivity
 
-This is the next practical WAN bridge slice.
+This is the next practical WAN milestone slice.
 
 ## Milestone Plan
 
