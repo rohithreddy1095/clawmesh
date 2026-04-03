@@ -87,6 +87,10 @@ export class PeerConnectionManager {
         this.deps.autoConnect.markDisconnected(deviceId);
         this.connectionHealth.removePeer(deviceId);
         this.deps.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
+        this.deps.peerRegistry.broadcastEvent("peer.down", {
+          deviceId,
+          reportedAtMs: Date.now(),
+        });
         this.deps.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
       onError: (err) => {
@@ -104,6 +108,25 @@ export class PeerConnectionManager {
             this.connectionHealth.removePeer(peer.deviceId);
             this.deps.eventBus.emit("peer.disconnected", { deviceId: peer.deviceId, reason: "peer leaving" });
             this.deps.log.info(`mesh: peer leaving ${peer.deviceId.slice(0, 12)}…`);
+          }
+          return;
+        }
+
+        if (event === "peer.down") {
+          const targetDeviceId =
+            payload && typeof payload === "object" && typeof (payload as { deviceId?: unknown }).deviceId === "string"
+              ? (payload as { deviceId: string }).deviceId
+              : undefined;
+          if (!targetDeviceId || targetDeviceId === this.deps.identity.deviceId) {
+            return;
+          }
+          const removed = this.deps.peerRegistry.unregisterDevice(targetDeviceId);
+          if (removed) {
+            this.deps.capabilityRegistry.removePeer(targetDeviceId);
+            this.deps.autoConnect.markDisconnected(targetDeviceId);
+            this.connectionHealth.removePeer(targetDeviceId);
+            this.deps.eventBus.emit("peer.disconnected", { deviceId: targetDeviceId, reason: "peer down" });
+            this.deps.log.info(`mesh: peer down ${targetDeviceId.slice(0, 12)}… (reported by ${peer.deviceId.slice(0, 12)}…)`);
           }
           return;
         }
