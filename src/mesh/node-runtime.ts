@@ -258,6 +258,7 @@ export class MeshNodeRuntime {
       getPlannerLeader: () => this.getPlannerLeader(),
       getPlannerActivity: () => this.getPlannerActivity(),
       isDiscoveryEnabled: () => !this.opts.disableDiscovery,
+      getConfiguredStaticPeers: () => this.getConfiguredStaticPeers(),
       getMetrics: () => this.metrics.snapshot(),
     }));
     this.rpcDispatcher.registerAll(createChatHandlers({

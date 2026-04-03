@@ -172,6 +172,19 @@ describe("computeHealthCheck", () => {
     expect(result.discoveryEnabled).toBe(false);
   });
 
+  it("reports configured static peers when provided", () => {
+    const deps = createDeps({
+      getConfiguredStaticPeers: () => ([{
+        deviceId: "peer-static",
+        url: "wss://relay.example.com/mesh",
+        transportLabel: "relay",
+      }]),
+    } as any);
+    const result = computeHealthCheck(deps as any);
+    expect(result.configuredStaticPeers?.[0].url).toBe("wss://relay.example.com/mesh");
+    expect(result.configuredStaticPeers?.[0].transportLabel).toBe("relay");
+  });
+
   it("includes memory usage", () => {
     const deps = createDeps();
     const result = computeHealthCheck(deps);
