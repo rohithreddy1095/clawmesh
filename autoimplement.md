@@ -209,18 +209,22 @@ Example:
   - message: `feat(cli): warn on unpinned relay and wss peers`
 
 - ✅ Insecure relay transport diagnostics
-  - commit: pending
+  - commit: `5de49c7`
   - message: `feat(cli): warn on insecure relay ws peers`
+
+- ✅ Static peer security posture in status surfaces
+  - commit: pending
+  - message: `feat(mesh): expose static peer security posture in status`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Static peer security posture in status surfaces**
+**Static peer security posture in operator views**
 
 Desired behavior:
-- surface whether configured static peers are secure/pinned/insecure in status-style outputs
+- show configured static peer security posture in operator-facing status output
 - keep connection behavior unchanged
-- make WAN peer posture visible after startup, not just during preflight
+- make WAN peer posture visible after startup, not just via RPC/health
 
 This is the next practical WAN milestone slice.
 

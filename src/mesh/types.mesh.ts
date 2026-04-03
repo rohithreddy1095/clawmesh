@@ -1,3 +1,5 @@
+export type MeshStaticPeerSecurityPosture = "insecure" | "tls-unpinned" | "tls-pinned";
+
 export type MeshStaticPeer = {
   /** WebSocket URL of the remote gateway (e.g. "wss://jetson.local:18789"). */
   url: string;

@@ -48,6 +48,7 @@ describe("mesh.peers handler", () => {
         deviceId: "peer-static",
         url: "wss://relay.example.com/mesh",
         transportLabel: "relay",
+        securityPosture: "tls-unpinned",
       }]),
       getPendingProposals: () => ([{
         taskId: "task-1234...",
@@ -114,7 +115,7 @@ describe("mesh.peers handler", () => {
       peers: unknown[];
       discoveryEnabled?: boolean;
       plannerActivity?: { state: string; leader: { kind: string } };
-      configuredStaticPeers?: Array<{ transportLabel?: string; url: string }>;
+      configuredStaticPeers?: Array<{ transportLabel?: string; url: string; securityPosture?: string }>;
       pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
     expect(s.localDeviceId).toBe("local-device");
@@ -124,6 +125,7 @@ describe("mesh.peers handler", () => {
     expect(s.discoveryEnabled).toBe(false);
     expect(s.configuredStaticPeers?.[0].url).toBe("wss://relay.example.com/mesh");
     expect(s.configuredStaticPeers?.[0].transportLabel).toBe("relay");
+    expect(s.configuredStaticPeers?.[0].securityPosture).toBe("tls-unpinned");
     expect(s.plannerActivity?.state).toBe("active");
     expect(s.plannerActivity?.leader.kind).toBe("local");
     expect(s.pendingProposals?.[0].summary).toBe("Irrigate zone-1");

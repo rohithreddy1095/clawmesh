@@ -47,7 +47,7 @@ import { formatProposalOwner } from "../agents/proposal-formatting.js";
 import { MeshDiscovery } from "./discovery.js";
 import { loadOrCreateMeshId } from "./mesh-identity.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
-import { normalizeMeshPeerUrl } from "./peer-url.js";
+import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl } from "./peer-url.js";
 import { choosePlannerLeader, getPlannerActivity, type PlannerActivity, type PlannerLeader } from "./planner-election.js";
 
 export type MeshNodeRuntimeOptions = {
@@ -532,6 +532,7 @@ export class MeshNodeRuntime {
       deviceId: peer.deviceId,
       url: peer.url,
       transportLabel: peer.transportLabel,
+      securityPosture: getMeshStaticPeerSecurityPosture(peer),
     }));
   }
 

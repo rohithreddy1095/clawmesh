@@ -17,6 +17,7 @@ export function createMeshPeersHandlers(deps: {
     deviceId: string;
     url: string;
     transportLabel?: string;
+    securityPosture?: string;
   }>;
   getPendingProposals?: () => Array<{
     taskId: string;

@@ -178,11 +178,13 @@ describe("computeHealthCheck", () => {
         deviceId: "peer-static",
         url: "wss://relay.example.com/mesh",
         transportLabel: "relay",
+        securityPosture: "tls-unpinned",
       }]),
     } as any);
     const result = computeHealthCheck(deps as any);
     expect(result.configuredStaticPeers?.[0].url).toBe("wss://relay.example.com/mesh");
     expect(result.configuredStaticPeers?.[0].transportLabel).toBe("relay");
+    expect(result.configuredStaticPeers?.[0].securityPosture).toBe("tls-unpinned");
   });
 
   it("includes memory usage", () => {

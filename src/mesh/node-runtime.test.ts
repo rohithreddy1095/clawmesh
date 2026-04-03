@@ -340,6 +340,7 @@ describe("MeshNodeRuntime", () => {
 
     expect(node.runtime.getConfiguredStaticPeers()[0]?.url).toBe("wss://relay.example.com/mesh");
     expect(node.runtime.getConfiguredStaticPeers()[0]?.transportLabel).toBe("relay");
+    expect(node.runtime.getConfiguredStaticPeers()[0]?.securityPosture).toBe("tls-unpinned");
   });
 
   it("labels auto-connected discovery peers as mdns", async () => {
