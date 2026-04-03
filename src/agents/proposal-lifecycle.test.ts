@@ -199,6 +199,20 @@ describe("ProposalDedup", () => {
     dd.checkAndRecord({ targetRef: "c", operation: "d" }, now + 200); // triggers cleanup
     expect(dd.size).toBe(1); // "a:b" cleaned up
   });
+
+  it("tracks which planner last claimed a dedup entry", () => {
+    const dd = new ProposalDedup();
+    const sig = { targetRef: "pump:P1", operation: "irrigate", zone: "z1", plannerDeviceId: "planner-a" };
+    dd.checkAndRecord(sig);
+    expect(dd.getRecord(sig)?.plannerDeviceId).toBe("planner-a");
+  });
+
+  it("keeps cross-planner blocking while preserving original owner", () => {
+    const dd = new ProposalDedup({ windowMs: 60_000 });
+    dd.checkAndRecord({ targetRef: "pump:P1", operation: "irrigate", zone: "z1", plannerDeviceId: "planner-a" });
+    expect(dd.checkAndRecord({ targetRef: "pump:P1", operation: "irrigate", zone: "z1", plannerDeviceId: "planner-b" })).toBe(false);
+    expect(dd.getRecord({ targetRef: "pump:P1", operation: "irrigate", zone: "z1" })?.plannerDeviceId).toBe("planner-a");
+  });
 });
 
 // ── Scenario: Multi-Planner Safety ────────────────────

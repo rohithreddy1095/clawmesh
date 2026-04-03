@@ -15,6 +15,14 @@ export interface ProposalSignature {
   targetRef: string;
   operation: string;
   zone?: string;
+  plannerDeviceId?: string;
+}
+
+export interface ProposalDedupRecord {
+  actionKey: string;
+  plannerKey: string;
+  plannerDeviceId?: string;
+  seenAt: number;
 }
 
 export interface DedupConfig {
@@ -23,7 +31,7 @@ export interface DedupConfig {
 }
 
 export class ProposalDedup {
-  private seen = new Map<string, number>(); // key → timestamp
+  private seen = new Map<string, ProposalDedupRecord>(); // action key → record
   private readonly windowMs: number;
 
   constructor(config: DedupConfig = {}) {
@@ -36,12 +44,17 @@ export class ProposalDedup {
    */
   checkAndRecord(sig: ProposalSignature, now = Date.now()): boolean {
     this.cleanup(now);
-    const key = this.makeKey(sig);
-    const lastSeen = this.seen.get(key);
-    if (lastSeen !== undefined && now - lastSeen < this.windowMs) {
+    const actionKey = this.makeKey(sig);
+    const lastSeen = this.seen.get(actionKey);
+    if (lastSeen !== undefined && now - lastSeen.seenAt < this.windowMs) {
       return false; // Duplicate — too recent
     }
-    this.seen.set(key, now);
+    this.seen.set(actionKey, {
+      actionKey,
+      plannerKey: this.makePlannerKey(sig),
+      plannerDeviceId: sig.plannerDeviceId,
+      seenAt: now,
+    });
     return true; // New — proceed
   }
 
@@ -52,7 +65,7 @@ export class ProposalDedup {
     this.cleanup(now);
     const key = this.makeKey(sig);
     const lastSeen = this.seen.get(key);
-    return lastSeen !== undefined && now - lastSeen < this.windowMs;
+    return lastSeen !== undefined && now - lastSeen.seenAt < this.windowMs;
   }
 
   /**
@@ -73,13 +86,22 @@ export class ProposalDedup {
     return this.seen.size;
   }
 
+  getRecord(sig: ProposalSignature, now = Date.now()): ProposalDedupRecord | undefined {
+    this.cleanup(now);
+    return this.seen.get(this.makeKey(sig));
+  }
+
   private makeKey(sig: ProposalSignature): string {
     return `${sig.targetRef}|${sig.operation}|${sig.zone ?? "*"}`;
   }
 
+  private makePlannerKey(sig: ProposalSignature): string {
+    return `${sig.plannerDeviceId ?? "unknown"}|${this.makeKey(sig)}`;
+  }
+
   private cleanup(now: number): void {
-    for (const [key, ts] of this.seen) {
-      if (now - ts >= this.windowMs) {
+    for (const [key, record] of this.seen) {
+      if (now - record.seenAt >= this.windowMs) {
         this.seen.delete(key);
       }
     }

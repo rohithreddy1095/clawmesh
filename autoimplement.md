@@ -117,18 +117,22 @@ Example:
   - message: `feat(mesh): gate autonomous planner activity by election`
 
 - ✅ Standby promotion wake-up
-  - commit: pending
+  - commit: `0284901`
   - message: `feat(mesh): wake standby planners on promotion`
+
+- ✅ Planner identity broadcast for duplicate suppression
+  - commit: pending
+  - message: `feat(mesh): stamp proposals with planner identity`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner identity broadcast for duplicate suppression**
+**Per-planner duplicate suppression keys**
 
 Desired behavior:
-- proposals should identify which planner node originated them
-- runtime/event surfaces should expose proposal origin clearly
-- foundation for stronger cross-planner duplicate suppression and sticky ownership
+- duplicate suppression should distinguish proposals by originating planner identity
+- keep current cross-mesh safety while making ownership/debugging clearer
+- foundation for future sticky planner ownership and handoff rules
 
 This is the next practical HA slice.
 
