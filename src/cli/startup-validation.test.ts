@@ -156,6 +156,20 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(true);
   });
 
+  it("warns when a custom wan-labeled peer has no TLS fingerprint", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "wss://tailscale.example.com/mesh",
+          transportLabel: "tailscale",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(true);
+  });
+
   it("warns when a relay peer uses insecure ws transport", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",
@@ -178,6 +192,20 @@ describe("validateStartupConfig", () => {
           deviceId: "peer-a",
           url: "ws://vpn.example.com/mesh",
           transportLabel: "vpn",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(true);
+  });
+
+  it("warns when a custom wan-labeled peer uses insecure ws transport", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://tailscale.example.com/mesh",
+          transportLabel: "tailscale",
         },
       ],
     });

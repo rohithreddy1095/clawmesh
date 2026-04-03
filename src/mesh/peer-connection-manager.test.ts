@@ -230,6 +230,42 @@ describe("PeerConnectionManager", () => {
     );
   });
 
+  it("refuses insecure ws connections for custom wan-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "wan-peer",
+      url: "ws://tailscale.example.com/mesh",
+      transportLabel: "tailscale",
+    });
+
+    expect(manager.has("wan-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure tailscale connection"),
+    );
+  });
+
+  it("refuses unpinned tls connections for custom wan-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "wan-peer",
+      url: "wss://tailscale.example.com/mesh",
+      transportLabel: "tailscale",
+    });
+
+    expect(manager.has("wan-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing unpinned tailscale connection"),
+    );
+  });
+
   it("normalizes https relay URLs before creating the client", () => {
     manager.connectToPeer({
       deviceId: "secure-peer",

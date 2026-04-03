@@ -241,18 +241,22 @@ Example:
   - message: `feat(mesh): refuse unpinned relay tls connections`
 
 - ✅ WAN pinning policy broadening review
-  - commit: pending
+  - commit: `4087028`
   - message: `feat(mesh): enforce vpn transport safety like relay`
+
+- ✅ Generic WAN-labeled transport enforcement
+  - commit: pending
+  - message: `feat(mesh): treat unknown transport labels as wan`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Generic WAN-labeled transport enforcement**
+**Explicit local transport alias support**
 
 Desired behavior:
-- treat non-local transport labels as WAN by default
-- keep explicit local labels like `lan` and `mdns` permissive
-- continue transport safety enforcement without special-casing every future WAN label
+- keep explicit local labels like `lan`, `mdns`, and `local` permissive
+- avoid surprising enforcement when operators use `local` for nearby/static peers
+- continue WAN safety without overreaching into clearly local transport labels
 
 This is the next practical WAN milestone slice.
 

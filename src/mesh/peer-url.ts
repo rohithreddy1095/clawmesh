@@ -1,6 +1,6 @@
 import type { MeshStaticPeer, MeshStaticPeerSecurityPosture } from "./types.mesh.js";
 
-const PINNED_WAN_TRANSPORT_LABELS = new Set(["relay", "vpn"]);
+const LOCAL_TRANSPORT_LABELS = new Set(["lan", "mdns"]);
 
 export function normalizeMeshPeerUrl(url: string): string {
   if (url.startsWith("https://")) {
@@ -21,5 +21,6 @@ export function getMeshStaticPeerSecurityPosture(peer: Pick<MeshStaticPeer, "url
 }
 
 export function requiresPinnedWanTransport(peer: Pick<MeshStaticPeer, "transportLabel">): boolean {
-  return !!peer.transportLabel && PINNED_WAN_TRANSPORT_LABELS.has(peer.transportLabel);
+  const transportLabel = peer.transportLabel?.toLowerCase();
+  return !!transportLabel && !LOCAL_TRANSPORT_LABELS.has(transportLabel);
 }
