@@ -72,19 +72,21 @@ Example:
   - commit: `8b859e0`
   - message: `feat(mesh): broadcast and handle peer.down on hard disconnect`
 
+- ✅ Reachability confirmation before honoring `peer.down`
+  - commit: pending
+  - message: `feat(mesh): confirm peer reachability before honoring peer.down`
+
 ## Next Planned Slice
 
 ### Red/Green target
-**Reachability confirmation before honoring `peer.down`**
+**Dead-peer suppression / ghost reconnect prevention**
 
 Desired behavior:
-- node A reports `peer.down(C)`
-- node B does **not** blindly remove C
-- node B probes C briefly
-- if C is reachable → ignore report
-- if C is unreachable → remove C
+- once a peer is confirmed dead, stale discovery / reconnect noise should not immediately resurrect it
+- the mesh should keep a temporary dead-peer suppression set
+- a peer should only come back through a clean reconnect path
 
-This prevents false-positive death cascades.
+This prevents ghost peers from reappearing after flaky disconnects.
 
 ## Milestone Plan
 
@@ -92,7 +94,7 @@ This prevents false-positive death cascades.
 - ✅ runtime harness
 - ✅ `peer.leaving`
 - ✅ `peer.down` broadcast/handling
-- ⏳ reachability confirmation before removal
+- ✅ reachability confirmation before removal
 - ⏳ dead-peer suppression / ghost reconnect prevention
 
 ### Milestone 2 — Identity & protocol safety

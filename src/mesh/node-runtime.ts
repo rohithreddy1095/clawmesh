@@ -185,6 +185,15 @@ export class MeshNodeRuntime {
       worldModel: this.worldModel,
       eventBus: this.eventBus,
       autoConnect: this.autoConnect,
+      confirmPeerReachable: async (deviceId: string) => {
+        const result = await this.peerRegistry.invoke({
+          deviceId,
+          method: "mesh.health",
+          params: {},
+          timeoutMs: 3_000,
+        });
+        return result.ok;
+      },
       log: this.log,
     });
 

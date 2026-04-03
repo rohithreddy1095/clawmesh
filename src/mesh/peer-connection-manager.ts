@@ -33,6 +33,8 @@ export type PeerConnectionManagerDeps = {
   worldModel: WorldModel;
   eventBus: MeshEventBus;
   autoConnect: AutoConnectManager;
+  /** Best-effort probe used before honoring a peer.down report. */
+  confirmPeerReachable?: (deviceId: string) => Promise<boolean>;
   log: { info: (msg: string) => void; warn: (msg: string) => void };
 };
 
@@ -96,7 +98,7 @@ export class PeerConnectionManager {
       onError: (err) => {
         this.deps.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
       },
-      onEvent: (event, payload) => {
+      onEvent: async (event, payload) => {
         // Record activity for connection health monitoring
         this.connectionHealth.recordActivity(peer.deviceId);
 
@@ -120,6 +122,17 @@ export class PeerConnectionManager {
           if (!targetDeviceId || targetDeviceId === this.deps.identity.deviceId) {
             return;
           }
+
+          const reachable = this.deps.confirmPeerReachable
+            ? await this.deps.confirmPeerReachable(targetDeviceId)
+            : false;
+          if (reachable) {
+            this.deps.log.info(
+              `mesh: ignoring peer.down for ${targetDeviceId.slice(0, 12)}… — peer still reachable`,
+            );
+            return;
+          }
+
           const removed = this.deps.peerRegistry.unregisterDevice(targetDeviceId);
           if (removed) {
             this.deps.capabilityRegistry.removePeer(targetDeviceId);

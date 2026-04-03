@@ -29,7 +29,7 @@ export type MeshPeerClientOptions = {
   /** Called on errors. */
   onError?: (err: Error) => void;
   /** Called when the remote peer sends an event (e.g. context.frame). */
-  onEvent?: (event: string, payload: unknown) => void;
+  onEvent?: (event: string, payload: unknown) => void | Promise<void>;
 };
 
 export class MeshPeerClient {
