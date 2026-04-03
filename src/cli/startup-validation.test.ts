@@ -44,7 +44,7 @@ describe("validateStartupConfig", () => {
   it("errors on invalid peer URL", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",
-      staticPeers: [{ deviceId: "d2", url: "http://wrong-protocol" }],
+      staticPeers: [{ deviceId: "d2", url: "ftp://wrong-protocol" }],
     });
     expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(true);
   });
@@ -84,6 +84,26 @@ describe("validateStartupConfig", () => {
       ],
     });
     expect(diagnostics.some(d => d.code === "STATIC_PEER_TRANSPORTS" && d.message.includes("relay, lan"))).toBe(true);
+  });
+
+  it("accepts normalized relay peer websocket URLs", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(false);
+  });
+
+  it("accepts relay peer URLs normalized from https", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "https://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INVALID_PEER_URL")).toBe(false);
   });
 
   it("warns when discovery is disabled and static peers have no transport labels", () => {

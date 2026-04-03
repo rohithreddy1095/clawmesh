@@ -21,6 +21,13 @@ describe("parsePeerSpec", () => {
     expect(result.transportLabel).toBe("relay");
   });
 
+  it("normalizes https relay URLs to wss", () => {
+    const result = parsePeerSpec("abc123=https://relay.example.com/mesh|sha256:AABBCCDD|relay");
+    expect(result.url).toBe("wss://relay.example.com/mesh");
+    expect(result.tlsFingerprint).toBe("sha256:AABBCCDD");
+    expect(result.transportLabel).toBe("relay");
+  });
+
   it("parses deviceId@ws://host:port format", () => {
     const result = parsePeerSpec("abc123@ws://10.0.0.5:18789");
     expect(result.deviceId).toBe("abc123");

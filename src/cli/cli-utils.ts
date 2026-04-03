@@ -6,6 +6,16 @@
 
 import type { MeshStaticPeer } from "../mesh/types.mesh.js";
 
+export function normalizePeerUrl(url: string): string {
+  if (url.startsWith("https://")) {
+    return `wss://${url.slice("https://".length)}`;
+  }
+  if (url.startsWith("http://")) {
+    return `ws://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
 /**
  * Parse a peer specification string into a MeshStaticPeer.
  *
@@ -27,7 +37,7 @@ export function parsePeerSpec(spec: string): MeshStaticPeer {
   const restRaw = trimmed.slice(sepIndex + 1);
   const [urlRaw, tlsFingerprint, transportLabel] = restRaw.split("|");
   const deviceId = deviceIdRaw.trim();
-  const url = urlRaw?.trim();
+  const url = normalizePeerUrl(urlRaw?.trim() ?? "");
   if (!deviceId || !url) {
     throw new Error(`invalid peer spec "${spec}" (use "<deviceId>=<ws://host:port>")`);
   }

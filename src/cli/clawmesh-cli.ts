@@ -18,6 +18,7 @@ import { CredentialStore } from "../infra/credential-store.js";
 import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from "./startup-validation.js";
 import { createGracefulShutdown } from "./graceful-shutdown.js";
 import { resolveRuntimeRole, normalizeMeshName, formatDiscoveryMode, formatStaticPeerSummary } from "./cli-config.js";
+import { normalizePeerUrl } from "./cli-utils.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -60,7 +61,7 @@ function parsePeerSpec(spec: string): MeshStaticPeer {
   const restRaw = trimmed.slice(sepIndex + 1);
   const [urlRaw, tlsFingerprint, transportLabel] = restRaw.split("|");
   const deviceId = deviceIdRaw.trim();
-  const url = urlRaw?.trim();
+  const url = normalizePeerUrl(urlRaw?.trim() ?? "");
   if (!deviceId || !url) {
     throw new Error(`invalid peer spec "${spec}" (use "<deviceId>=<ws://host:port>")`);
   }

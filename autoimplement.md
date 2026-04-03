@@ -193,18 +193,22 @@ Example:
   - message: `feat(mesh): expose configured static peers in mesh status`
 
 - ✅ Configured static peers in health parity
-  - commit: pending
+  - commit: `248bab4`
   - message: `feat(mesh): expose configured static peers in health`
+
+- ✅ Relay/static peer URL normalization at CLI boundary
+  - commit: pending
+  - message: `feat(cli): normalize relay peer https URLs to wss`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay transport execution slice**
+**Relay/static peer URL normalization in runtime path**
 
 Desired behavior:
-- start actual transport behavior beyond pure visibility/labeling
-- keep trust and existing LAN/static behavior unchanged
-- prefer smallest test-backed bridge step toward relay-backed connectivity
+- normalize static peer `http(s)` URLs at the runtime connection boundary too
+- keep existing CLI and LAN/static behavior unchanged
+- harden programmatic/config-driven runtime usage beyond CLI parsing
 
 This is the next practical WAN milestone slice.
 

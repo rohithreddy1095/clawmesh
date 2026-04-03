@@ -65,11 +65,16 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
   // Static peers
   if (input.staticPeers) {
     for (const peer of input.staticPeers) {
-      if (!peer.url.startsWith("ws://") && !peer.url.startsWith("wss://")) {
+      if (
+        !peer.url.startsWith("ws://") &&
+        !peer.url.startsWith("wss://") &&
+        !peer.url.startsWith("http://") &&
+        !peer.url.startsWith("https://")
+      ) {
         diagnostics.push({
           level: "error",
           code: "INVALID_PEER_URL",
-          message: `Peer ${peer.deviceId.slice(0, 12)}… has invalid URL: ${peer.url} (must start with ws:// or wss://)`,
+          message: `Peer ${peer.deviceId.slice(0, 12)}… has invalid URL: ${peer.url} (must start with ws://, wss://, http://, or https://)`,
         });
       }
       if (peer.deviceId === input.deviceId) {
