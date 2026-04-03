@@ -145,20 +145,24 @@ Example:
   - message: `feat(mesh): include planner owner in decision notices`
 
 - ✅ Planner-owner visibility in status surfaces
-  - commit: pending
+  - commit: `1ea0593`
   - message: `feat(mesh): show proposal owners in status surfaces`
+
+- ✅ Planner-owner visibility in RPC summaries
+  - commit: pending
+  - message: `feat(mesh): expose proposal owners in mesh status RPC`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner-owner visibility in RPC summaries**
+**Relay/WAN investigation slice**
 
 Desired behavior:
-- expose proposal owner context in machine-readable status surfaces where proposal summaries are available
-- keep it observational and backward compatible
-- prepare for HA dashboards and relay-era debugging
+- begin the next milestone with a small, test-backed transport/WAN step
+- keep LAN/trust behavior unchanged
+- preserve all current planner HA work
 
-This is the next practical HA slice.
+This is the next practical milestone bridge.
 
 ## Milestone Plan
 
