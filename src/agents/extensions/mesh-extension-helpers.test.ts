@@ -188,6 +188,8 @@ describe("summarizeProposals", () => {
       operation: "open",
       approvalLevel: "L3",
       status: "completed",
+      plannerDeviceId: "planner-abcdef1234567890",
+      plannerRole: "standby-planner",
     });
     const [s] = summarizeProposals([p]);
     expect(s.summary).toBe("Open valve");
@@ -195,6 +197,9 @@ describe("summarizeProposals", () => {
     expect(s.operation).toBe("open");
     expect(s.approvalLevel).toBe("L3");
     expect(s.status).toBe("completed");
+    expect(s.plannerDeviceId).toBe("planner-abcdef1234567890");
+    expect(s.plannerRole).toBe("standby-planner");
+    expect(s.plannerOwner).toBe("standby-planner:planner-abcd…");
   });
 
   it("formats createdAt as ISO string", () => {

@@ -33,6 +33,7 @@ import {
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
+import { formatProposalSummaryLine } from "../proposal-formatting.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -377,9 +378,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           ctx.ui.notify("No proposals.", "info");
           return;
         }
-        const lines = proposals.map((p) =>
-          `[${p.taskId.slice(0, 8)}] ${p.status.toUpperCase()} ${p.approvalLevel} — ${p.summary}`,
-        );
+        const lines = proposals.map((p) => formatProposalSummaryLine(p));
         ctx.ui.notify(lines.join("\n"), "info");
       },
     });
@@ -473,7 +472,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         relevantSection,
         freshnessSection,
         pending.length > 0
-          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.summary}`).join("\n")}`
+          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  ${formatProposalSummaryLine(p, { includeStatus: false })}`).join("\n")}`
           : "Pending proposals: 0",
       ].filter(Boolean).join("\n");
 

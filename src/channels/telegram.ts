@@ -20,6 +20,7 @@ import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
+import { formatProposalSummaryLine } from "../agents/proposal-formatting.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -267,7 +268,7 @@ export class TelegramChannel {
           : p.status === "rejected" ? "❌"
           : p.status === "executing" ? "⏳"
           : "·";
-        return `${icon} [${p.taskId.slice(0, 8)}] ${p.approvalLevel} ${p.status}\n   ${p.summary}`;
+        return `${icon} ${formatProposalSummaryLine(p)}`;
       });
 
       await ctx.reply(`📋 Proposals (${proposals.length})\n\n${lines.join("\n\n")}`);

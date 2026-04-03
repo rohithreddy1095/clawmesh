@@ -5,6 +5,7 @@
 
 import type { ContextFrame } from "../../mesh/context-types.js";
 import type { TaskProposal } from "../types.js";
+import { formatProposalOwner } from "../proposal-formatting.js";
 
 /**
  * Format an array of context frames into a human-readable string.
@@ -66,6 +67,8 @@ export function summarizeProposals(
   approvalLevel: string;
   status: string;
   plannerDeviceId?: string;
+  plannerRole?: string;
+  plannerOwner?: string;
   createdAt: string;
 }> {
   return proposals.map((p) => ({
@@ -76,6 +79,8 @@ export function summarizeProposals(
     approvalLevel: p.approvalLevel,
     status: p.status,
     plannerDeviceId: p.plannerDeviceId,
+    plannerRole: p.plannerRole,
+    plannerOwner: formatProposalOwner(p),
     createdAt: new Date(p.createdAt).toISOString(),
   }));
 }

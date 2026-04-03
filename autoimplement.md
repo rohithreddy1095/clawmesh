@@ -129,18 +129,22 @@ Example:
   - message: `feat(mesh): track proposal dedup ownership by planner`
 
 - ✅ Proposal owner visibility on duplicate rejection
-  - commit: pending
+  - commit: `ef9affe`
   - message: `feat(mesh): expose duplicate proposal owner to callers`
+
+- ✅ Planner-owner aware proposal summaries
+  - commit: pending
+  - message: `feat(mesh): surface planner ownership in proposal summaries`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner-owner aware proposal summaries**
+**Sticky planner ownership hints**
 
 Desired behavior:
-- proposal listings and operator-facing summaries should show planner ownership consistently
-- make HA debugging easier when proposals survive leader changes
-- keep existing proposal lifecycle semantics unchanged
+- when a proposal already exists, operator-facing views should make ownership/handoff intent obvious
+- prepare for future leader handoff rules without changing approval semantics yet
+- keep summary formatting consistent across slash commands and channels
 
 This is the next practical HA slice.
 
