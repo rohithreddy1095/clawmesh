@@ -371,6 +371,12 @@ export class MeshNodeRuntime {
       peers: this.peerRegistry.listConnected().length,
     });
 
+    // Tell peers we are leaving before sockets close so they can clean up immediately.
+    this.peerRegistry.broadcastEvent("peer.leaving", {
+      deviceId: this.identity.deviceId,
+      timestamp: Date.now(),
+    });
+
     // Save world model snapshot for fast restart
     saveWorldModelSnapshot(
       this.worldModel, this.identity.deviceId,

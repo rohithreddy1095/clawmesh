@@ -93,8 +93,10 @@ export class MeshPeerClient {
       const ws = this.ws;
       this.ws = null;
       if (ws) {
-        this.opts.peerRegistry.unregister(this.connId);
-        this.opts.onDisconnected?.(this.opts.remoteDeviceId);
+        const removed = this.opts.peerRegistry.unregister(this.connId);
+        if (removed) {
+          this.opts.onDisconnected?.(this.opts.remoteDeviceId);
+        }
       }
       this.scheduleReconnect();
     });

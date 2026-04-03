@@ -177,4 +177,36 @@ describe("MeshNodeRuntime", () => {
     expect(forward.ok).toBe(false);
     expect(forward.error).toContain("VERIFICATION_REQUIRED");
   });
+
+  it("emits peer.disconnected with 'peer leaving' when a remote node stops gracefully", async () => {
+    const nodeB = await harness.startNode({
+      name: "node-b5",
+      capabilities: ["channel:clawmesh"],
+    });
+    const nodeA = await harness.startNode({
+      name: "node-a5",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!nodeA || !nodeB) return;
+
+    const connected = await harness.connect(nodeA, nodeB);
+    expect(connected).toBe(true);
+
+    const disconnected = new Promise<{ deviceId: string; reason?: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timed out waiting for peer.disconnected")), 2_000);
+      nodeA.runtime.eventBus.on("peer.disconnected", (event) => {
+        if (event.deviceId === nodeB.identity.deviceId) {
+          clearTimeout(timer);
+          resolve(event);
+        }
+      });
+    });
+
+    await nodeB.runtime.stop();
+
+    const event = await disconnected;
+    expect(event.reason).toBe("peer leaving");
+    expect(nodeA.runtime.listConnectedPeers().some((p) => p.deviceId === nodeB.identity.deviceId)).toBe(false);
+  });
 });

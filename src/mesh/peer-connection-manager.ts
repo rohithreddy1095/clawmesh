@@ -96,6 +96,18 @@ export class PeerConnectionManager {
         // Record activity for connection health monitoring
         this.connectionHealth.recordActivity(peer.deviceId);
 
+        if (event === "peer.leaving") {
+          const removed = this.deps.peerRegistry.unregisterDevice(peer.deviceId);
+          if (removed) {
+            this.deps.capabilityRegistry.removePeer(peer.deviceId);
+            this.deps.autoConnect.markDisconnected(peer.deviceId);
+            this.connectionHealth.removePeer(peer.deviceId);
+            this.deps.eventBus.emit("peer.disconnected", { deviceId: peer.deviceId, reason: "peer leaving" });
+            this.deps.log.info(`mesh: peer leaving ${peer.deviceId.slice(0, 12)}…`);
+          }
+          return;
+        }
+
         if (event === "context.frame") {
           const frame = payload as ContextFrame;
           const isNew = this.deps.contextPropagator.handleInbound(frame, peer.deviceId);

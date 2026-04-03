@@ -55,6 +55,18 @@ export class PeerRegistry {
     return deviceId;
   }
 
+  /**
+   * Unregister a peer by device ID.
+   * Useful when a protocol-level event (e.g. peer.leaving) arrives before socket close.
+   */
+  unregisterDevice(deviceId: string): boolean {
+    const session = this.peersById.get(deviceId);
+    if (!session) {
+      return false;
+    }
+    return this.unregister(session.connId) !== null;
+  }
+
   get(deviceId: string): PeerSession | undefined {
     return this.peersById.get(deviceId);
   }
