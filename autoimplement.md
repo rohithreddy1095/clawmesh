@@ -137,18 +137,22 @@ Example:
   - message: `feat(mesh): surface planner ownership in proposal summaries`
 
 - ✅ Sticky planner ownership hints
-  - commit: pending
+  - commit: `f365ec7`
   - message: `feat(mesh): show proposal owner handoff hints`
+
+- ✅ Approval/rejection owner visibility
+  - commit: pending
+  - message: `feat(mesh): include planner owner in decision notices`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Approval/rejection owner visibility**
+**Planner-owner visibility in status surfaces**
 
 Desired behavior:
-- operator approval/rejection paths should mention the originating planner when helpful
-- make handoff situations obvious during human decisions
-- keep approval semantics unchanged
+- surface proposal owner context in broader operational status views where proposals are summarized
+- make HA debugging easier without changing proposal lifecycle behavior
+- keep the slice observational
 
 This is the next practical HA slice.
 
