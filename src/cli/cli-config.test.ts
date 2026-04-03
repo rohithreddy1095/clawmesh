@@ -270,18 +270,19 @@ describe("formatDiscoveryMode", () => {
 });
 
 describe("formatStaticPeerSummary", () => {
-  it("includes transport label when present", () => {
+  it("includes transport label and tls posture when present", () => {
     expect(formatStaticPeerSummary({
       deviceId: "abcdef1234567890",
       url: "wss://relay.example.com/mesh",
       transportLabel: "relay",
-    })).toBe("abcdef123456…  wss://relay.example.com/mesh  via relay");
+      tlsFingerprint: "sha256:AABBCCDD",
+    })).toBe("abcdef123456…  wss://relay.example.com/mesh  via relay  tls-pinned");
   });
 
-  it("omits transport label when absent", () => {
+  it("shows insecure posture for ws peers", () => {
     expect(formatStaticPeerSummary({
       deviceId: "abcdef1234567890",
       url: "ws://10.0.0.5:18789",
-    })).toBe("abcdef123456…  ws://10.0.0.5:18789");
+    })).toBe("abcdef123456…  ws://10.0.0.5:18789  insecure");
   });
 });

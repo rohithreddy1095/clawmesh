@@ -217,18 +217,22 @@ Example:
   - message: `feat(mesh): expose static peer security posture in status`
 
 - ✅ Static peer security posture in operator views
-  - commit: pending
+  - commit: `f9ed287`
   - message: `feat(mesh): show static peer posture in operator status views`
+
+- ✅ Static peer security posture in CLI startup output
+  - commit: pending
+  - message: `feat(cli): show static peer posture at startup`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Static peer security posture in CLI startup output**
+**Static peer posture in connection logs**
 
 Desired behavior:
-- show configured static peer security posture in CLI startup summaries
+- include transport/security posture context in outbound static-peer connection logs
 - keep connection behavior unchanged
-- make WAN peer posture visible both before and after startup
+- make WAN peer posture visible during actual connect attempts too
 
 This is the next practical WAN milestone slice.
 
