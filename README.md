@@ -3,506 +3,543 @@
 </p>
 
 <p align="center">
-  <strong>Distributed AI mesh — independent claws that join into one intelligent network</strong>
+  <strong>Mesh-first distributed AI gateway for multi-device sensing, planning, and safe execution.</strong>
 </p>
 
 <p align="center">
+  <a href="#what-is-clawmesh">Overview</a> &middot;
   <a href="#quickstart">Quickstart</a> &middot;
-  <a href="#architecture">Architecture</a> &middot;
-  <a href="#interacting-with-the-mesh">Interaction</a> &middot;
-  <a href="#cli">CLI</a> &middot;
-  <a href="#emergent-context-propagation">Context</a> &middot;
-  <a href="#test-suite">Tests</a> &middot;
-  <a href="#configuration">Config</a>
+  <a href="#deployment-patterns">Deployment</a> &middot;
+  <a href="#trust-and-safety">Safety</a> &middot;
+  <a href="#operator-surfaces">Operator Surfaces</a> &middot;
+  <a href="#development">Development</a>
 </p>
 
 ---
 
 ## What is ClawMesh?
 
-ClawMesh makes a group of devices behave like **one distributed, capability-aware gateway**.
+ClawMesh turns a set of independent devices into one **capability-aware, trust-gated mesh runtime**.
 
-Each device is a **claw** — an independent mesh node with its own identity, capabilities, and intelligence. Claws discover each other, establish trust, and form a mesh where context flows organically and execution routes to whichever node has the right capability.
+A laptop can host the planner and operator UI, a Jetson can expose sensors and actuators, another node can host models or private-network access, and the mesh routes work to the right place.
 
-| What it does |
-|---|
-| Mesh protocol — mDNS discovery, Ed25519 peer trust, capability-based routing |
-| Emergent context — sensor observations gossip across the mesh, building distributed awareness |
-| Pi-powered intelligence — LLM planner reasons over mesh-wide context, proposes actions |
-| Pattern learning — operator approve/reject decisions propagate as learned patterns |
-| Layered trust — T0–T3 evidence tiers, L0–L3 approval levels, LLM hard-blocked from actuation |
-| Multi-channel — Telegram bot, TUI dashboard, Web UI, CLI |
+ClawMesh is built around a few practical ideas:
 
-## Why?
+- **Each device keeps its own identity** via Ed25519 keys and a stable device ID.
+- **Peers discover or connect to each other directly** over mDNS or static/WAN peer definitions.
+- **Context propagates across the mesh** so the planner reasons over shared state, not just one process.
+- **Capabilities determine routing** instead of hard-coded host assumptions.
+- **Actuation is trust-gated** so LLM-only reasoning cannot directly trigger physical execution.
 
-Most AI stacks assume a single machine. That breaks when your capabilities are spread across devices:
+## Why teams use it
 
-- **Laptop** has your API keys and control surface
-- **Jetson/Pi** has hardware sensors and edge inference
-- **Desktop** has GPUs and local models
-- **Server** has private network access
+ClawMesh is useful when your real system is distributed across machines:
 
-ClawMesh lets these discover each other via **mDNS**, establish **Ed25519 mutual trust**, and **route messages** to whichever peer has the right capability — all without a central coordinator.
+- a **command center** with credentials, operator chat, and approvals
+- a **field node** with sensors and actuators
+- an **edge node** with local inference or camera pipelines
+- a **private network node** that can reach systems others cannot
 
-## Usage & Setup Guides
+Instead of building point-to-point glue for each pair, ClawMesh gives you a mesh with:
 
-- [Getting Started Guide](docs/getting-started.md)
-- [Command Center Setup (Mac/PC)](docs/setup-command-center.md)
-- [Field Node Setup (Jetson/Pi)](docs/setup-field-node.md)
-- [Bhoomi Farm Twin Spec](docs/bhoomi-farm-twin-spec-v0.md)
-- [Trust & Safety Policy](.pi/skills/mesh-safety.md)
+- peer trust
+- capability routing
+- mesh-wide context
+- operator approval flows
+- health and status surfaces
+- explicit WAN/static deployment modes
+
+## Project status
+
+ClawMesh is being hardened toward production-style field deployments, but the repo is still evolving quickly.
+
+Important realities:
+
+- the runtime and safety model are real and actively tested
+- WAN/static deployment support now includes transport labeling, posture reporting, and basic WAN enforcement
+- the package is **not yet published to npm**
+- the current checkout expects local `file:` dependencies from a sibling `../pi-mono`
+
+That means this repo is best treated today as a **serious working codebase under active development**, not a finished packaged product.
+
+## Core capabilities
+
+### Mesh runtime
+- mDNS discovery for trusted LAN peers
+- static peer configuration for WAN or discovery-disabled deployments
+- stable mesh identity and protocol generation checks
+- explicit node roles (`node`, `planner`, `field`, `sensor`, `actuator`, `viewer`, `standby-planner`)
+- peer lifecycle handling (`peer.leaving`, `peer.down`, reachability confirmation)
+
+### Intelligence and control
+- Pi-powered planner integration
+- proposal-based execution flow with approval levels
+- mesh-wide world model built from propagated context frames
+- planner ownership and HA groundwork
+
+### Safety and trust
+- Ed25519 mutual identity
+- local trust store
+- actuation trust tiers (T0-T3)
+- approval levels (L0-L3)
+- hard block on LLM-only physical actuation
+
+### Operator experience
+- CLI runtime and one-shot commands
+- Telegram bot integration
+- terminal TUI
+- browser UI in `ui/`
+- machine-readable status via `mesh.status`, `mesh.health`, and `mesh.peers`
+
+### WAN/static deployment hardening
+- discovery-disabled static mode
+- transport labels (`relay`, `vpn`, `lan`, `local`, etc.)
+- URL normalization from `http(s)` to `ws(s)`
+- startup diagnostics for insecure/unpinned WAN peers
+- posture surfaced in health, status, operator views, startup output, and logs
+- enforcement for WAN-labeled peers while keeping explicit local labels permissive
+
+---
 
 ## Quickstart
 
+### Requirements
+
+- Node.js **22+**
+- `pnpm`
+- a sibling checkout of `../pi-mono` for local `file:` dependencies
+
+Optional but commonly needed:
+
+- provider API keys for planner usage
+- Telegram bot token if using Telegram
+
+### Install
+
 ```bash
-# Requirements: Node.js 22+, pnpm
 pnpm install
-pnpm test          # 135 tests across 17 files
-pnpm typecheck     # tsc --noEmit
+pnpm typecheck
+pnpm test
 ```
 
-## Architecture
+### Running from a source checkout
 
-```
-src/agents/
-  extensions/
-    clawmesh-mesh-extension.ts  # Mesh tools for Pi (query_world_model, propose_task, execute, etc.)
-  pi-session.ts                 # Pi-powered intelligence — AgentSession with conversational loop
-  pattern-memory.ts             # Learns from operator approve/reject → gossips mature patterns
-  farm-context-loader.ts        # Loads Bhoomi farm YAML → structured FarmContext
-  types.ts                      # Shared types: TaskProposal, ThresholdRule, FarmContext
-
-src/mesh/
-  node-runtime.ts         # Orchestrator: WebSocket server, peers, planner, UI subscribers
-  discovery.ts            # mDNS polling with peer-discovered/peer-lost events
-  capabilities.ts         # Capability registry (channel:*, skill:*, actuator:*)
-  routing.ts              # Local-first routing: local caps → mesh peers → unavailable
-  forwarding.ts           # RPC-based message forwarding between peers
-  peer-trust.ts           # File-backed trust store with atomic writes
-  peer-registry.ts        # Connected peer session tracking
-  peer-client.ts          # Outbound WebSocket connection to remote peers
-  peer-server.ts          # Inbound WebSocket connection handler
-  handshake.ts            # Ed25519 signed auth payloads
-  context-types.ts        # ContextFrame types for emergent context
-  context-propagator.ts   # Broadcast context frames to mesh peers (gossip)
-  world-model.ts          # Ingest and track mesh-wide knowledge
-  mock-sensor.ts          # Mock sensor for testing context propagation
-  mock-actuator.ts        # Mock actuator for trust-gated command testing
-  trust-policy.ts         # T0–T3 trust tier evaluation + LLM-only actuation blocking
-  command-envelope.ts     # ClawMesh command wire format
-  gateway-connect.ts      # Connect to remote gateways
-  gateway-config.ts       # Saved gateway target management
-  server-methods/         # Gateway RPC handlers (peers, trust, forward)
-
-src/channels/
-  telegram.ts             # Telegram bot — thin mesh-native bridge (long-polling, no webhook)
-  telegram.test.ts        # Telegram channel tests
-
-src/tui/
-  mesh-tui.ts             # Interactive terminal dashboard (peers, gossip, proposals, input)
-  ansi.ts                 # ANSI escape helpers for TUI rendering
-
-src/infra/
-  device-identity.ts      # Ed25519 key generation + deviceId derivation
-  credential-store.ts     # Persistent credential store (~/.clawmesh/credentials.json)
-  credential-store.test.ts
-  ws.ts                   # WebSocket utility helpers
-
-src/cli/
-  clawmesh-cli.ts         # Commander-based CLI (start, identity, trust, credential, etc.)
-
-ui/                       # Next.js web dashboard
-  src/app/page.tsx        # Digital twin overview with mesh node visualization
-  src/app/command/page.tsx  # Chat-first command center (send intents, see responses)
-  src/app/twin/page.tsx   # Digital twin dashboard
-  src/app/telemetry/page.tsx  # Telemetry view
-  src/components/
-    ChatMessage.tsx       # Chat bubble for operator/agent messages
-    CitationBadge.tsx     # Inline citation for sensor data references
-    ProposalCard.tsx      # Approve/reject card for task proposals
-    MeshNode.tsx          # Mesh node visualization component
-    Sidebar.tsx           # Navigation sidebar
-  src/lib/
-    store.ts              # Zustand store for mesh state
-    useMesh.ts            # WebSocket hook connecting UI to mesh node
-    utils.ts              # Shared utilities
-
-.pi/                      # Pi agent skills and prompt templates
-  skills/
-    bhoomi-farm.md        # Farm domain knowledge for the planner
-    mesh-operations.md    # Mesh operation procedures
-    mesh-safety.md        # Safety rules and trust policy
-  prompts/
-    emergency.md          # Emergency response prompt template
-    irrigate.md           # Irrigation decision prompt
-    morning-check.md      # Daily farm check prompt
-```
-
-### Routing Decision Flow
-
-```
-resolveMeshRoute("telegram", capabilityRegistry, localCapabilities)
-  │
-  ├── localCapabilities.has("channel:telegram")? → { kind: "local" }
-  │
-  ├── capabilityRegistry.findPeerWithChannel("telegram")? → { kind: "mesh", peerDeviceId }
-  │
-  └── otherwise → { kind: "unavailable" }
-```
-
-## Interacting with the Mesh
-
-ClawMesh provides five ways to interact with mesh nodes:
-
-### 1. Telegram Bot (`--telegram`)
+If `clawmesh` is not installed on your PATH yet, use:
 
 ```bash
-clawmesh start --name mac-main --command-center --telegram --telegram-chat 7419077732
+pnpm exec tsx clawmesh.ts <command>
 ```
 
-A Telegram bot that bridges your chat to the mesh:
-- **Natural language** — type messages, get Pi planner responses with sensor citations
-- **Commands** — `/status`, `/world`, `/proposals`, `/approve <id>`, `/reject <id>`, `/alerts`
-- **Proposal buttons** — inline approve/reject buttons on task proposals
-- **Alert forwarding** — threshold breaches pushed to subscribed chats
-- **Long-polling** — no webhook, no public IP needed (works from Jetson behind NAT)
+The examples below use `clawmesh` for readability. In a source checkout, replace that with `pnpm exec tsx clawmesh.ts`.
 
-Set up via `clawmesh credential set channel/telegram <bot-token>` or `TELEGRAM_BOT_TOKEN` env var.
-
-### 2. Terminal readline (default)
-
-When you run `clawmesh start`, an interactive stdin handler accepts commands:
-
-| Command | Shortcut | What it does |
-|---------|----------|-------------|
-| `proposals` | `p` | List all task proposals with status |
-| `approve <id>` | `a <id>` | Approve a proposal by task ID prefix |
-| `reject <id>` | `r <id>` | Reject a proposal |
-| `world` | `w` | Show recent world model frames |
-| `status` / `mode` | `s` | Show planner mode (active/observing/suspended) |
-| `resume` | — | Resume LLM calls from observing/suspended mode |
-| `help` | `h` | Show available commands |
-| *anything else* | — | Sent as natural language intent to the Pi planner |
-
-### 3. TUI Dashboard (`--tui`)
+### Minimal single-node runtime
 
 ```bash
-clawmesh start --name mac-main --command-center --tui
+clawmesh start --name dev-node --capability channel:clawmesh
 ```
 
-A full-screen terminal dashboard with:
-- **PEERS** column — connected mesh nodes with capabilities
-- **GOSSIP** column — live context frame stream (observations, events, inferences)
-- **PROPOSALS** section — pending/approved/rejected task proposals
-- **WORLD** summary — current world model state
-- **Status bar** — planner mode, peer count, frame count, uptime
-- **Input line** — same commands as readline, plus free-text intents
-
-### 4. Web UI Dashboard
+### Command center with planner + TUI
 
 ```bash
-cd ui && pnpm install && pnpm dev
+clawmesh start \
+  --name ops-main \
+  --role planner \
+  --command-center \
+  --tui \
+  --pi-model anthropic/claude-sonnet-4-5-20250929
 ```
 
-A Next.js browser dashboard at `http://localhost:3000` with:
-- **Digital Twin** (`/twin`) — mesh node visualization
-- **Command Center** (`/command`) — chat-first interface: type intents, see LLM responses, approve/reject proposals inline
-- **Telemetry** (`/telemetry`) — sensor data and frame history
-
-Connects to the mesh node via WebSocket (`chat.subscribe` RPC) for live streaming of context frames, agent responses, and proposal events.
-
-### 5. CLI one-shot commands
+### Field node with mock sensor + mock actuator
 
 ```bash
-clawmesh identity                     # Print device ID + public key
-clawmesh trust list                   # List trusted peers
-clawmesh trust add <deviceId>         # Trust a peer
-clawmesh trust remove <deviceId>      # Untrust a peer
-clawmesh credential set <key> <val>   # Store a credential
-clawmesh credential list              # List stored credentials
-clawmesh demo-actuate --peer ...      # Send a test actuation command
-clawmesh gateway-connect --url ...    # Connect to a remote gateway
-clawmesh gateways                     # List saved gateway targets
+clawmesh start \
+  --name field-jetson \
+  --role field \
+  --field-node \
+  --mock-sensor \
+  --mock-actuator
 ```
 
-## CLI
-
-### Starting a Mesh Node
+### Query a running node
 
 ```bash
-# Basic node
-clawmesh start --name my-node --port 18789
-
-# Field node (sensors + actuators)
-clawmesh start --name jetson-field --field-node --sensor-interval 5000
-
-# Command center (credentials auto-loaded from ~/.clawmesh/credentials.json)
-clawmesh start --name mac-main --command-center \
-  --peer "<deviceId>=ws://192.168.1.39:18789"
-
-# Command center with Telegram
-clawmesh start --name mac-main --command-center --telegram --telegram-chat <chatId> \
-  --peer "<deviceId>=ws://192.168.1.39:18789"
-
-# Command center with specific model
-clawmesh start --name mac-main --command-center \
-  --pi-model "anthropic/claude-sonnet-4-5-20250929" \
-  --peer "<deviceId>=ws://192.168.1.39:18789"
-
-# Command center with TUI dashboard
-clawmesh start --name mac-main --command-center --tui \
-  --peer "<deviceId>=ws://192.168.1.39:18789"
-
-# Command center with thinking enabled
-clawmesh start --name mac-main --command-center --thinking medium \
-  --peer "<deviceId>=ws://192.168.1.39:18789"
+clawmesh status --url ws://localhost:18789
+clawmesh status --url ws://localhost:18789 --events
+clawmesh peers
+clawmesh world
 ```
 
-### Credential Management
+---
+
+## Deployment patterns
+
+### 1. LAN / zero-config discovery
+
+Use discovery when nodes share a local network and you want trusted peers to auto-connect.
 
 ```bash
-# Store API keys (persisted to ~/.clawmesh/credentials.json, mode 600)
-clawmesh credential set provider/google <gemini-api-key>
-clawmesh credential set provider/anthropic <anthropic-api-key>
-clawmesh credential set channel/telegram <bot-token>
+clawmesh start --name edge-a --capability sensor:mock
+clawmesh start --name edge-b --capability channel:clawmesh
+```
 
-# Pipe from stdin (avoids shell history)
-echo "sk-..." | clawmesh credential set provider/anthropic --from-stdin
+Notes:
+- mDNS is enabled by default
+- discovery only helps once peers are trusted
+- auto-connected discovery peers are labeled `mdns`
 
-# List stored credentials (values masked)
+### 2. Static / WAN / discovery-disabled mode
+
+Use this when peers are not on the same LAN, or when you want deterministic startup with explicit peers.
+
+```bash
+clawmesh start \
+  --name wan-node \
+  --no-discovery \
+  --peer "<deviceId>=https://relay.example.com/mesh|sha256:ABCDEF...|relay"
+```
+
+ClawMesh normalizes:
+- `http://...` → `ws://...`
+- `https://...` → `wss://...`
+
+### 3. Stable named mesh
+
+Use a shared mesh name when you want nodes to reject accidental cross-mesh connections.
+
+```bash
+clawmesh start --name ops-main --mesh-name bhoomi-prod --role planner
+clawmesh start --name field-jetson --mesh-name bhoomi-prod --role field
+```
+
+### 4. Roles
+
+Common role patterns:
+
+- `planner` — primary planning node
+- `standby-planner` — hot standby for planner HA groundwork
+- `field` — mixed edge node with sensors/actuators
+- `sensor` — read-focused node
+- `actuator` — execution-focused node
+- `viewer` — passive observer that does not contribute routing capabilities
+
+---
+
+## Static peer format
+
+Static peers are passed with `--peer`.
+
+### Supported format
+
+```text
+<deviceId>=<url>|<tlsFingerprint>|<transportLabel>
+```
+
+Where:
+- `deviceId` is the trusted peer device ID
+- `url` may be `ws://`, `wss://`, `http://`, or `https://`
+- `tlsFingerprint` is optional for local peers, but required for WAN-safe labeled peers
+- `transportLabel` is optional but strongly recommended for non-LAN peers
+
+### Examples
+
+#### Local static peer
+
+```bash
+clawmesh start --peer "<deviceId>=ws://10.0.0.5:18789||lan"
+```
+
+If you want to specify a transport label without a fingerprint, leave the middle field empty:
+
+```text
+<deviceId>=ws://10.0.0.5:18789||lan
+```
+
+#### Relay/WAN static peer
+
+```bash
+clawmesh start --no-discovery \
+  --peer "<deviceId>=https://relay.example.com/mesh|sha256:ABCDEF...|relay"
+```
+
+#### VPN/WAN static peer
+
+```bash
+clawmesh start --no-discovery \
+  --peer "<deviceId>=wss://vpn.example.com/mesh|sha256:ABCDEF...|vpn"
+```
+
+---
+
+## Transport labels and WAN policy
+
+ClawMesh now uses transport labels as an operator-facing and safety-relevant signal.
+
+| Label | Intent | Behavior |
+|---|---|---|
+| `mdns` | auto-discovered local peer | local / permissive |
+| `lan` | explicit local network peer | local / permissive |
+| `local` | explicit local alias | local / permissive |
+| `relay` | WAN relay/static path | requires secure pinned transport |
+| `vpn` | WAN tunnel/static path | requires secure pinned transport |
+| any other non-local label | treated as WAN by default | requires secure pinned transport |
+
+### Current WAN enforcement
+
+For WAN-labeled peers:
+
+- `ws://` is refused
+- unpinned `wss://` is refused
+- pinned `wss://` is allowed
+
+This keeps local labels permissive while making WAN/static mistakes obvious and safer.
+
+---
+
+## Trust and safety
+
+ClawMesh is opinionated here.
+
+### Peer trust
+
+Discovered peers are not automatically trusted just because they are visible.
+
+You explicitly trust peers with:
+
+```bash
+clawmesh trust add <deviceId>
+clawmesh trust list
+clawmesh trust remove <deviceId>
+```
+
+Trusted peers are persisted in:
+
+```text
+~/.clawmesh/mesh/trusted-peers.json
+```
+
+### Evidence trust tiers
+
+| Tier | Meaning |
+|---|---|
+| `T0` | planning inference |
+| `T1` | unverified observation |
+| `T2` | operational observation |
+| `T3` | verified action evidence |
+
+### Approval levels
+
+| Level | Meaning |
+|---|---|
+| `L0` | safe read-only |
+| `L1` | bounded auto-execute |
+| `L2` | human approval required |
+| `L3` | strongest verification / on-site style control |
+
+### Critical safety rule
+
+**LLM-only evidence is hard-blocked from physical actuation.**
+
+That means planning can propose, summarize, route, and explain — but it cannot unilaterally trigger real-world actuation without the required trust and approval evidence.
+
+---
+
+## Operator surfaces
+
+### CLI
+
+Main commands:
+
+```bash
+clawmesh identity
+clawmesh start
+clawmesh status --url ws://localhost:18789 --events
+clawmesh trust list
 clawmesh credential list
-
-# Provider keys are auto-injected as env vars on startup:
-#   provider/google    → GEMINI_API_KEY
-#   provider/anthropic → ANTHROPIC_API_KEY
-#   provider/openai    → OPENAI_API_KEY
-```
-
-### CLI Flags Reference
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--name <name>` | Display name for this node | — |
-| `--host <host>` | Host interface to bind | `0.0.0.0` |
-| `--port <port>` | Port to listen on | `18789` |
-| `--field-node` | Shorthand: enable sensors + actuators | — |
-| `--command-center` | Shorthand: enable Pi planner | — |
-| `--pi-planner` | Enable Pi-powered planner | — |
-| `--pi-model <spec>` | Model spec (provider/model) | `google/gemini-3.1-pro-preview` |
-| `--thinking <level>` | Thinking level (off/minimal/low/medium/high) | `off` |
-| `--mock-sensor` | Enable mock soil moisture sensor | — |
-| `--sensor-interval <ms>` | Sensor broadcast interval | `5000` |
-| `--mock-actuator` | Enable mock actuator handler | — |
-| `--telegram` | Enable Telegram bot channel | — |
-| `--telegram-token <tok>` | Telegram bot token (or use credential store) | — |
-| `--telegram-chat <id>` | Allowed Telegram chat ID (repeatable) | — |
-| `--tui` | Launch interactive terminal dashboard | — |
-| `--peer <id=url>` | Static peer to connect (repeatable) | — |
-| `--capability <cap>` | Capability to advertise (repeatable) | — |
-| `--planner-interval <ms>` | Proactive planner check interval | `60000` |
-
-### Connecting to Remote Gateways
-
-```bash
-# Connect to a ClawMesh gateway and save as named target
-clawmesh gateway-connect --url ws://192.168.1.39:18789 --password secret --save jetson
-
-# Reconnect using saved name
-clawmesh gateway-connect jetson
-
-# List saved gateway targets
+clawmesh gateway-connect --url ws://192.168.1.39:18789
 clawmesh gateways
 ```
 
-## Emergent Context Propagation
-
-ClawMesh nodes build intelligence organically through continuous context gossip.
-
-When a sensor on one node detects a state change, that **observation becomes context** — a `ContextFrame` that propagates across the mesh. Other nodes ingest this context into their **world model**, building a live picture of mesh-wide state. Planner LLMs can reason over this emergent knowledge and forward execution commands to nodes with the right capabilities.
-
-### Example: Field Sensor → Mesh Awareness → Intelligent Execution
-
-```
-1. Jetson sensor detects low soil moisture in zone-1
-2. Context propagates to mesh:
-     { kind: "observation", zone: "zone-1", moisture: 15.2%, status: "critical" }
-3. Mac planner LLM reasons over mesh-wide context
-4. Planner creates a TaskProposal (L2 — needs human approval)
-5. Operator approves via Telegram / TUI / Web UI / CLI
-6. Mac forwards execution command: actuate:pump:P1
-7. Jetson validates trust policy and starts pump
-```
-
-No file syncing. No manual coordination. Just emergent intelligence.
-
-### Context Frame Types
-
-| Kind | Description | Example |
-|------|-------------|---------|
-| `observation` | Sensor readings, measurements | Soil moisture 15.2% |
-| `event` | Task completed, state change | Pump P1 started |
-| `human_input` | Operator commands, notes | "Inspect pump P1" |
-| `inference` | LLM-derived conclusions | "Zone 1 needs irrigation" |
-| `agent_response` | Conversational response from intelligence layer | Planner reasoning + citations |
-| `capability_update` | Node capabilities changed | Node gained `actuator:pump` |
-
-### Pattern Learning
-
-When operators approve or reject proposals, the **PatternMemory** module learns from these decisions:
-
-1. A threshold breach triggers a planner proposal
-2. The operator approves or rejects it
-3. PatternMemory records the trigger condition + action + outcome
-4. After repeated consistent decisions, the pattern becomes **mature**
-5. Mature patterns are **gossipped across the mesh** so other nodes learn too
-
-Patterns are persisted to `~/.clawmesh/mesh/patterns.json` and survive restarts.
-
-### Testing with Mock Sensor
+### Telegram
 
 ```bash
-# Terminal 1: Node broadcasting sensor context
-clawmesh start --name sensor-node --port 18790 --mock-sensor --sensor-interval 3000
-
-# Terminal 2: Observer node ingesting context
-clawmesh start --name observer --port 18791 --peer "<sensor-deviceId>=ws://127.0.0.1:18790"
+clawmesh start --command-center --telegram --telegram-chat <chatId>
 ```
 
-The observer's world model will log each ingested context frame:
-```
-[world-model] Ingested observation from sensor-node
-```
+Telegram supports:
+- `/status`
+- `/world`
+- `/proposals`
+- `/approve <id>`
+- `/reject <id>`
+- `/alerts`
 
-## Trust & Safety
-
-ClawMesh enforces a layered trust model:
-
-| Tier | Name | Use |
-|------|------|-----|
-| T0 | Planning inference | LLM reasoning (read-only, never actuates) |
-| T1 | Unverified observation | Raw sensor data before calibration |
-| T2 | Operational observation | Calibrated sensor readings |
-| T3 | Verified action evidence | Human-confirmed + sensor-backed actuation |
-
-**Critical safety rule:** LLM-only evidence (`evidence_sources: ["llm"]`) is **hard-blocked** from triggering any physical actuation. The trust policy requires sensor or human evidence for any L2/L3 operation.
-
-### Approval Levels
-
-| Level | Description | Execution |
-|-------|-------------|-----------|
-| L0 | Safe read-only | Auto-execute |
-| L1 | Bounded auto | Execute within defined limits |
-| L2 | Human confirm | Awaits operator approval |
-| L3 | On-site verify | Requires physical presence + approval |
-
-## Test Suite
-
-**135 tests across 17 files** — built test-first to ensure networking robustness and correct intelligence wiring.
-
-| File | Tests | What it covers |
-|------|-------|----------------|
-| `src/mesh/peer-registry.test.ts` | 18 | Connection tracking, event broadcasting, RPC invoke |
-| `src/mesh/capabilities.test.ts` | 14 | Dynamic capability advertising and lookups |
-| `src/mesh/smoke.test.ts` | 14 | All mesh modules import cleanly |
-| `src/infra/credential-store.test.ts` | 11 | Credential CRUD, env injection, masking, permissions |
-| `src/mesh/integration.test.ts` | 10 | End-to-end routing + forwarding between nodes |
-| `src/mesh/peer-trust.test.ts` | 10 | Ed25519 identity verification and local trust storage |
-| `src/agents/planner.test.ts` | 8 | Farm context loading and task proposal types |
-| `src/mesh/handshake.test.ts` | 7 | Ed25519 signed auth payloads |
-| `src/mesh/forwarding.test.ts` | 7 | RPC payload construction and dispatch |
-| `src/mesh/server-methods/forward.test.ts` | 7 | Forward handler trust evaluation |
-| `src/mesh/routing.test.ts` | 7 | Capability-based local-first routing |
-| `src/mesh/trust-policy.test.ts` | 6 | L0–L3 approval tiers and evidence validation |
-| `src/channels/telegram.test.ts` | 5 | Telegram channel adapter structure and types |
-| `src/mesh/node-runtime.test.ts` | 4 | Runtime lifecycle, start/stop, peer management |
-| `src/mesh/command-envelope.test.ts` | 3 | Command wire format validation |
-| `src/mesh/server-methods/peers.test.ts` | 3 | Peer listing RPC handler |
-| `src/mesh/discovery.test.ts` | 1 | mDNS discovery module structure |
+### TUI
 
 ```bash
-pnpm test                              # Run all tests
-pnpm vitest run src/mesh/              # Mesh tests only
-pnpm vitest run src/agents/            # Agent/planner tests only
-pnpm vitest run src/channels/          # Channel adapter tests
+clawmesh start --command-center --tui
 ```
 
-## Configuration
+The TUI gives you:
+- peers
+- world/context activity
+- proposals
+- planner state
+- interactive command input
 
-Mesh config in your gateway YAML/JSON:
-
-```yaml
-mesh:
-  enabled: true
-  scanIntervalMs: 30000
-  capabilities:
-    - channel:clawmesh
-    - actuator:mock
-  peers:
-    - url: wss://jetson.local:18789
-      deviceId: sha256-of-peer-public-key
-      tlsFingerprint: "sha256:..."
-```
-
-### Systemd Service (Field Node)
-
-For always-on field nodes (e.g., Jetson), install as a systemd user service:
-
-```ini
-# ~/.config/systemd/user/clawmesh.service
-[Unit]
-Description=ClawMesh Field Node
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/home/jetson/repo/clawmesh
-ExecStart=/path/to/tsx clawmesh.ts start --name jetson-field --field-node \
-  --sensor-interval 10000 --peer "<mac-deviceId>=ws://<mac-ip>:18789"
-Restart=on-failure
-RestartSec=5
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=default.target
-```
+### Web UI
 
 ```bash
-systemctl --user enable clawmesh
-systemctl --user start clawmesh
-systemctl --user status clawmesh
+cd ui
+pnpm install
+pnpm dev
 ```
 
-## Design Principles
+The browser UI provides digital-twin, command, and telemetry views.
 
-- **Mesh-first**: Peer connectivity and forwarding are first-class primitives
-- **Capability-driven**: Route by advertised capabilities, not hard-coded plugin lookups
-- **Trust before traffic**: Discovered peers are ignored unless explicitly trusted
-- **Local-first**: Always prefer local capabilities over mesh peers
-- **Emergent intelligence**: Context gossip builds distributed awareness without central coordination
-- **Conversational**: Operators interact via natural language; the planner reasons and proposes
-- **Learning mesh**: Approve/reject patterns propagate across nodes, building collective intelligence
-- **Lean core**: Small enough to reason about and deploy on edge devices
+---
 
-## Roadmap
+## Observability
 
-- [x] Mesh protocol (mDNS discovery, Ed25519 peer trust, capability routing)
-- [x] Emergent context propagation (ContextFrame, WorldModel, gossip)
-- [x] Mock sensor / actuator for testing context broadcast
-- [x] Pi-powered LLM planner (multi-provider, event-driven, conversational)
-- [x] Task proposal queue with approval levels (L0–L3)
-- [x] Farm context injection from Bhoomi YAML data
-- [x] Pattern learning from operator decisions (PatternMemory + mesh gossip)
-- [x] Credential store with auto env-var injection
-- [x] Telegram bot channel (long-polling, proposals, alerts)
-- [x] TUI dashboard (live peers, gossip, proposals, operator input)
-- [x] Web UI dashboard (Next.js — digital twin, command center, telemetry)
-- [x] Systemd service for always-on field nodes
-- [x] Setup guides for command center and field nodes
-- [ ] Real GPIO sensor integration (moisture, temperature, pressure)
-- [ ] Build output + npm packaging for the `clawmesh` binary
-- [ ] Multi-node end-to-end examples (discovery + trust + forwarding)
-- [ ] Capability announcement protocol refinement
+ClawMesh exposes runtime state through:
+
+- `mesh.peers`
+- `mesh.status`
+- `mesh.health`
+- startup diagnostics
+- connection and error logs
+
+Current operator-visible surfaces include:
+- discovery mode
+- connected peers
+- configured static peers
+- transport labels
+- static peer security posture (`insecure`, `tls-unpinned`, `tls-pinned`)
+- planner activity / leader context
+
+This matters especially in WAN/static deployments, where the question is often:
+
+> “What did this node think it was supposed to connect to, and how safe was that transport?”
+
+---
+
+## Architecture at a glance
+
+### Runtime core
+
+- `src/mesh/node-runtime.ts` — node orchestrator
+- `src/mesh/peer-connection-manager.ts` — outbound peer lifecycle
+- `src/mesh/peer-client.ts` / `peer-server.ts` — WebSocket transport
+- `src/mesh/discovery.ts` — mDNS discovery
+- `src/mesh/server-methods/` — RPC handlers
+
+### Intelligence layer
+
+- `src/agents/pi-session.ts` — planner/session integration
+- `src/agents/extensions/` — mesh tools and operator commands
+- `src/agents/proposal-*.ts` — proposal lifecycle and formatting
+
+### Channels and UI
+
+- `src/channels/telegram.ts` — Telegram bridge
+- `src/tui/` — terminal dashboard
+- `ui/` — web dashboard
+
+### State and identity
+
+- `src/infra/device-identity.ts` — Ed25519 identity
+- `src/mesh/peer-trust.ts` — trusted peer store
+- `src/infra/credential-store.ts` — credential persistence
+
+---
+
+## State and file locations
+
+By default ClawMesh stores local state under:
+
+```text
+~/.clawmesh
+```
+
+Override with:
+
+```bash
+export CLAWMESH_STATE_DIR=/path/to/custom/state
+```
+
+Important files:
+
+| Path | Purpose |
+|---|---|
+| `~/.clawmesh/identity/device.json` | local Ed25519 identity |
+| `~/.clawmesh/credentials.json` | provider/channel credentials |
+| `~/.clawmesh/mesh/trusted-peers.json` | trusted peer store |
+| `~/.clawmesh/mesh/gateways.json` | saved gateway targets |
+| `~/.clawmesh/mesh/patterns.json` | learned operator patterns |
+| `~/.clawmesh/world-model-snapshot.json` | world-model snapshot for restart recovery |
+
+---
+
+## Credential management
+
+```bash
+clawmesh credential set provider/google <api-key>
+clawmesh credential set provider/anthropic <api-key>
+clawmesh credential set channel/telegram <bot-token>
+clawmesh credential list
+clawmesh credential get provider/google
+```
+
+Stored provider credentials are injected into `process.env` on startup so the planner can use them without manually exporting each variable.
+
+---
+
+## Development
+
+### Common commands
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+```
+
+### Targeted test runs
+
+```bash
+pnpm vitest run src/mesh/
+pnpm vitest run src/agents/
+pnpm vitest run src/channels/
+pnpm vitest run src/cli/
+```
+
+### Notes for contributors
+
+- prefer small, test-backed slices
+- mesh reliability changes are developed Red/Green
+- existing trust/safety constraints should not be weakened casually
+- WAN/static behavior should stay explicit and operator-visible
+
+---
+
+## Setup guides and docs
+
+- [Getting Started Guide](docs/getting-started.md)
+- [Command Center Setup](docs/setup-command-center.md)
+- [Field Node Setup](docs/setup-field-node.md)
+- [Bhoomi Farm Twin Spec](docs/bhoomi-farm-twin-spec-v0.md)
+- [Mesh Safety Skill / Policy Context](.pi/skills/mesh-safety.md)
+
+---
+
+## Current focus areas
+
+- field deployment hardening
+- WAN/static connectivity safety and observability
+- planner HA groundwork
+- real sensor/actuator integrations
+- packaging and distribution cleanup
+
+---
 
 ## License
 
