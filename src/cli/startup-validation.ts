@@ -89,6 +89,13 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
           message: `Peer spec points to own device ID — will be ignored`,
         });
       }
+      if (peer.transportLabel === "relay" && peer.url.startsWith("ws://")) {
+        diagnostics.push({
+          level: "warn",
+          code: "INSECURE_RELAY_TRANSPORT",
+          message: `Peer ${peer.deviceId.slice(0, 12)}… is labeled relay but uses ws:// without TLS. Prefer wss:// or https:// for WAN/static relay links.`,
+        });
+      }
       const expectsTlsPinning =
         peer.transportLabel === "relay" ||
         peer.url.startsWith("wss://") ||

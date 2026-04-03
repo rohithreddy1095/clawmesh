@@ -142,6 +142,34 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(false);
   });
 
+  it("warns when a relay peer uses insecure ws transport", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://relay.example.com/mesh",
+          transportLabel: "relay",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(true);
+  });
+
+  it("does not warn about insecure relay transport for non-relay ws peers", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "ws://10.0.0.5:18789",
+          transportLabel: "lan",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "INSECURE_RELAY_TRANSPORT")).toBe(false);
+  });
+
   it("info on no capabilities", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",

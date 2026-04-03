@@ -205,18 +205,22 @@ Example:
   - message: `feat(mesh): normalize static peer http URLs at runtime boundary`
 
 - ✅ Relay/WSS TLS pinning diagnostics
-  - commit: pending
+  - commit: `5d0fae2`
   - message: `feat(cli): warn on unpinned relay and wss peers`
+
+- ✅ Insecure relay transport diagnostics
+  - commit: pending
+  - message: `feat(cli): warn on insecure relay ws peers`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Insecure relay transport diagnostics**
+**Static peer security posture in status surfaces**
 
 Desired behavior:
-- warn when relay-labeled peers are configured over plain `ws://`
-- keep current connection behavior unchanged
-- make insecure WAN/static transport intent obvious before startup
+- surface whether configured static peers are secure/pinned/insecure in status-style outputs
+- keep connection behavior unchanged
+- make WAN peer posture visible after startup, not just during preflight
 
 This is the next practical WAN milestone slice.
 
