@@ -9,6 +9,8 @@ export type ContextFrameKind =
   | "agent_response"; // Conversational response from intelligence layer
 
 export type ContextFrame = {
+  /** Control-plane protocol generation for safe evolution. */
+  gen?: number;
   kind: ContextFrameKind;
   /** Unique ID for deduplication. */
   frameId: string;

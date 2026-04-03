@@ -17,6 +17,7 @@ import { getModel, type Model } from "@mariozechner/pi-ai";
 import type { AgentEvent, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { ContextFrame } from "../mesh/context-types.js";
+import type { PlannerActivity } from "../mesh/planner-election.js";
 import type { FarmContext, TaskProposal, ThresholdRule } from "./types.js";
 import {
   createClawMeshExtension,
@@ -39,6 +40,7 @@ import {
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
 import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
+import { shouldProcessPlannerTrigger, shouldWakePlannerOnActivityChange } from "./planner-activity-gate.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -101,6 +103,8 @@ export class PiSession {
   private thresholdLastFired = new Map<string, number>();
   private proactiveTimer?: ReturnType<typeof setInterval>;
   private probeTimer?: ReturnType<typeof setTimeout>;
+  private plannerActivity: PlannerActivity;
+  private readonly plannerActivityListeners: Array<() => void> = [];
   private running = false;
   private stopped = false;
   private initialized = false;
@@ -120,8 +124,7 @@ export class PiSession {
     this.thinkingLevel = opts.thinkingLevel ?? "off";
     this.model = this.resolveModel(opts.modelSpec ?? "anthropic/claude-sonnet-4-5-20250929");
     this.patternMemory = new PatternMemory({ log: this.log });
-
-    // Mode controller — manages active/observing/suspended transitions
+    this.plannerActivity = this.runtime.getPlannerActivity();
     this.modeCtrl = new ModeController({
       errorThreshold: opts.errorThreshold,
       observingCooldownMs: opts.observingCooldownMs,
@@ -132,8 +135,6 @@ export class PiSession {
       },
       log: this.log,
     });
-
-    // Proposal manager — handles approve/reject lifecycle + pattern recording
     this.proposalManager = new ProposalManager({
       onDecision: (record) => {
         this.patternMemory.recordDecision(record);
@@ -144,8 +145,6 @@ export class PiSession {
         opts.onProposalResolved?.(proposal);
       },
     });
-
-    // Shared state between extension and this session controller
     this.extensionState = {
       proposals: this.proposalManager.getMap(),
       thresholds: opts.thresholds ?? [],
@@ -163,16 +162,11 @@ export class PiSession {
     };
   }
 
-  // ─── Mode management (delegated to ModeController) ─────
-
   /** Current operational mode. */
   get mode(): SessionMode {
     return this.modeCtrl.mode;
   }
 
-  /**
-   * Schedule a single probe call after the observing cooldown.
-   */
   private scheduleProbe(): void {
     this.clearProbeTimer();
     this.probeTimer = setTimeout(() => {
@@ -189,9 +183,6 @@ export class PiSession {
     }
   }
 
-  /**
-   * A lightweight probe — sends a minimal prompt to see if the provider responds.
-   */
   private async runProbe(): Promise<void> {
     if (this.running || !this.initialized) {
       this.scheduleProbe();
@@ -219,9 +210,6 @@ export class PiSession {
     }
   }
 
-  /**
-   * Manually resume from suspended or observing mode.
-   */
   resume(reason = "manual resume"): void {
     this.clearProbeTimer();
     this.modeCtrl.resume(reason);
@@ -229,8 +217,6 @@ export class PiSession {
       setTimeout(() => void this.runCycle(), 1000);
     }
   }
-
-  // ─── Lifecycle ──────────────────────────────────────────
 
   async start(): Promise<void> {
     this.stopped = false;
@@ -290,6 +276,18 @@ export class PiSession {
       this.handleIncomingFrame(frame);
     };
 
+    const refreshPlannerActivity = () => {
+      const nextActivity = this.runtime.getPlannerActivity();
+      const nextTriggerType = this.triggerQueue.peek()?.type;
+      const shouldWake = shouldWakePlannerOnActivityChange(this.plannerActivity, nextActivity, nextTriggerType);
+      this.plannerActivity = nextActivity;
+      if (shouldWake && !this.stopped) {
+        void this.runCycle();
+      }
+    };
+    this.plannerActivityListeners.push(this.runtime.eventBus.on("peer.connected", refreshPlannerActivity));
+    this.plannerActivityListeners.push(this.runtime.eventBus.on("peer.disconnected", refreshPlannerActivity));
+
     // Start proactive timer (also sweeps expired proposals)
     const intervalMs = this.opts.proactiveIntervalMs ?? 60_000;
     if (intervalMs > 0) {
@@ -316,13 +314,15 @@ export class PiSession {
     }
     this.clearProbeTimer();
     this.runtime.worldModel.onIngest = undefined;
+    while (this.plannerActivityListeners.length > 0) {
+      const cleanup = this.plannerActivityListeners.pop();
+      cleanup?.();
+    }
     if (this.initialized) {
       void this.session.abort();
     }
     this.log.info("pi-session: stopped");
   }
-
-  // ─── External triggers ─────────────────────────────────
 
   handleOperatorIntent(text: string, opts?: { conversationId?: string; requestId?: string }): void {
     const conversationId = opts?.conversationId;
@@ -348,9 +348,6 @@ export class PiSession {
     void this.runCycle();
   }
 
-  /**
-   * Broadcast an agent response frame to UI subscribers and mesh peers.
-   */
   private broadcastAgentResponse(data: AgentResponseData): void {
     const frame = buildAgentResponseFrame(
       data,
@@ -451,13 +448,13 @@ export class PiSession {
 
   private triggerProactiveCheck(): void {
     if (!this.modeCtrl.canMakeLLMCalls()) return; // Silent skip in observing/suspended
+    this.plannerActivity = this.runtime.getPlannerActivity();
+    if (!shouldProcessPlannerTrigger(this.plannerActivity, "proactive_check")) return;
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
     this.triggerQueue.enqueueProactiveCheck(recentFrames);
     void this.runCycle();
   }
-
-  // ─── Planner cycle ─────────────────────────────────────
 
   private async runCycle(): Promise<void> {
     if (this.running || this.stopped || !this.initialized) return;
@@ -465,6 +462,12 @@ export class PiSession {
     // Mode gate: only active mode makes LLM calls
     if (!this.modeCtrl.canMakeLLMCalls()) {
       // Silently accumulate triggers — they'll drain when we go active
+      return;
+    }
+
+    this.plannerActivity = this.runtime.getPlannerActivity();
+    const nextTrigger = this.triggerQueue.peek();
+    if (!shouldProcessPlannerTrigger(this.plannerActivity, nextTrigger?.type)) {
       return;
     }
 
@@ -584,8 +587,6 @@ export class PiSession {
       }
     }
   }
-
-  // ─── Session event handler (delegates to SessionEventClassifier) ──
 
   private handleSessionEvent(event: any): void {
     const classified = classifyEvent(event);

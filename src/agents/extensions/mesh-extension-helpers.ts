@@ -65,6 +65,7 @@ export function summarizeProposals(
   operation: string;
   approvalLevel: string;
   status: string;
+  plannerDeviceId?: string;
   createdAt: string;
 }> {
   return proposals.map((p) => ({
@@ -74,6 +75,7 @@ export function summarizeProposals(
     operation: p.operation,
     approvalLevel: p.approvalLevel,
     status: p.status,
+    plannerDeviceId: p.plannerDeviceId,
     createdAt: new Date(p.createdAt).toISOString(),
   }));
 }
@@ -87,6 +89,16 @@ export function countPending(proposals: Map<string, TaskProposal>): number {
     if (p.status === "proposed" || p.status === "awaiting_approval") count++;
   }
   return count;
+}
+
+export function buildDuplicateProposalNotice(
+  operation: string,
+  targetRef: string,
+  ownerPlannerDeviceId?: string,
+): string {
+  const base = `A similar action was already proposed recently (${operation} on ${targetRef}). Wait for the existing proposal to be resolved.`;
+  if (!ownerPlannerDeviceId) return base;
+  return `${base} Owned by planner ${ownerPlannerDeviceId.slice(0, 12)}….`;
 }
 
 /**

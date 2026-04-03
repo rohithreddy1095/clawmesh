@@ -81,6 +81,7 @@ describe("createMeshServerHandlers", () => {
         identity: clientIdentity,
         displayName: "test-client",
         capabilities: ["channel:test"],
+        role: "field",
       });
 
       const peerRegistry = new PeerRegistry();
@@ -90,6 +91,7 @@ describe("createMeshServerHandlers", () => {
         peerRegistry,
         displayName: "test-server",
         capabilities: ["channel:clawmesh"],
+        role: "planner",
         onPeerConnected: (session) => { connectedSession = session; },
       });
 
@@ -110,11 +112,13 @@ describe("createMeshServerHandlers", () => {
       expect(responsePayload.signature).toBeTruthy();
       expect(responsePayload.displayName).toBe("test-server");
       expect(responsePayload.capabilities).toContain("channel:clawmesh");
+      expect(responsePayload.role).toBe("planner");
 
       // Verify peer was registered
       expect(connectedSession).toBeDefined();
       expect(connectedSession!.deviceId).toBe(clientIdentity.deviceId);
       expect(connectedSession!.capabilities).toContain("channel:test");
+      expect(connectedSession!.role).toBe("field");
       expect(peerRegistry.get(clientIdentity.deviceId)).toBeDefined();
     });
   });
@@ -149,6 +153,40 @@ describe("createMeshServerHandlers", () => {
 
       expect(responseOk).toBe(false);
       expect(responseError?.code).toBe("AUTH_FAILED");
+    });
+  });
+
+  it("rejects connection from a different mesh", async () => {
+    await withTempHome(async () => {
+      const serverIdentity = loadOrCreateDeviceIdentity();
+      const clientIdentity = loadOrCreateDeviceIdentity("/tmp/test-ps-meshid-" + Date.now() + "/device.json");
+
+      await addTrustedPeer({ deviceId: clientIdentity.deviceId });
+
+      const auth = buildMeshConnectAuth({
+        identity: clientIdentity,
+        meshId: "mesh-client",
+      });
+
+      const handlers = createMeshServerHandlers({
+        identity: serverIdentity,
+        peerRegistry: new PeerRegistry(),
+        meshId: "mesh-server",
+      });
+
+      let responseOk: boolean | undefined;
+      let responseError: any;
+      await handlers["mesh.connect"]({
+        req: {},
+        params: auth,
+        respond: (ok, _payload, error) => {
+          responseOk = ok;
+          responseError = error;
+        },
+      });
+
+      expect(responseOk).toBe(false);
+      expect(responseError?.code).toBe("MESH_ID_MISMATCH");
     });
   });
 });

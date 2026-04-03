@@ -29,6 +29,7 @@ import {
   findPeerForCapability as _findPeerForCapability,
   summarizeProposals,
   countPending,
+  buildDuplicateProposalNotice,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
@@ -240,11 +241,18 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
 
         // Dedup check: prevent duplicate proposals for the same action
         const zone = targetRef.split(":").pop(); // Extract zone hint from targetRef
-        if (!proposalDedup.checkAndRecord({ targetRef, operation, zone })) {
-          log.info(`[mesh-ext] Deduplicated proposal: ${operation} on ${targetRef} (already proposed recently)`);
+        const dedupSignature = {
+          targetRef,
+          operation,
+          zone,
+          plannerDeviceId: runtime.identity.deviceId,
+        };
+        if (!proposalDedup.checkAndRecord(dedupSignature)) {
+          const existing = proposalDedup.getRecord(dedupSignature);
+          log.info(`[mesh-ext] Deduplicated proposal: ${operation} on ${targetRef} (owner=${existing?.plannerDeviceId ?? "unknown"})`);
           return {
-            content: [{ type: "text", text: `A similar action was already proposed recently (${operation} on ${targetRef}). Wait for the existing proposal to be resolved.` }],
-            details: { ok: false, reason: "deduplicated" },
+            content: [{ type: "text", text: buildDuplicateProposalNotice(operation, targetRef, existing?.plannerDeviceId) }],
+            details: { ok: false, reason: "deduplicated", ownerPlannerDeviceId: existing?.plannerDeviceId },
           };
         }
 
@@ -256,6 +264,10 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           operation,
           operationParams,
           peerDeviceId,
+          plannerDeviceId: runtime.identity.deviceId,
+          plannerRole: runtime.role === "planner" || runtime.role === "standby-planner"
+            ? runtime.role
+            : undefined,
           approvalLevel,
           status: approvalLevel === "L1" ? "approved" : "awaiting_approval",
           createdBy: "intelligence",
@@ -268,6 +280,8 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         runtime.contextPropagator.broadcastInference({
           data: {
             proposalId: proposal.taskId,
+            plannerDeviceId: proposal.plannerDeviceId,
+            plannerRole: proposal.plannerRole,
             summary, targetRef, operation, approvalLevel,
             status: proposal.status,
           },

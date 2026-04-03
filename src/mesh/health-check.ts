@@ -17,6 +17,8 @@ import type { MeshCapabilityRegistry } from "./capabilities.js";
 import type { WorldModel } from "./world-model.js";
 import type { RpcHandlerFn, RpcHandlerMap } from "./rpc-dispatcher.js";
 import type { MetricSnapshot } from "./metrics-collector.js";
+import type { PlannerActivity, PlannerLeader } from "./planner-election.js";
+import type { MeshNodeRole } from "./types.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ export type PeerHealthInfo = {
   deviceId: string;
   displayName?: string;
   capabilities: string[];
+  role?: MeshNodeRole;
   connectedMs: number;
   outbound: boolean;
 };
@@ -49,6 +52,8 @@ export type HealthCheckResult = {
     meshTotal: number;
   };
   plannerMode?: string;
+  plannerLeader?: PlannerLeader;
+  plannerActivity?: PlannerActivity;
   memoryUsageMB?: number;
   metrics?: MetricSnapshot[];
   version: string;
@@ -67,6 +72,8 @@ export type HealthCheckDeps = {
   capabilityRegistry: MeshCapabilityRegistry;
   worldModel: WorldModel;
   getPlannerMode?: () => string | undefined;
+  getPlannerLeader?: () => PlannerLeader;
+  getPlannerActivity?: () => PlannerActivity;
   getMetrics?: () => MetricSnapshot[];
 };
 
@@ -81,6 +88,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     deviceId: p.deviceId.slice(0, 16) + "...",
     displayName: p.displayName,
     capabilities: p.capabilities,
+    role: p.role,
     connectedMs: now - p.connectedAtMs,
     outbound: p.outbound,
   }));
@@ -126,6 +134,8 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
       meshTotal: meshCapCount,
     },
     plannerMode,
+    plannerLeader: deps.getPlannerLeader?.(),
+    plannerActivity: deps.getPlannerActivity?.(),
     memoryUsageMB,
     metrics: deps.getMetrics?.(),
     version: deps.version,

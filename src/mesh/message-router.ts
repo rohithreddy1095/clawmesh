@@ -19,6 +19,7 @@ import type { PeerRegistry } from "./peer-registry.js";
 import type { RpcDispatcher } from "./rpc-dispatcher.js";
 import type { MeshEventBus } from "./event-bus.js";
 import { extractIntentFromForward, routeIntent, type IntentRouterDeps } from "./intent-router.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -65,6 +66,9 @@ export async function routeInboundMessage(
   // ─── Context frame events ─────────────────
   if (frame.type === "event" && frame.event === "context.frame") {
     const contextFrame = frame.payload as ContextFrame;
+    if (contextFrame.gen !== undefined && contextFrame.gen !== NODE_PROTOCOL_GENERATION) {
+      return { handled: false, reason: "bad_generation" };
+    }
     const senderSession = deps.peerRegistry.getByConnId(connId);
     const fromDeviceId = senderSession?.deviceId ?? contextFrame.sourceDeviceId;
     const isNew = deps.contextPropagator.handleInbound(contextFrame, fromDeviceId);

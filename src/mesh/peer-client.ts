@@ -5,7 +5,7 @@ import { normalizeFingerprint } from "../infra/tls/fingerprint.js";
 import { rawDataToString } from "../infra/ws.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
-import type { MeshConnectResult, PeerSession } from "./types.js";
+import type { MeshConnectResult, MeshNodeRole, PeerSession } from "./types.js";
 
 export type MeshPeerClientOptions = {
   /** Remote peer's WebSocket URL (e.g. "wss://jetson.local:18789"). */
@@ -22,6 +22,10 @@ export type MeshPeerClientOptions = {
   displayName?: string;
   /** Capabilities to advertise. */
   capabilities?: string[];
+  /** Expected stable mesh identity. */
+  meshId?: string;
+  /** Local declared node role. */
+  role?: MeshNodeRole;
   /** Called when the peer connection is established. */
   onConnected?: (session: PeerSession) => void;
   /** Called when the peer disconnects. */
@@ -29,7 +33,7 @@ export type MeshPeerClientOptions = {
   /** Called on errors. */
   onError?: (err: Error) => void;
   /** Called when the remote peer sends an event (e.g. context.frame). */
-  onEvent?: (event: string, payload: unknown) => void;
+  onEvent?: (event: string, payload: unknown) => void | Promise<void>;
 };
 
 export class MeshPeerClient {
@@ -93,8 +97,10 @@ export class MeshPeerClient {
       const ws = this.ws;
       this.ws = null;
       if (ws) {
-        this.opts.peerRegistry.unregister(this.connId);
-        this.opts.onDisconnected?.(this.opts.remoteDeviceId);
+        const removed = this.opts.peerRegistry.unregister(this.connId);
+        if (removed) {
+          this.opts.onDisconnected?.(this.opts.remoteDeviceId);
+        }
       }
       this.scheduleReconnect();
     });
@@ -119,6 +125,8 @@ export class MeshPeerClient {
       identity: this.opts.identity,
       displayName: this.opts.displayName,
       capabilities: this.opts.capabilities,
+      meshId: this.opts.meshId,
+      role: this.opts.role,
     });
     const requestId = randomUUID();
     this.connectRequestId = requestId;
@@ -199,10 +207,17 @@ export class MeshPeerClient {
       publicKey: result.publicKey,
       signature: result.signature,
       signedAtMs: result.signedAtMs,
+      meshId: result.meshId,
+      role: result.role,
     });
     if (!valid) {
       this.opts.onError?.(new Error("mesh peer signature verification failed"));
       this.ws?.close(1008, "signature mismatch");
+      return;
+    }
+    if (this.opts.meshId && result.meshId && this.opts.meshId !== result.meshId) {
+      this.opts.onError?.(new Error("mesh peer mesh ID mismatch"));
+      this.ws?.close(1008, "mesh ID mismatch");
       return;
     }
     // Register the peer session.
@@ -214,6 +229,7 @@ export class MeshPeerClient {
       socket: this.ws!,
       outbound: true,
       capabilities: result.capabilities ?? [],
+      role: result.role,
       connectedAtMs: Date.now(),
     };
     this.opts.peerRegistry.register(session);

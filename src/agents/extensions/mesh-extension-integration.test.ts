@@ -18,6 +18,7 @@ import {
   findPeerForCapability,
   summarizeProposals,
   countPending,
+  buildDuplicateProposalNotice,
 } from "./mesh-extension-helpers.js";
 import type { ContextFrame } from "../../mesh/context-types.js";
 
@@ -41,6 +42,8 @@ function makeProposal(overrides?: Partial<TaskProposal>): TaskProposal {
     operation: "irrigate",
     targetRef: "actuator:pump-01",
     peerDeviceId: "peer-01",
+    plannerDeviceId: "planner-01",
+    plannerRole: "planner",
     approvalLevel: "L2",
     status: "awaiting_approval",
     createdBy: "intelligence",
@@ -199,6 +202,7 @@ describe("summarizeProposals in list_proposals tool", () => {
     expect(summary).toHaveLength(2);
     expect(summary[0]).toHaveProperty("summary");
     expect(summary[0]).toHaveProperty("status");
+    expect(summary[0]).toHaveProperty("plannerDeviceId");
   });
 
   it("returns empty array for no proposals", () => {
@@ -221,6 +225,23 @@ describe("countPending for capacity checks", () => {
 
   it("returns 0 for empty map", () => {
     expect(countPending(new Map())).toBe(0);
+  });
+});
+
+// ── duplicate proposal notice ─────────────────────────
+
+describe("buildDuplicateProposalNotice", () => {
+  it("includes owner planner when known", () => {
+    const text = buildDuplicateProposalNotice("irrigate", "actuator:pump:P1", "planner-abcdef123456");
+    expect(text).toContain("irrigate");
+    expect(text).toContain("actuator:pump:P1");
+    expect(text).toContain("planner-abcd");
+  });
+
+  it("falls back to generic message when owner is unknown", () => {
+    const text = buildDuplicateProposalNotice("open", "actuator:valve:V1");
+    expect(text).toContain("open");
+    expect(text).not.toContain("Owned by planner");
   });
 });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PeerConnectionManager, type PeerConnectionManagerDeps } from "./peer-connection-manager.js";
 import { PeerRegistry } from "./peer-registry.js";
 import { MeshCapabilityRegistry } from "./capabilities.js";
@@ -7,6 +7,48 @@ import { WorldModel } from "./world-model.js";
 import { MeshEventBus } from "./event-bus.js";
 import { AutoConnectManager } from "./auto-connect.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
+import type { PeerSession } from "./types.js";
+
+const peerClientInstances: any[] = [];
+
+vi.mock("./peer-client.js", () => {
+  class MeshPeerClient {
+    opts: any;
+
+    constructor(opts: any) {
+      this.opts = opts;
+      peerClientInstances.push(this);
+    }
+
+    start() {}
+    stop() {}
+
+    __simulateConnected(session?: any) {
+      this.opts.onConnected?.(
+        session ?? {
+          deviceId: this.opts.remoteDeviceId,
+          connId: `conn-${this.opts.remoteDeviceId}`,
+          socket: { send: vi.fn() },
+          outbound: true,
+          capabilities: [],
+          connectedAtMs: Date.now(),
+        },
+      );
+    }
+
+    __simulateDisconnected(deviceId?: string) {
+      this.opts.onDisconnected?.(deviceId ?? this.opts.remoteDeviceId);
+    }
+
+    async __emitEvent(event: string, payload: unknown) {
+      await this.opts.onEvent?.(event, payload);
+    }
+  }
+
+  return {
+    MeshPeerClient,
+  };
+});
 
 const noop = { info: () => {}, warn: () => {} };
 
@@ -16,8 +58,8 @@ const fakeIdentity: DeviceIdentity = {
   privateKeyPem: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n",
 };
 
-function createDeps(): PeerConnectionManagerDeps {
-  const peerRegistry = new PeerRegistry();
+function createDeps(overrides: Partial<PeerConnectionManagerDeps> = {}): PeerConnectionManagerDeps {
+  const peerRegistry = overrides.peerRegistry ?? new PeerRegistry();
   return {
     identity: fakeIdentity,
     displayName: "test-manager",
@@ -33,14 +75,31 @@ function createDeps(): PeerConnectionManagerDeps {
     eventBus: new MeshEventBus(),
     autoConnect: new AutoConnectManager(),
     log: noop,
+    ...overrides,
+  };
+}
+
+function makeSession(deviceId: string): PeerSession {
+  return {
+    deviceId,
+    connId: `conn-${deviceId}`,
+    displayName: deviceId,
+    publicKey: undefined,
+    socket: { send: vi.fn() } as any,
+    outbound: true,
+    capabilities: ["channel:test"],
+    connectedAtMs: Date.now(),
   };
 }
 
 describe("PeerConnectionManager", () => {
   let manager: PeerConnectionManager;
+  let deps: PeerConnectionManagerDeps;
 
   beforeEach(() => {
-    manager = new PeerConnectionManager(createDeps());
+    peerClientInstances.length = 0;
+    deps = createDeps();
+    manager = new PeerConnectionManager(deps);
   });
 
   it("starts empty", () => {
@@ -97,5 +156,71 @@ describe("PeerConnectionManager", () => {
     });
     expect(manager.has("secure-peer")).toBe(true);
     manager.stopAll();
+  });
+
+  it("broadcasts peer.down when an unexpected disconnect is detected", () => {
+    const broadcastSpy = vi.spyOn(deps.peerRegistry, "broadcastEvent");
+
+    manager.connectToPeer({ deviceId: "peer-1", url: "ws://127.0.0.1:19999" });
+    const client = peerClientInstances[0];
+    client.__simulateConnected(makeSession("peer-1"));
+
+    client.__simulateDisconnected("peer-1");
+
+    expect(broadcastSpy).toHaveBeenCalledWith(
+      "peer.down",
+      expect.objectContaining({ deviceId: "peer-1" }),
+    );
+  });
+
+  it("removes the target peer when another node reports peer.down", async () => {
+    const disconnected: Array<{ deviceId: string; reason?: string }> = [];
+    deps.eventBus.on("peer.disconnected", (event) => disconnected.push(event));
+
+    manager.connectToPeer({ deviceId: "reporter", url: "ws://127.0.0.1:19999" });
+    const reporterClient = peerClientInstances[0];
+
+    deps.peerRegistry.register(makeSession("reporter"));
+    deps.peerRegistry.register(makeSession("dead-peer"));
+
+    expect(deps.peerRegistry.get("dead-peer")).toBeDefined();
+
+    await reporterClient.__emitEvent("peer.down", { deviceId: "dead-peer" });
+
+    expect(deps.peerRegistry.get("dead-peer")).toBeUndefined();
+    expect(disconnected).toContainEqual({ deviceId: "dead-peer", reason: "peer down" });
+  });
+
+  it("ignores peer.down when the reported peer is still reachable", async () => {
+    const disconnected: Array<{ deviceId: string; reason?: string }> = [];
+    const confirmPeerReachable = vi.fn(async (deviceId: string) => deviceId === "healthy-peer");
+
+    deps = createDeps({ confirmPeerReachable });
+    manager = new PeerConnectionManager(deps);
+    deps.eventBus.on("peer.disconnected", (event) => disconnected.push(event));
+
+    manager.connectToPeer({ deviceId: "reporter", url: "ws://127.0.0.1:19999" });
+    const reporterClient = peerClientInstances[0];
+
+    deps.peerRegistry.register(makeSession("reporter"));
+    deps.peerRegistry.register(makeSession("healthy-peer"));
+
+    await reporterClient.__emitEvent("peer.down", { deviceId: "healthy-peer" });
+
+    expect(confirmPeerReachable).toHaveBeenCalledWith("healthy-peer");
+    expect(deps.peerRegistry.get("healthy-peer")).toBeDefined();
+    expect(disconnected).toHaveLength(0);
+  });
+
+  it("ignores peer.down events with unsupported generation", async () => {
+    deps.peerRegistry.register(makeSession("reporter"));
+    deps.peerRegistry.register(makeSession("healthy-peer"));
+
+    manager.connectToPeer({ deviceId: "reporter", url: "ws://127.0.0.1:19999" });
+    const reporterClient = peerClientInstances[0];
+
+    await reporterClient.__emitEvent("peer.down", { deviceId: "healthy-peer", gen: 99 });
+
+    expect(deps.peerRegistry.get("healthy-peer")).toBeDefined();
   });
 });

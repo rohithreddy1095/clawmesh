@@ -10,7 +10,7 @@
 import type { MeshStaticPeer } from "./types.mesh.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import type { ContextFrame } from "./context-types.js";
-import type { PeerSession } from "./types.js";
+import type { MeshNodeRole, PeerSession } from "./types.js";
 import { MeshPeerClient } from "./peer-client.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import type { MeshCapabilityRegistry } from "./capabilities.js";
@@ -20,6 +20,7 @@ import type { MeshEventBus } from "./event-bus.js";
 import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -27,12 +28,16 @@ export type PeerConnectionManagerDeps = {
   identity: DeviceIdentity;
   displayName?: string;
   capabilities: string[];
+  meshId?: string;
+  role?: MeshNodeRole;
   peerRegistry: PeerRegistry;
   capabilityRegistry: MeshCapabilityRegistry;
   contextPropagator: ContextPropagator;
   worldModel: WorldModel;
   eventBus: MeshEventBus;
   autoConnect: AutoConnectManager;
+  /** Best-effort probe used before honoring a peer.down report. */
+  confirmPeerReachable?: (deviceId: string) => Promise<boolean>;
   log: { info: (msg: string) => void; warn: (msg: string) => void };
 };
 
@@ -72,8 +77,10 @@ export class PeerConnectionManager {
       tlsFingerprint: peer.tlsFingerprint,
       displayName: this.deps.displayName,
       capabilities: this.deps.capabilities,
+      meshId: this.deps.meshId,
+      role: this.deps.role,
       onConnected: (session) => {
-        if (session.capabilities.length > 0) {
+        if (session.role !== "viewer" && session.capabilities.length > 0) {
           this.deps.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
         this.deps.autoConnect.markConnected(session.deviceId);
@@ -84,17 +91,78 @@ export class PeerConnectionManager {
       },
       onDisconnected: (deviceId) => {
         this.deps.capabilityRegistry.removePeer(deviceId);
-        this.deps.autoConnect.markDisconnected(deviceId);
+        this.deps.autoConnect.markDead(deviceId);
         this.connectionHealth.removePeer(deviceId);
         this.deps.eventBus.emit("peer.disconnected", { deviceId, reason: "outbound disconnected" });
+        this.deps.peerRegistry.broadcastEvent("peer.down", {
+          gen: NODE_PROTOCOL_GENERATION,
+          deviceId,
+          reportedAtMs: Date.now(),
+        });
         this.deps.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
       onError: (err) => {
         this.deps.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
       },
-      onEvent: (event, payload) => {
+      onEvent: async (event, payload) => {
         // Record activity for connection health monitoring
         this.connectionHealth.recordActivity(peer.deviceId);
+
+        if (event === "peer.leaving") {
+          if (
+            payload && typeof payload === "object" &&
+            typeof (payload as { gen?: unknown }).gen === "number" &&
+            (payload as { gen: number }).gen !== NODE_PROTOCOL_GENERATION
+          ) {
+            return;
+          }
+          const removed = this.deps.peerRegistry.unregisterDevice(peer.deviceId);
+          if (removed) {
+            this.deps.capabilityRegistry.removePeer(peer.deviceId);
+            this.deps.autoConnect.markDisconnected(peer.deviceId);
+            this.connectionHealth.removePeer(peer.deviceId);
+            this.deps.eventBus.emit("peer.disconnected", { deviceId: peer.deviceId, reason: "peer leaving" });
+            this.deps.log.info(`mesh: peer leaving ${peer.deviceId.slice(0, 12)}…`);
+          }
+          return;
+        }
+
+        if (event === "peer.down") {
+          if (
+            payload && typeof payload === "object" &&
+            typeof (payload as { gen?: unknown }).gen === "number" &&
+            (payload as { gen: number }).gen !== NODE_PROTOCOL_GENERATION
+          ) {
+            return;
+          }
+          const targetDeviceId =
+            payload && typeof payload === "object" && typeof (payload as { deviceId?: unknown }).deviceId === "string"
+              ? (payload as { deviceId: string }).deviceId
+              : undefined;
+          if (!targetDeviceId || targetDeviceId === this.deps.identity.deviceId) {
+            return;
+          }
+
+          const reachable = this.deps.confirmPeerReachable
+            ? await this.deps.confirmPeerReachable(targetDeviceId)
+            : false;
+          if (reachable) {
+            this.deps.log.info(
+              `mesh: ignoring peer.down for ${targetDeviceId.slice(0, 12)}… — peer still reachable`,
+            );
+            return;
+          }
+
+          const removed = this.deps.peerRegistry.unregisterDevice(targetDeviceId);
+          if (removed) {
+            this.deps.capabilityRegistry.removePeer(targetDeviceId);
+            this.deps.autoConnect.markDead(targetDeviceId);
+            this.connectionHealth.removePeer(targetDeviceId);
+            this.deps.eventBus.emit("peer.disconnected", { deviceId: targetDeviceId, reason: "peer down" });
+            this.deps.log.info(`mesh: peer down ${targetDeviceId.slice(0, 12)}… (reported by ${peer.deviceId.slice(0, 12)}…)`);
+          }
+          return;
+        }
 
         if (event === "context.frame") {
           const frame = payload as ContextFrame;

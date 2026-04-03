@@ -38,17 +38,24 @@ import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
   MeshForwardTrustMetadata,
+  MeshNodeRole,
 } from "./types.js";
 import { PiSession } from "../agents/pi-session.js";
 import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
+import { loadOrCreateMeshId } from "./mesh-identity.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
+import { choosePlannerLeader, getPlannerActivity, type PlannerActivity, type PlannerLeader } from "./planner-election.js";
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
   host?: string;
   port?: number;
   displayName?: string;
+  meshId?: string;
+  meshName?: string;
+  role?: MeshNodeRole;
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
@@ -94,7 +101,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 export class MeshNodeRuntime {
   readonly identity: DeviceIdentity;
   readonly peerRegistry = new PeerRegistry();
@@ -111,11 +117,12 @@ export class MeshNodeRuntime {
   private readonly host: string;
   private readonly requestedPort: number;
   readonly displayName?: string;
+  readonly meshId: string;
+  readonly role: MeshNodeRole;
   private readonly capabilities: string[];
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
   readonly rpcDispatcher: RpcDispatcher;
-
   readonly peerConnections: PeerConnectionManager;
   private readonly inboundSocketConnIds = new Map<WebSocket, string>();
   /** Rate limiter for inbound RPC requests (100 req/min per connection). */
@@ -136,6 +143,11 @@ export class MeshNodeRuntime {
     this.host = opts.host ?? "0.0.0.0";
     this.requestedPort = opts.port ?? 18789;
     this.displayName = opts.displayName;
+    this.role = opts.role ?? "node";
+    this.meshId = opts.meshId ?? loadOrCreateMeshId({
+      meshName: opts.meshName,
+      originatorDeviceId: this.identity.deviceId,
+    });
     this.capabilities = [...(opts.capabilities ?? [])];
     this.staticPeers = [...(opts.staticPeers ?? [])];
     this.log = opts.log ?? DEFAULT_LOGGER;
@@ -151,11 +163,8 @@ export class MeshNodeRuntime {
     }
 
     this.eventBus = new MeshEventBus();
-
-    // Wire event bus → system event log + correlation tracker
     wireEventLog(this.eventBus, this.eventLog);
     wireCorrelationTracker(this.eventBus, this.correlationTracker);
-
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
@@ -167,37 +176,43 @@ export class MeshNodeRuntime {
       maxHistory: 1000,
       log: this.log,
     });
-
-    // Wire locally-originated frames into the world model + event bus
     this.contextPropagator.onLocalBroadcast = (frame) => {
       this.worldModel.ingest(frame);
       this.eventBus.emit("context.frame.broadcast", { frame });
     };
-
-    // ─── Peer Connection Manager ───
     this.peerConnections = new PeerConnectionManager({
       identity: this.identity,
       displayName: this.displayName,
       capabilities: this.capabilities,
+      meshId: this.meshId,
+      role: this.role,
       peerRegistry: this.peerRegistry,
       capabilityRegistry: this.capabilityRegistry,
       contextPropagator: this.contextPropagator,
       worldModel: this.worldModel,
       eventBus: this.eventBus,
       autoConnect: this.autoConnect,
+      confirmPeerReachable: async (deviceId: string) => {
+        const result = await this.peerRegistry.invoke({
+          deviceId,
+          method: "mesh.health",
+          params: {},
+          timeoutMs: 3_000,
+        });
+        return result.ok;
+      },
       log: this.log,
     });
-
-    // ─── RPC Handler Registration (via extracted RpcDispatcher) ───
     this.rpcDispatcher = new RpcDispatcher();
-
     this.rpcDispatcher.registerAll(createMeshServerHandlers({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
       displayName: this.displayName,
       capabilities: this.capabilities,
+      meshId: this.meshId,
+      role: this.role,
       onPeerConnected: (session) => {
-        if (session.capabilities.length > 0) {
+        if (session.role !== "viewer" && session.capabilities.length > 0) {
           this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
         }
         this.eventBus.emit("peer.connected", { session });
@@ -207,6 +222,7 @@ export class MeshNodeRuntime {
       peerRegistry: this.peerRegistry,
       capabilityRegistry: this.capabilityRegistry,
       localDeviceId: this.identity.deviceId,
+      getPlannerActivity: () => this.getPlannerActivity(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
       identity: this.identity,
@@ -234,17 +250,15 @@ export class MeshNodeRuntime {
       capabilityRegistry: this.capabilityRegistry,
       worldModel: this.worldModel,
       getPlannerMode: () => this.piSession?.mode,
+      getPlannerLeader: () => this.getPlannerLeader(),
+      getPlannerActivity: () => this.getPlannerActivity(),
       getMetrics: () => this.metrics.snapshot(),
     }));
-
-    // ─── Chat & UI subscriber handlers (extracted) ────────
     this.rpcDispatcher.registerAll(createChatHandlers({
       uiBroadcaster: this.uiBroadcaster,
       getPiSession: () => this.piSession,
       log: this.log,
     }));
-
-    // ─── Events + Trace RPC handlers ─────────────────────
     this.rpcDispatcher.registerAll(createEventsHandlers({
       eventLog: this.eventLog,
     }));
@@ -371,6 +385,13 @@ export class MeshNodeRuntime {
       peers: this.peerRegistry.listConnected().length,
     });
 
+    // Tell peers we are leaving before sockets close so they can clean up immediately.
+    this.peerRegistry.broadcastEvent("peer.leaving", {
+      gen: NODE_PROTOCOL_GENERATION,
+      deviceId: this.identity.deviceId,
+      timestamp: Date.now(),
+    });
+
     // Save world model snapshot for fast restart
     saveWorldModelSnapshot(
       this.worldModel, this.identity.deviceId,
@@ -455,6 +476,30 @@ export class MeshNodeRuntime {
 
   listConnectedPeers() {
     return this.peerRegistry.listConnected();
+  }
+
+  getPlannerLeader(): PlannerLeader {
+    return choosePlannerLeader({
+      self: { deviceId: this.identity.deviceId, role: this.role },
+      peers: this.peerRegistry.listConnected().map((peer) => ({
+        deviceId: peer.deviceId,
+        role: peer.role,
+      })),
+    });
+  }
+
+  getPlannerActivity(): PlannerActivity {
+    return getPlannerActivity({
+      self: { deviceId: this.identity.deviceId, role: this.role },
+      peers: this.peerRegistry.listConnected().map((peer) => ({
+        deviceId: peer.deviceId,
+        role: peer.role,
+      })),
+    });
+  }
+
+  shouldHandleAutonomousPlanner(): boolean {
+    return this.getPlannerActivity().shouldHandleAutonomous;
   }
 
   getAdvertisedCapabilities(): string[] {

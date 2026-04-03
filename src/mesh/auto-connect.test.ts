@@ -51,6 +51,27 @@ describe("AutoConnectManager", () => {
     expect(decision.action).toBe("connect");
   });
 
+  it("suppresses auto-connect for peers marked dead", () => {
+    const peer = makePeer();
+    manager.markDead(peer.deviceId);
+
+    const decision = manager.evaluate(peer);
+    expect(decision.action).toBe("skip");
+    if (decision.action === "skip") {
+      expect(decision.reason).toContain("marked dead");
+    }
+  });
+
+  it("clears dead-peer suppression on successful reconnect", () => {
+    const peer = makePeer();
+    manager.markDead(peer.deviceId);
+    manager.markConnected(peer.deviceId);
+    manager.markDisconnected(peer.deviceId);
+
+    const decision = manager.evaluate(peer);
+    expect(decision.action).toBe("connect");
+  });
+
   // ─── Rate limiting ─────────────────────────
 
   it("rate limits after max attempts per hour", () => {

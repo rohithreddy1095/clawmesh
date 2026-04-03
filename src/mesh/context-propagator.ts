@@ -3,6 +3,7 @@ import type { DeviceIdentity } from "../infra/device-identity.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import type { ContextFrame } from "./context-types.js";
 import type { MeshEvidenceSource } from "./types.js";
+import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
 
 /**
  * Maximum number of hops a context frame will be re-propagated through the mesh.
@@ -39,6 +40,7 @@ export class ContextPropagator {
   ): ContextFrame {
     const fullFrame: ContextFrame = {
       ...frame,
+      gen: NODE_PROTOCOL_GENERATION,
       frameId: randomUUID(),
       sourceDeviceId: this.deps.identity.deviceId,
       sourceDisplayName: frame.sourceDisplayName ?? this.deps.displayName,

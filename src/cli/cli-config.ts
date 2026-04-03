@@ -8,6 +8,7 @@
  */
 
 import type { ThresholdRule } from "../agents/types.js";
+import type { MeshNodeRole } from "../mesh/types.js";
 
 export interface CLIShorthandOpts {
   fieldNode?: boolean;
@@ -125,4 +126,24 @@ export function buildDefaultCapabilities(opts: {
     caps.push("sensor:mock");
   }
   return caps;
+}
+
+const VALID_RUNTIME_ROLES: MeshNodeRole[] = [
+  "node",
+  "planner",
+  "field",
+  "sensor",
+  "actuator",
+  "viewer",
+  "standby-planner",
+];
+
+export function resolveRuntimeRole(role: string | undefined): MeshNodeRole {
+  if (!role) return "node";
+  return (VALID_RUNTIME_ROLES.includes(role as MeshNodeRole) ? role : "node") as MeshNodeRole;
+}
+
+export function normalizeMeshName(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed : undefined;
 }
