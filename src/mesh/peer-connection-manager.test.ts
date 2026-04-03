@@ -158,6 +158,18 @@ describe("PeerConnectionManager", () => {
     manager.stopAll();
   });
 
+  it("normalizes https relay URLs before creating the client", () => {
+    manager.connectToPeer({
+      deviceId: "secure-peer",
+      url: "https://relay.example.com/mesh",
+      tlsFingerprint: "sha256:AABBCCDD",
+      transportLabel: "relay",
+    });
+    expect(peerClientInstances[0]?.opts.url).toBe("wss://relay.example.com/mesh");
+    expect(peerClientInstances[0]?.opts.transportLabel).toBe("relay");
+    manager.stopAll();
+  });
+
   it("broadcasts peer.down when an unexpected disconnect is detected", () => {
     const broadcastSpy = vi.spyOn(deps.peerRegistry, "broadcastEvent");
 

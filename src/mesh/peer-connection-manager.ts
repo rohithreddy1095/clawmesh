@@ -21,6 +21,7 @@ import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
+import { normalizeMeshPeerUrl } from "./peer-url.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export class PeerConnectionManager {
     if (this.clients.has(peer.deviceId)) return;
 
     const client = new MeshPeerClient({
-      url: peer.url,
+      url: normalizeMeshPeerUrl(peer.url),
       remoteDeviceId: peer.deviceId,
       identity: this.deps.identity,
       peerRegistry: this.deps.peerRegistry,

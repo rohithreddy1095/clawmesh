@@ -197,18 +197,22 @@ Example:
   - message: `feat(mesh): expose configured static peers in health`
 
 - ✅ Relay/static peer URL normalization at CLI boundary
-  - commit: pending
+  - commit: `05e1642`
   - message: `feat(cli): normalize relay peer https URLs to wss`
+
+- ✅ Relay/static peer URL normalization in runtime path
+  - commit: pending
+  - message: `feat(mesh): normalize static peer http URLs at runtime boundary`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay/static peer URL normalization in runtime path**
+**Relay/WSS TLS pinning diagnostics**
 
 Desired behavior:
-- normalize static peer `http(s)` URLs at the runtime connection boundary too
-- keep existing CLI and LAN/static behavior unchanged
-- harden programmatic/config-driven runtime usage beyond CLI parsing
+- warn when relay or `wss://` static peers are configured without a TLS fingerprint
+- keep current connection behavior unchanged
+- make WAN transport usage safer before deeper relay behavior changes
 
 This is the next practical WAN milestone slice.
 
