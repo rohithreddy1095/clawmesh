@@ -105,20 +105,24 @@ Example:
   - message: `feat(mesh): expose peer roles in mesh status RPCs`
 
 - ✅ Planner leadership observable in health/runtime surfaces
-  - commit: pending
+  - commit: `a48c45a`
   - message: `feat(mesh): surface planner leadership in health status`
+
+- ✅ CLI support for mesh role / mesh name
+  - commit: pending
+  - message: `feat(cli): add runtime role and mesh name options`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**CLI support for mesh role / mesh name**
+**Planner activity gating**
 
 Desired behavior:
-- `clawmesh start` can set `--role` and `--mesh-name`
-- the new runtime features become usable outside tests
-- operational deployment can opt into the new mesh identity / role model
+- expose whether the local node should be considered active or standby based on planner election
+- keep the first step observational or minimally enforced
+- foundation for duplicate-proposal prevention in multi-planner meshes
 
-This is the next practical enablement slice.
+This is the next practical HA slice.
 
 ## Milestone Plan
 
