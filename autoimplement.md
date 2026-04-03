@@ -225,18 +225,22 @@ Example:
   - message: `feat(cli): show static peer posture at startup`
 
 - ✅ Static peer posture in connection logs
-  - commit: pending
+  - commit: `d9356b8`
   - message: `feat(mesh): log static peer posture on connect`
+
+- ✅ Static peer posture in outbound error logs
+  - commit: pending
+  - message: `feat(mesh): include static peer posture in outbound errors`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Static peer posture in outbound error logs**
+**Relay transport enforcement slice**
 
 Desired behavior:
-- include transport/security posture context in outbound peer error logs
-- keep connection behavior unchanged
-- make WAN peer posture visible on failed connect attempts too
+- begin moving from pure observability toward a small behavior-enforcement step
+- keep LAN/static compatibility intact
+- prefer the smallest test-backed WAN safety or transport gate next
 
 This is the next practical WAN milestone slice.
 

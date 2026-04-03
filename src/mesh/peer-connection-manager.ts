@@ -113,7 +113,9 @@ export class PeerConnectionManager {
         this.deps.log.info(`mesh: outbound disconnected ${deviceId.slice(0, 12)}…`);
       },
       onError: (err) => {
-        this.deps.log.warn(`mesh: outbound peer error (${peer.deviceId.slice(0, 12)}…): ${String(err)}`);
+        this.deps.log.warn(
+          `mesh: outbound peer error (${peer.deviceId.slice(0, 12)}… ${transportContext}): ${String(err)}`,
+        );
       },
       onEvent: async (event, payload) => {
         // Record activity for connection health monitoring

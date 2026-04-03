@@ -188,6 +188,26 @@ describe("PeerConnectionManager", () => {
     manager.stopAll();
   });
 
+  it("logs outbound peer errors with transport posture context", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "secure-peer",
+      url: "https://relay.example.com/mesh",
+      tlsFingerprint: "sha256:AABBCCDD",
+      transportLabel: "relay",
+    });
+
+    peerClientInstances[0]?.opts.onError?.(new Error("boom"));
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("wss://relay.example.com/mesh via relay (tls-pinned)"),
+    );
+    manager.stopAll();
+  });
+
   it("broadcasts peer.down when an unexpected disconnect is detected", () => {
     const broadcastSpy = vi.spyOn(deps.peerRegistry, "broadcastEvent");
 
