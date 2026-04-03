@@ -20,7 +20,7 @@ import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
-import { formatProposalSummaryLine } from "../agents/proposal-formatting.js";
+import { buildProposalDecisionNotice, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -300,7 +300,7 @@ export class TelegramChannel {
 
       const result = await pi.approveProposal(match.taskId, `telegram:${ctx.from?.id ?? "unknown"}`);
       if (result) {
-        await ctx.reply(`✅ Approved: ${match.summary}\nTask: ${match.taskId.slice(0, 8)}`);
+        await ctx.reply(`✅ ${buildProposalDecisionNotice("Approved", match)}\nTask: ${match.taskId.slice(0, 8)}`);
         this.updateProposalNotification(match.taskId, "approved");
       } else {
         await ctx.reply("Approval failed.");
@@ -324,7 +324,7 @@ export class TelegramChannel {
 
       const result = pi.rejectProposal(match.taskId, `telegram:${ctx.from?.id ?? "unknown"}`);
       if (result) {
-        await ctx.reply(`❌ Rejected: ${match.summary}\nTask: ${match.taskId.slice(0, 8)}`);
+        await ctx.reply(`❌ ${buildProposalDecisionNotice("Rejected", match)}\nTask: ${match.taskId.slice(0, 8)}`);
         this.updateProposalNotification(match.taskId, "rejected");
       } else {
         await ctx.reply("Rejection failed.");

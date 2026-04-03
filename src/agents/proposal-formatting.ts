@@ -31,3 +31,11 @@ export function formatProposalSummaryLine(
   if (leader && leader !== owner) return `${base} (owner: ${owner}; leader: ${leader})`;
   return `${base} (owner: ${owner})`;
 }
+
+export function buildProposalDecisionNotice(
+  action: string,
+  proposal: Pick<TaskProposal, "summary" | "plannerDeviceId" | "plannerRole">,
+): string {
+  const owner = formatProposalOwner(proposal);
+  return owner ? `${action}: ${proposal.summary} (owner: ${owner})` : `${action}: ${proposal.summary}`;
+}

@@ -33,7 +33,7 @@ import {
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
-import { formatProposalSummaryLine } from "../proposal-formatting.js";
+import { buildProposalDecisionNotice, formatProposalSummaryLine } from "../proposal-formatting.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -412,7 +412,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         proposal.status = "approved";
         proposal.resolvedBy = "operator";
         await executeProposal(proposal);
-        ctx.ui.notify(`Approved and executing: ${proposal.summary}`, "info");
+        ctx.ui.notify(buildProposalDecisionNotice("Approved and executing", proposal), "info");
       },
     });
 
@@ -437,7 +437,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         proposal.resolvedAt = Date.now();
         proposal.resolvedBy = "operator";
         state.onProposalResolved?.(proposal);
-        ctx.ui.notify(`Rejected: ${proposal.summary}`, "info");
+        ctx.ui.notify(buildProposalDecisionNotice("Rejected", proposal), "info");
       },
     });
 

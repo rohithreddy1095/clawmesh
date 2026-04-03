@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatProposalOwner, formatProposalSummaryLine } from "./proposal-formatting.js";
+import { buildProposalDecisionNotice, formatProposalOwner, formatProposalSummaryLine } from "./proposal-formatting.js";
 
 describe("formatProposalOwner", () => {
   it("formats planner owner with role and device prefix", () => {
@@ -67,5 +67,30 @@ describe("formatProposalSummaryLine", () => {
     })).toBe(
       "[abcd1234] AWAITING_APPROVAL L2 — Irrigate zone-1 (owner: planner:planner-abcd…)"
     );
+  });
+});
+
+describe("buildProposalDecisionNotice", () => {
+  const proposal = {
+    taskId: "abcd1234-5678-90ab-cdef",
+    summary: "Irrigate zone-1",
+    approvalLevel: "L2" as const,
+    status: "awaiting_approval" as const,
+    plannerDeviceId: "planner-abcdef1234567890",
+    plannerRole: "planner" as const,
+  };
+
+  it("includes owner when known", () => {
+    expect(buildProposalDecisionNotice("Approved", proposal)).toBe(
+      "Approved: Irrigate zone-1 (owner: planner:planner-abcd…)"
+    );
+  });
+
+  it("falls back to plain summary when owner unknown", () => {
+    expect(buildProposalDecisionNotice("Rejected", {
+      ...proposal,
+      plannerDeviceId: undefined,
+      plannerRole: undefined,
+    })).toBe("Rejected: Irrigate zone-1");
   });
 });
