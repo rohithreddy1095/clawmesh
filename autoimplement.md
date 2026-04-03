@@ -180,14 +180,26 @@ Example:
   - commit: `b12afe3`
   - message: `feat(cli): report static peer transports in preflight`
 
+- ✅ Unlabeled WAN peer diagnostics
+  - commit: `31c377f`
+  - message: `feat(cli): warn on unlabeled static peers in WAN mode`
+
+- ✅ mDNS peer transport labeling
+  - commit: `3353fcd`
+  - message: `feat(mesh): label discovery auto-connect peers as mdns`
+
+- ✅ Configured static peers in mesh.status
+  - commit: pending
+  - message: `feat(mesh): expose configured static peers in mesh status`
+
 ## Next Planned Slice
 
 ### Red/Green target
-**Unlabeled WAN peer diagnostics**
+**Configured static peers in health parity**
 
 Desired behavior:
-- when discovery is disabled, preflight should warn if static peers lack transport labels
-- make WAN intent clearer before runtime starts
+- health and status surfaces should present configured static peers consistently
+- close another observational gap before actual relay transport work
 - keep behavior observational only
 
 This is the next practical WAN bridge slice.

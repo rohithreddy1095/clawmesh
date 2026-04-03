@@ -56,6 +56,11 @@ export type HealthCheckResult = {
   plannerLeader?: PlannerLeader;
   plannerActivity?: PlannerActivity;
   discoveryEnabled?: boolean;
+  configuredStaticPeers?: Array<{
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+  }>;
   memoryUsageMB?: number;
   metrics?: MetricSnapshot[];
   version: string;
@@ -77,6 +82,11 @@ export type HealthCheckDeps = {
   getPlannerLeader?: () => PlannerLeader;
   getPlannerActivity?: () => PlannerActivity;
   isDiscoveryEnabled?: () => boolean;
+  getConfiguredStaticPeers?: () => Array<{
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+  }>;
   getMetrics?: () => MetricSnapshot[];
 };
 
@@ -141,6 +151,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     plannerLeader: deps.getPlannerLeader?.(),
     plannerActivity: deps.getPlannerActivity?.(),
     discoveryEnabled: deps.isDiscoveryEnabled?.(),
+    configuredStaticPeers: deps.getConfiguredStaticPeers?.(),
     memoryUsageMB,
     metrics: deps.getMetrics?.(),
     version: deps.version,
