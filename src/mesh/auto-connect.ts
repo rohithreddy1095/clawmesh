@@ -35,6 +35,7 @@ export class AutoConnectManager {
   private readonly maxAttemptsPerHour: number;
   private readonly attempts = new Map<string, number[]>(); // deviceId → timestamps
   private readonly connectedPeers = new Set<string>();
+  private readonly deadPeers = new Set<string>();
 
   constructor(opts?: AutoConnectOptions) {
     this.maxAttemptsPerHour = opts?.maxAttemptsPerHour ?? 5;
@@ -44,6 +45,7 @@ export class AutoConnectManager {
    * Mark a peer as currently connected (skip auto-connect for it).
    */
   markConnected(deviceId: string): void {
+    this.deadPeers.delete(deviceId);
     this.connectedPeers.add(deviceId);
   }
 
@@ -55,6 +57,21 @@ export class AutoConnectManager {
   }
 
   /**
+   * Mark a peer as confirmed dead so stale discovery noise does not immediately reconnect it.
+   */
+  markDead(deviceId: string): void {
+    this.connectedPeers.delete(deviceId);
+    this.deadPeers.add(deviceId);
+  }
+
+  /**
+   * Check whether a peer is currently suppressed because it was confirmed dead.
+   */
+  isDeadSuppressed(deviceId: string): boolean {
+    return this.deadPeers.has(deviceId);
+  }
+
+  /**
    * Evaluate whether to auto-connect to a discovered peer.
    * Does NOT check the trust store — use evaluateWithTrust() for the full flow.
    */
@@ -62,6 +79,11 @@ export class AutoConnectManager {
     // Already connected
     if (this.connectedPeers.has(peer.deviceId)) {
       return { action: "skip", reason: "already connected" };
+    }
+
+    // Suppressed because the peer was recently confirmed dead.
+    if (this.deadPeers.has(peer.deviceId)) {
+      return { action: "skip", reason: "peer marked dead" };
     }
 
     // Rate limiting
@@ -123,5 +145,6 @@ export class AutoConnectManager {
   reset(): void {
     this.attempts.clear();
     this.connectedPeers.clear();
+    this.deadPeers.clear();
   }
 }
