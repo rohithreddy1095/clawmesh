@@ -89,20 +89,28 @@ Example:
   - message: `feat(mesh): add protocol generation checks to mesh events`
 
 - ✅ Explicit node roles in peer handshake
-  - commit: pending
+  - commit: `d410c75`
   - message: `feat(mesh): add explicit node roles to peer handshake`
+
+- ✅ Viewer/passive clients excluded from capability routing
+  - commit: `969d8de`
+  - message: `feat(mesh): exclude viewer peers from capability routing`
+
+- ✅ Planner election primitive
+  - commit: pending
+  - message: `feat(mesh): add deterministic planner election primitive`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Viewer/passive clients excluded from capability routing**
+**Expose peer roles in operational RPC/status surfaces**
 
 Desired behavior:
-- `viewer` peers can connect and observe
-- `viewer` peers do not contribute capabilities to mesh routing
-- this creates the first real passive-client behavior without breaking existing runtime APIs
+- `mesh.peers` and `mesh.status` include peer role
+- operators and future planner orchestration can inspect role information remotely
+- role model becomes observable, not just internal
 
-This is the second Milestone 3 slice.
+This is a small operational follow-up slice.
 
 ## Milestone Plan
 
