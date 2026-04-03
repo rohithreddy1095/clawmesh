@@ -22,6 +22,8 @@ export type MeshPeerClientOptions = {
   displayName?: string;
   /** Capabilities to advertise. */
   capabilities?: string[];
+  /** Expected stable mesh identity. */
+  meshId?: string;
   /** Called when the peer connection is established. */
   onConnected?: (session: PeerSession) => void;
   /** Called when the peer disconnects. */
@@ -121,6 +123,7 @@ export class MeshPeerClient {
       identity: this.opts.identity,
       displayName: this.opts.displayName,
       capabilities: this.opts.capabilities,
+      meshId: this.opts.meshId,
     });
     const requestId = randomUUID();
     this.connectRequestId = requestId;
@@ -201,10 +204,16 @@ export class MeshPeerClient {
       publicKey: result.publicKey,
       signature: result.signature,
       signedAtMs: result.signedAtMs,
+      meshId: result.meshId,
     });
     if (!valid) {
       this.opts.onError?.(new Error("mesh peer signature verification failed"));
       this.ws?.close(1008, "signature mismatch");
+      return;
+    }
+    if (this.opts.meshId && result.meshId && this.opts.meshId !== result.meshId) {
+      this.opts.onError?.(new Error("mesh peer mesh ID mismatch"));
+      this.ws?.close(1008, "mesh ID mismatch");
       return;
     }
     // Register the peer session.

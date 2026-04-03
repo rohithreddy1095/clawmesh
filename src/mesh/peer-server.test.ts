@@ -151,4 +151,38 @@ describe("createMeshServerHandlers", () => {
       expect(responseError?.code).toBe("AUTH_FAILED");
     });
   });
+
+  it("rejects connection from a different mesh", async () => {
+    await withTempHome(async () => {
+      const serverIdentity = loadOrCreateDeviceIdentity();
+      const clientIdentity = loadOrCreateDeviceIdentity("/tmp/test-ps-meshid-" + Date.now() + "/device.json");
+
+      await addTrustedPeer({ deviceId: clientIdentity.deviceId });
+
+      const auth = buildMeshConnectAuth({
+        identity: clientIdentity,
+        meshId: "mesh-client",
+      });
+
+      const handlers = createMeshServerHandlers({
+        identity: serverIdentity,
+        peerRegistry: new PeerRegistry(),
+        meshId: "mesh-server",
+      });
+
+      let responseOk: boolean | undefined;
+      let responseError: any;
+      await handlers["mesh.connect"]({
+        req: {},
+        params: auth,
+        respond: (ok, _payload, error) => {
+          responseOk = ok;
+          responseError = error;
+        },
+      });
+
+      expect(responseOk).toBe(false);
+      expect(responseError?.code).toBe("MESH_ID_MISMATCH");
+    });
+  });
 });

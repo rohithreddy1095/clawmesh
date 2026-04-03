@@ -209,4 +209,30 @@ describe("MeshNodeRuntime", () => {
     expect(event.reason).toBe("peer leaving");
     expect(nodeA.runtime.listConnectedPeers().some((p) => p.deviceId === nodeB.identity.deviceId)).toBe(false);
   });
+
+  it("does not connect peers from different mesh IDs", async () => {
+    const nodeB = await harness.startNode({
+      name: "node-b6",
+      meshId: "mesh-b",
+      capabilities: ["channel:clawmesh"],
+    });
+    const nodeA = await harness.startNode({
+      name: "node-a6",
+      meshId: "mesh-a",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!nodeA || !nodeB) return;
+
+    await harness.trust(nodeA, nodeB);
+    nodeA.runtime.connectToPeer({
+      deviceId: nodeB.identity.deviceId,
+      url: harness.urlFor(nodeB),
+    });
+
+    const connected = await nodeA.runtime.waitForPeerConnected(nodeB.identity.deviceId, 500);
+    expect(connected).toBe(false);
+    expect(nodeA.runtime.listConnectedPeers()).toHaveLength(0);
+    expect(nodeB.runtime.listConnectedPeers()).toHaveLength(0);
+  });
 });

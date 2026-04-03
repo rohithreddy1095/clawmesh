@@ -129,6 +129,8 @@ export type MeshConnectParams = {
   nonce?: string;
   /** Display name. */
   displayName?: string;
+  /** Stable mesh identity this peer belongs to. */
+  meshId?: string;
   /** Capabilities offered by this peer. */
   capabilities?: string[];
 };
@@ -144,6 +146,8 @@ export type MeshConnectResult = {
   signedAtMs: number;
   /** Server's display name. */
   displayName?: string;
+  /** Server's stable mesh identity. */
+  meshId?: string;
   /** Server's capabilities. */
   capabilities?: string[];
 };

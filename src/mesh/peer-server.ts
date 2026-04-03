@@ -18,6 +18,7 @@ export type MeshServerHandlerDeps = {
   peerRegistry: PeerRegistry;
   displayName?: string;
   capabilities?: string[];
+  meshId?: string;
   onPeerConnected?: (session: PeerSession) => void;
 };
 
@@ -62,6 +63,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         signature: p.signature,
         signedAtMs: p.signedAtMs,
         nonce: p.nonce,
+        meshId: p.meshId,
       });
       if (!valid) {
         respond(false, undefined, {
@@ -71,11 +73,20 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         return;
       }
 
+      if (deps.meshId && p.meshId && deps.meshId !== p.meshId) {
+        respond(false, undefined, {
+          code: "MESH_ID_MISMATCH",
+          message: `peer belongs to mesh ${p.meshId}, expected ${deps.meshId}`,
+        });
+        return;
+      }
+
       // Build our own signed response for mutual authentication.
       const ourAuth = buildMeshConnectAuth({
         identity: deps.identity,
         displayName: deps.displayName,
         capabilities: deps.capabilities,
+        meshId: deps.meshId,
       });
 
       // Register the peer session.
@@ -105,6 +116,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         signedAtMs: ourAuth.signedAtMs,
         displayName: ourAuth.displayName,
         capabilities: ourAuth.capabilities,
+        meshId: ourAuth.meshId,
       });
     },
   };

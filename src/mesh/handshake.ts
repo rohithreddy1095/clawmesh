@@ -7,16 +7,20 @@ import type { DeviceIdentity } from "../infra/device-identity.js";
 
 /**
  * Build the mesh auth payload string for signing/verification.
- * Format: "mesh.connect|v1|deviceId|signedAtMs|nonce"
+ * Format: "mesh.connect|v1|deviceId|signedAtMs|nonce?|meshId?"
  */
 export function buildMeshAuthPayload(params: {
   deviceId: string;
   signedAtMs: number;
   nonce?: string;
+  meshId?: string;
 }): string {
   const parts = ["mesh.connect", "v1", params.deviceId, String(params.signedAtMs)];
   if (params.nonce) {
     parts.push(params.nonce);
+  }
+  if (params.meshId) {
+    parts.push(params.meshId);
   }
   return parts.join("|");
 }
@@ -29,6 +33,7 @@ export function buildMeshConnectAuth(params: {
   nonce?: string;
   displayName?: string;
   capabilities?: string[];
+  meshId?: string;
 }): {
   deviceId: string;
   publicKey: string;
@@ -37,12 +42,14 @@ export function buildMeshConnectAuth(params: {
   nonce?: string;
   displayName?: string;
   capabilities?: string[];
+  meshId?: string;
 } {
   const signedAtMs = Date.now();
   const payload = buildMeshAuthPayload({
     deviceId: params.identity.deviceId,
     signedAtMs,
     nonce: params.nonce,
+    meshId: params.meshId,
   });
   const signature = signDevicePayload(params.identity.privateKeyPem, payload);
   return {
@@ -53,6 +60,7 @@ export function buildMeshConnectAuth(params: {
     nonce: params.nonce,
     displayName: params.displayName,
     capabilities: params.capabilities,
+    meshId: params.meshId,
   };
 }
 
@@ -66,6 +74,7 @@ export function verifyMeshConnectAuth(params: {
   signature: string;
   signedAtMs: number;
   nonce?: string;
+  meshId?: string;
 }): boolean {
   const MAX_CLOCK_DRIFT_MS = 5 * 60 * 1000;
   const now = Date.now();
@@ -76,6 +85,7 @@ export function verifyMeshConnectAuth(params: {
     deviceId: params.deviceId,
     signedAtMs: params.signedAtMs,
     nonce: params.nonce,
+    meshId: params.meshId,
   });
   return verifyDeviceSignature(params.publicKey, payload, params.signature);
 }

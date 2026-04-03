@@ -27,6 +27,7 @@ export type PeerConnectionManagerDeps = {
   identity: DeviceIdentity;
   displayName?: string;
   capabilities: string[];
+  meshId?: string;
   peerRegistry: PeerRegistry;
   capabilityRegistry: MeshCapabilityRegistry;
   contextPropagator: ContextPropagator;
@@ -74,6 +75,7 @@ export class PeerConnectionManager {
       tlsFingerprint: peer.tlsFingerprint,
       displayName: this.deps.displayName,
       capabilities: this.deps.capabilities,
+      meshId: this.deps.meshId,
       onConnected: (session) => {
         if (session.capabilities.length > 0) {
           this.deps.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);

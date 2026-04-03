@@ -73,20 +73,28 @@ Example:
   - message: `feat(mesh): broadcast and handle peer.down on hard disconnect`
 
 - ✅ Reachability confirmation before honoring `peer.down`
-  - commit: pending
+  - commit: `53e9c5e`
   - message: `feat(mesh): confirm peer reachability before honoring peer.down`
+
+- ✅ Dead-peer suppression / ghost reconnect prevention
+  - commit: `55a0344`
+  - message: `feat(mesh): suppress auto-connect for confirmed dead peers`
+
+- ✅ Stable mesh identity (`meshId`) in peer handshake
+  - commit: pending
+  - message: `feat(mesh): add stable mesh identity to handshake`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Dead-peer suppression / ghost reconnect prevention**
+**Protocol generation (`gen`) on mesh messages**
 
 Desired behavior:
-- once a peer is confirmed dead, stale discovery / reconnect noise should not immediately resurrect it
-- the mesh should keep a temporary dead-peer suppression set
-- a peer should only come back through a clean reconnect path
+- control-plane messages and context frames carry a protocol generation
+- unsupported generations are rejected safely
+- nodes can evolve protocol shape without silent corruption
 
-This prevents ghost peers from reappearing after flaky disconnects.
+This is the second Milestone 2 slice.
 
 ## Milestone Plan
 
@@ -95,7 +103,7 @@ This prevents ghost peers from reappearing after flaky disconnects.
 - ✅ `peer.leaving`
 - ✅ `peer.down` broadcast/handling
 - ✅ reachability confirmation before removal
-- ⏳ dead-peer suppression / ghost reconnect prevention
+- ✅ dead-peer suppression / ghost reconnect prevention
 
 ### Milestone 2 — Identity & protocol safety
 - `meshId`

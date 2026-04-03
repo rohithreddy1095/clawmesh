@@ -43,12 +43,15 @@ import { PiSession } from "../agents/pi-session.js";
 import { createAndStartPiSession } from "./pi-session-factory.js";
 import type { FarmContext, ThresholdRule, TaskProposal } from "../agents/types.js";
 import { MeshDiscovery } from "./discovery.js";
+import { loadOrCreateMeshId } from "./mesh-identity.js";
 
 export type MeshNodeRuntimeOptions = {
   identity: DeviceIdentity;
   host?: string;
   port?: number;
   displayName?: string;
+  meshId?: string;
+  meshName?: string;
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
@@ -111,6 +114,7 @@ export class MeshNodeRuntime {
   private readonly host: string;
   private readonly requestedPort: number;
   readonly displayName?: string;
+  readonly meshId: string;
   private readonly capabilities: string[];
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
@@ -136,6 +140,10 @@ export class MeshNodeRuntime {
     this.host = opts.host ?? "0.0.0.0";
     this.requestedPort = opts.port ?? 18789;
     this.displayName = opts.displayName;
+    this.meshId = opts.meshId ?? loadOrCreateMeshId({
+      meshName: opts.meshName,
+      originatorDeviceId: this.identity.deviceId,
+    });
     this.capabilities = [...(opts.capabilities ?? [])];
     this.staticPeers = [...(opts.staticPeers ?? [])];
     this.log = opts.log ?? DEFAULT_LOGGER;
@@ -179,6 +187,7 @@ export class MeshNodeRuntime {
       identity: this.identity,
       displayName: this.displayName,
       capabilities: this.capabilities,
+      meshId: this.meshId,
       peerRegistry: this.peerRegistry,
       capabilityRegistry: this.capabilityRegistry,
       contextPropagator: this.contextPropagator,
@@ -205,6 +214,7 @@ export class MeshNodeRuntime {
       peerRegistry: this.peerRegistry,
       displayName: this.displayName,
       capabilities: this.capabilities,
+      meshId: this.meshId,
       onPeerConnected: (session) => {
         if (session.capabilities.length > 0) {
           this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
