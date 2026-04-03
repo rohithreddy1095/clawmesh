@@ -161,18 +161,22 @@ Example:
   - message: `feat(mesh): expose discovery mode in status surfaces`
 
 - ✅ Peer transport labeling
-  - commit: pending
+  - commit: `26b8979`
   - message: `feat(mesh): add operator-visible peer transport labels`
+
+- ✅ WAN peer labeling in health surfaces
+  - commit: pending
+  - message: `feat(mesh): expose peer transport labels in health`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**WAN peer labeling in health surfaces**
+**WAN peer labeling in runtime status commands**
 
 Desired behavior:
-- health and peer detail surfaces should expose transport labels consistently
-- help operators distinguish LAN vs relay/static peers at a glance
-- keep the slice observational only
+- operator-facing status views should show discovery mode plus transport labels together
+- make relay/static/LAN topology obvious at a glance
+- keep behavior observational only
 
 This is the next practical WAN bridge slice.
 
