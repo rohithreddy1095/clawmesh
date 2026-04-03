@@ -33,7 +33,7 @@ import {
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
-import { buildProposalDecisionNotice, formatProposalSummaryLine } from "../proposal-formatting.js";
+import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../proposal-formatting.js";
 
 // ─── Shared proposal state (singleton per extension instance) ──────
 
@@ -359,12 +359,23 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         const frameCount = runtime.worldModel.getRecentFrames(100).length;
         const pending = countPending(state.proposals);
 
+        const plannerLeader = runtime.getPlannerLeader();
+        const leader = plannerLeader.kind === "none"
+          ? undefined
+          : {
+              deviceId: plannerLeader.deviceId,
+              role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+                ? plannerLeader.role
+                : undefined,
+            };
+        const pendingLines = formatPendingProposalStatusLines([...state.proposals.values()], { leader });
         const lines = [
           `Mesh Status:`,
           `  Connected peers: ${peers.length}`,
           ...peers.map((p) => `    ${p.displayName ?? p.deviceId.slice(0, 12)} — ${p.capabilities.join(", ")}`),
           `  World model frames: ${frameCount}`,
           `  Pending proposals: ${pending}`,
+          ...pendingLines,
         ];
         ctx.ui.notify(lines.join("\n"), "info");
       },

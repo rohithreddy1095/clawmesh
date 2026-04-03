@@ -32,6 +32,22 @@ export function formatProposalSummaryLine(
   return `${base} (owner: ${owner})`;
 }
 
+export function formatPendingProposalStatusLines(
+  proposals: Array<Pick<
+    TaskProposal,
+    "taskId" | "summary" | "approvalLevel" | "status" | "plannerDeviceId" | "plannerRole"
+  >>,
+  opts?: {
+    limit?: number;
+    leader?: { deviceId: string; role?: "planner" | "standby-planner" };
+  },
+): string[] {
+  return proposals
+    .filter((p) => p.status === "proposed" || p.status === "awaiting_approval")
+    .slice(0, opts?.limit ?? 3)
+    .map((p) => `  ${formatProposalSummaryLine(p, { includeStatus: false, leader: opts?.leader })}`);
+}
+
 export function buildProposalDecisionNotice(
   action: string,
   proposal: Pick<TaskProposal, "summary" | "plannerDeviceId" | "plannerRole">,

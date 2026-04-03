@@ -20,7 +20,7 @@ import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { PiSession } from "../agents/pi-session.js";
 import type { ContextFrame } from "../mesh/context-types.js";
 import type { TaskProposal } from "../agents/types.js";
-import { buildProposalDecisionNotice, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
+import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../agents/proposal-formatting.js";
 import { randomUUID } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -208,10 +208,23 @@ export class TelegramChannel {
       const frameCount = this.runtime.worldModel.getRecentFrames(100).length;
       const proposals = pi ? pi.getProposals() : [];
       const pending = proposals.filter(p => p.status === "awaiting_approval").length;
+      const plannerLeader = this.runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
 
       const peerLines = peers.length > 0
         ? peers.map(p => `  • ${p.displayName ?? p.deviceId.slice(0, 12)} [${p.capabilities.join(", ")}]`).join("\n")
         : "  (no peers connected)";
+      const pendingLines = formatPendingProposalStatusLines(proposals, { leader });
+      const pendingSection = pendingLines.length > 0
+        ? `\nTop pending:\n${pendingLines.join("\n")}`
+        : "";
 
       await ctx.reply(
         `📊 Mesh Status\n\n` +
@@ -219,7 +232,7 @@ export class TelegramChannel {
         `Peers (${peers.length}):\n${peerLines}\n` +
         `Local capabilities: ${caps.join(", ")}\n` +
         `World model: ${frameCount} frames\n` +
-        `Proposals: ${proposals.length} total, ${pending} awaiting approval`,
+        `Proposals: ${proposals.length} total, ${pending} awaiting approval${pendingSection}`,
       );
     });
 
