@@ -3,14 +3,16 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useMeshStore, type ContextFrame, type MeshPeer, type Proposal } from "./store";
 
-const WS_URL = typeof window !== "undefined"
+const DEFAULT_WS_URL = typeof window !== "undefined"
   ? `ws://${window.location.hostname}:18789`
   : "ws://localhost:18789";
+
+const WS_URL = process.env.NEXT_PUBLIC_MESH_URL || DEFAULT_WS_URL;
 
 /** Fallback for mobile browsers on non-HTTPS where uuid() is unavailable. */
 function uuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return uuid();
+    return crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;

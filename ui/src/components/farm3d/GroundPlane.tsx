@@ -36,7 +36,7 @@ export function GroundPlane({ coords }: GroundPlaneProps) {
   }, [x_min, x_max, z_min, z_max]);
 
   // Farm boundary outline
-  const boundary = useMemo(() => {
+  const boundaryLine = useMemo(() => {
     const pts = [
       new THREE.Vector3(x_min, 0.02, z_min),
       new THREE.Vector3(x_max, 0.02, z_min),
@@ -44,7 +44,13 @@ export function GroundPlane({ coords }: GroundPlaneProps) {
       new THREE.Vector3(x_min, 0.02, z_max),
       new THREE.Vector3(x_min, 0.02, z_min),
     ];
-    return new THREE.BufferGeometry().setFromPoints(pts);
+    const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    const material = new THREE.LineBasicMaterial({
+      color: "#FF7844",
+      transparent: true,
+      opacity: 0.5,
+    });
+    return new THREE.Line(geometry, material);
   }, [x_min, x_max, z_min, z_max]);
 
   return (
@@ -66,9 +72,7 @@ export function GroundPlane({ coords }: GroundPlaneProps) {
       </lineSegments>
 
       {/* Farm boundary */}
-      <line geometry={boundary}>
-        <lineBasicMaterial color="#FF7844" transparent opacity={0.5} linewidth={2} />
-      </line>
+      <primitive object={boundaryLine} />
 
       {/* Origin marker (small axis indicator) */}
       <group position={[x_min - 3, 0, z_min - 3]}>
