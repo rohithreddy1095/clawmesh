@@ -176,15 +176,19 @@ Example:
   - commit: `7f671b5`
   - message: `feat(cli): show discovery mode and peer transport at startup`
 
+- ✅ Transport-label visibility in startup validation/reporting
+  - commit: `b12afe3`
+  - message: `feat(cli): report static peer transports in preflight`
+
 ## Next Planned Slice
 
 ### Red/Green target
-**Transport-label visibility in startup validation/reporting**
+**Unlabeled WAN peer diagnostics**
 
 Desired behavior:
-- preflight/startup surfaces should make WAN transport intent obvious before connect attempts
+- when discovery is disabled, preflight should warn if static peers lack transport labels
+- make WAN intent clearer before runtime starts
 - keep behavior observational only
-- preserve current static/LAN behavior
 
 This is the next practical WAN bridge slice.
 
