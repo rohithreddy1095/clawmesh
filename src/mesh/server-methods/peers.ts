@@ -13,6 +13,11 @@ export function createMeshPeersHandlers(deps: {
   localDeviceId: string;
   getPlannerActivity?: () => PlannerActivity;
   isDiscoveryEnabled?: () => boolean;
+  getConfiguredStaticPeers?: () => Array<{
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+  }>;
   getPendingProposals?: () => Array<{
     taskId: string;
     summary: string;
@@ -52,6 +57,7 @@ export function createMeshPeersHandlers(deps: {
         })),
         plannerActivity: deps.getPlannerActivity?.(),
         discoveryEnabled: deps.isDiscoveryEnabled?.(),
+        configuredStaticPeers: deps.getConfiguredStaticPeers?.(),
         pendingProposals: deps.getPendingProposals?.(),
       });
     },

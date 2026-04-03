@@ -226,6 +226,7 @@ export class MeshNodeRuntime {
       localDeviceId: this.identity.deviceId,
       getPlannerActivity: () => this.getPlannerActivity(),
       isDiscoveryEnabled: () => !this.opts.disableDiscovery,
+      getConfiguredStaticPeers: () => this.getConfiguredStaticPeers(),
       getPendingProposals: () => this.getPendingProposalSummaries(),
     }));
     this.rpcDispatcher.registerAll(createMeshForwardHandlers({
@@ -519,6 +520,14 @@ export class MeshNodeRuntime {
         plannerRole: proposal.plannerRole,
         plannerOwner: formatProposalOwner(proposal),
       }));
+  }
+
+  getConfiguredStaticPeers() {
+    return this.staticPeers.map((peer) => ({
+      deviceId: peer.deviceId,
+      url: peer.url,
+      transportLabel: peer.transportLabel,
+    }));
   }
 
   isDiscoveryEnabled(): boolean {
