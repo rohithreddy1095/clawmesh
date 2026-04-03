@@ -9,15 +9,15 @@ import { AutoConnectManager } from "./auto-connect.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import type { PeerSession } from "./types.js";
 
-vi.mock("./peer-client.js", () => {
-  const instances: any[] = [];
+const peerClientInstances: any[] = [];
 
+vi.mock("./peer-client.js", () => {
   class MeshPeerClient {
     opts: any;
 
     constructor(opts: any) {
       this.opts = opts;
-      instances.push(this);
+      peerClientInstances.push(this);
     }
 
     start() {}
@@ -47,11 +47,8 @@ vi.mock("./peer-client.js", () => {
 
   return {
     MeshPeerClient,
-    __peerClientInstances: instances,
   };
 });
-
-import { __peerClientInstances } from "./peer-client.js";
 
 const noop = { info: () => {}, warn: () => {} };
 
@@ -99,7 +96,7 @@ describe("PeerConnectionManager", () => {
   let deps: PeerConnectionManagerDeps;
 
   beforeEach(() => {
-    __peerClientInstances.length = 0;
+    peerClientInstances.length = 0;
     deps = createDeps();
     manager = new PeerConnectionManager(deps);
   });
@@ -164,7 +161,7 @@ describe("PeerConnectionManager", () => {
     const broadcastSpy = vi.spyOn(deps.peerRegistry, "broadcastEvent");
 
     manager.connectToPeer({ deviceId: "peer-1", url: "ws://127.0.0.1:19999" });
-    const client = __peerClientInstances[0];
+    const client = peerClientInstances[0];
     client.__simulateConnected(makeSession("peer-1"));
 
     client.__simulateDisconnected("peer-1");
@@ -180,7 +177,7 @@ describe("PeerConnectionManager", () => {
     deps.eventBus.on("peer.disconnected", (event) => disconnected.push(event));
 
     manager.connectToPeer({ deviceId: "reporter", url: "ws://127.0.0.1:19999" });
-    const reporterClient = __peerClientInstances[0];
+    const reporterClient = peerClientInstances[0];
 
     deps.peerRegistry.register(makeSession("reporter"));
     deps.peerRegistry.register(makeSession("dead-peer"));
