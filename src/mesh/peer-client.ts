@@ -5,7 +5,7 @@ import { normalizeFingerprint } from "../infra/tls/fingerprint.js";
 import { rawDataToString } from "../infra/ws.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
-import type { MeshConnectResult, PeerSession } from "./types.js";
+import type { MeshConnectResult, MeshNodeRole, PeerSession } from "./types.js";
 
 export type MeshPeerClientOptions = {
   /** Remote peer's WebSocket URL (e.g. "wss://jetson.local:18789"). */
@@ -24,6 +24,8 @@ export type MeshPeerClientOptions = {
   capabilities?: string[];
   /** Expected stable mesh identity. */
   meshId?: string;
+  /** Local declared node role. */
+  role?: MeshNodeRole;
   /** Called when the peer connection is established. */
   onConnected?: (session: PeerSession) => void;
   /** Called when the peer disconnects. */
@@ -124,6 +126,7 @@ export class MeshPeerClient {
       displayName: this.opts.displayName,
       capabilities: this.opts.capabilities,
       meshId: this.opts.meshId,
+      role: this.opts.role,
     });
     const requestId = randomUUID();
     this.connectRequestId = requestId;
@@ -205,6 +208,7 @@ export class MeshPeerClient {
       signature: result.signature,
       signedAtMs: result.signedAtMs,
       meshId: result.meshId,
+      role: result.role,
     });
     if (!valid) {
       this.opts.onError?.(new Error("mesh peer signature verification failed"));
@@ -225,6 +229,7 @@ export class MeshPeerClient {
       socket: this.ws!,
       outbound: true,
       capabilities: result.capabilities ?? [],
+      role: result.role,
       connectedAtMs: Date.now(),
     };
     this.opts.peerRegistry.register(session);

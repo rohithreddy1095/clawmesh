@@ -38,6 +38,7 @@ import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
   MeshForwardTrustMetadata,
+  MeshNodeRole,
 } from "./types.js";
 import { PiSession } from "../agents/pi-session.js";
 import { createAndStartPiSession } from "./pi-session-factory.js";
@@ -53,6 +54,7 @@ export type MeshNodeRuntimeOptions = {
   displayName?: string;
   meshId?: string;
   meshName?: string;
+  role?: MeshNodeRole;
   capabilities?: string[];
   staticPeers?: MeshStaticPeer[];
   enableMockActuator?: boolean;
@@ -116,6 +118,7 @@ export class MeshNodeRuntime {
   private readonly requestedPort: number;
   readonly displayName?: string;
   readonly meshId: string;
+  readonly role: MeshNodeRole;
   private readonly capabilities: string[];
   private readonly staticPeers: MeshStaticPeer[];
   private readonly log: Required<MeshNodeRuntimeOptions>["log"];
@@ -141,6 +144,7 @@ export class MeshNodeRuntime {
     this.host = opts.host ?? "0.0.0.0";
     this.requestedPort = opts.port ?? 18789;
     this.displayName = opts.displayName;
+    this.role = opts.role ?? "node";
     this.meshId = opts.meshId ?? loadOrCreateMeshId({
       meshName: opts.meshName,
       originatorDeviceId: this.identity.deviceId,
@@ -189,6 +193,7 @@ export class MeshNodeRuntime {
       displayName: this.displayName,
       capabilities: this.capabilities,
       meshId: this.meshId,
+      role: this.role,
       peerRegistry: this.peerRegistry,
       capabilityRegistry: this.capabilityRegistry,
       contextPropagator: this.contextPropagator,
@@ -216,6 +221,7 @@ export class MeshNodeRuntime {
       displayName: this.displayName,
       capabilities: this.capabilities,
       meshId: this.meshId,
+      role: this.role,
       onPeerConnected: (session) => {
         if (session.capabilities.length > 0) {
           this.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);

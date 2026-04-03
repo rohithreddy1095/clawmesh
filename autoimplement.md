@@ -85,20 +85,24 @@ Example:
   - message: `feat(mesh): add stable mesh identity to handshake`
 
 - ✅ Protocol generation (`gen`) on mesh messages
-  - commit: pending
+  - commit: `21ca115`
   - message: `feat(mesh): add protocol generation checks to mesh events`
+
+- ✅ Explicit node roles in peer handshake
+  - commit: pending
+  - message: `feat(mesh): add explicit node roles to peer handshake`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Explicit node roles in peer handshake**
+**Viewer/passive clients excluded from capability routing**
 
 Desired behavior:
-- peers declare a role (`planner`, `field`, `sensor`, `actuator`, `viewer`, etc.)
-- the role is available to routing / lifecycle logic
-- this becomes the foundation for passive clients and planner leadership
+- `viewer` peers can connect and observe
+- `viewer` peers do not contribute capabilities to mesh routing
+- this creates the first real passive-client behavior without breaking existing runtime APIs
 
-This is the first Milestone 3 slice.
+This is the second Milestone 3 slice.
 
 ## Milestone Plan
 

@@ -81,6 +81,7 @@ describe("createMeshServerHandlers", () => {
         identity: clientIdentity,
         displayName: "test-client",
         capabilities: ["channel:test"],
+        role: "field",
       });
 
       const peerRegistry = new PeerRegistry();
@@ -90,6 +91,7 @@ describe("createMeshServerHandlers", () => {
         peerRegistry,
         displayName: "test-server",
         capabilities: ["channel:clawmesh"],
+        role: "planner",
         onPeerConnected: (session) => { connectedSession = session; },
       });
 
@@ -110,11 +112,13 @@ describe("createMeshServerHandlers", () => {
       expect(responsePayload.signature).toBeTruthy();
       expect(responsePayload.displayName).toBe("test-server");
       expect(responsePayload.capabilities).toContain("channel:clawmesh");
+      expect(responsePayload.role).toBe("planner");
 
       // Verify peer was registered
       expect(connectedSession).toBeDefined();
       expect(connectedSession!.deviceId).toBe(clientIdentity.deviceId);
       expect(connectedSession!.capabilities).toContain("channel:test");
+      expect(connectedSession!.role).toBe("field");
       expect(peerRegistry.get(clientIdentity.deviceId)).toBeDefined();
     });
   });

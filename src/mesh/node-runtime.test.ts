@@ -235,4 +235,28 @@ describe("MeshNodeRuntime", () => {
     expect(nodeA.runtime.listConnectedPeers()).toHaveLength(0);
     expect(nodeB.runtime.listConnectedPeers()).toHaveLength(0);
   });
+
+  it("propagates declared node roles across a successful connection", async () => {
+    const nodeB = await harness.startNode({
+      name: "node-b7",
+      role: "field",
+      capabilities: ["channel:clawmesh"],
+    });
+    const nodeA = await harness.startNode({
+      name: "node-a7",
+      role: "planner",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!nodeA || !nodeB) return;
+
+    const connected = await harness.connect(nodeA, nodeB);
+    expect(connected).toBe(true);
+
+    const peerSeenByA = nodeA.runtime.listConnectedPeers().find((p) => p.deviceId === nodeB.identity.deviceId);
+    const peerSeenByB = nodeB.runtime.listConnectedPeers().find((p) => p.deviceId === nodeA.identity.deviceId);
+
+    expect(peerSeenByA?.role).toBe("field");
+    expect(peerSeenByB?.role).toBe("planner");
+  });
 });

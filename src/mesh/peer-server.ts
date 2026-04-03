@@ -3,7 +3,7 @@ import type { DeviceIdentity } from "../infra/device-identity.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import { isTrustedPeer, getTrustedPeer } from "./peer-trust.js";
-import type { MeshConnectParams, PeerSession } from "./types.js";
+import type { MeshConnectParams, MeshNodeRole, PeerSession } from "./types.js";
 import type { WebSocket } from "ws";
 
 type HandlerFn = (opts: {
@@ -19,6 +19,7 @@ export type MeshServerHandlerDeps = {
   displayName?: string;
   capabilities?: string[];
   meshId?: string;
+  role?: MeshNodeRole;
   onPeerConnected?: (session: PeerSession) => void;
 };
 
@@ -64,6 +65,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         signedAtMs: p.signedAtMs,
         nonce: p.nonce,
         meshId: p.meshId,
+        role: p.role,
       });
       if (!valid) {
         respond(false, undefined, {
@@ -87,6 +89,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         displayName: deps.displayName,
         capabilities: deps.capabilities,
         meshId: deps.meshId,
+        role: deps.role,
       });
 
       // Register the peer session.
@@ -104,6 +107,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         socket: (socket ?? (null as unknown)) as PeerSession["socket"],
         outbound: false,
         capabilities: p.capabilities ?? [],
+        role: p.role,
         connectedAtMs: Date.now(),
       };
       deps.peerRegistry.register(session);
@@ -117,6 +121,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         displayName: ourAuth.displayName,
         capabilities: ourAuth.capabilities,
         meshId: ourAuth.meshId,
+        role: ourAuth.role,
       });
     },
   };

@@ -1,5 +1,14 @@
 import type { WebSocket } from "ws";
 
+export type MeshNodeRole =
+  | "node"
+  | "planner"
+  | "field"
+  | "sensor"
+  | "actuator"
+  | "viewer"
+  | "standby-planner";
+
 export type PeerSession = {
   /** Remote peer's device ID (SHA256 of Ed25519 public key). */
   deviceId: string;
@@ -15,6 +24,8 @@ export type PeerSession = {
   outbound: boolean;
   /** Capabilities advertised by the remote peer. */
   capabilities: string[];
+  /** Declared node role for routing / policy decisions. */
+  role?: MeshNodeRole;
   /** Timestamp when this peer connected. */
   connectedAtMs: number;
 };
@@ -131,6 +142,8 @@ export type MeshConnectParams = {
   displayName?: string;
   /** Stable mesh identity this peer belongs to. */
   meshId?: string;
+  /** Declared node role. */
+  role?: MeshNodeRole;
   /** Capabilities offered by this peer. */
   capabilities?: string[];
 };
@@ -148,6 +161,8 @@ export type MeshConnectResult = {
   displayName?: string;
   /** Server's stable mesh identity. */
   meshId?: string;
+  /** Server's declared node role. */
+  role?: MeshNodeRole;
   /** Server's capabilities. */
   capabilities?: string[];
 };

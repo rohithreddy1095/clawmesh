@@ -10,7 +10,7 @@
 import type { MeshStaticPeer } from "./types.mesh.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import type { ContextFrame } from "./context-types.js";
-import type { PeerSession } from "./types.js";
+import type { MeshNodeRole, PeerSession } from "./types.js";
 import { MeshPeerClient } from "./peer-client.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import type { MeshCapabilityRegistry } from "./capabilities.js";
@@ -29,6 +29,7 @@ export type PeerConnectionManagerDeps = {
   displayName?: string;
   capabilities: string[];
   meshId?: string;
+  role?: MeshNodeRole;
   peerRegistry: PeerRegistry;
   capabilityRegistry: MeshCapabilityRegistry;
   contextPropagator: ContextPropagator;
@@ -77,6 +78,7 @@ export class PeerConnectionManager {
       displayName: this.deps.displayName,
       capabilities: this.deps.capabilities,
       meshId: this.deps.meshId,
+      role: this.deps.role,
       onConnected: (session) => {
         if (session.capabilities.length > 0) {
           this.deps.capabilityRegistry.updatePeer(session.deviceId, session.capabilities);
