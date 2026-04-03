@@ -117,6 +117,31 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "UNLABELED_STATIC_PEER_TRANSPORT")).toBe(true);
   });
 
+  it("warns when a relay peer has no TLS fingerprint", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh", transportLabel: "relay" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(true);
+  });
+
+  it("does not warn when a relay peer includes TLS fingerprint pinning", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        {
+          deviceId: "peer-a",
+          url: "wss://relay.example.com/mesh",
+          transportLabel: "relay",
+          tlsFingerprint: "sha256:AABBCCDD",
+        },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "MISSING_TLS_FINGERPRINT")).toBe(false);
+  });
+
   it("info on no capabilities", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",

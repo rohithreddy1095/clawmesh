@@ -20,7 +20,12 @@ export type StartupDiagnostic = {
 export interface StartupValidationInput {
   deviceId?: string;
   port?: number;
-  staticPeers?: Array<{ deviceId: string; url: string; transportLabel?: string }>;
+  staticPeers?: Array<{
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+    tlsFingerprint?: string;
+  }>;
   discoveryEnabled?: boolean;
   capabilities?: string[];
   thresholds?: Array<{ ruleId?: string; metric?: string }>;
@@ -82,6 +87,17 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
           level: "warn",
           code: "SELF_PEER",
           message: `Peer spec points to own device ID — will be ignored`,
+        });
+      }
+      const expectsTlsPinning =
+        peer.transportLabel === "relay" ||
+        peer.url.startsWith("wss://") ||
+        peer.url.startsWith("https://");
+      if (expectsTlsPinning && !peer.tlsFingerprint) {
+        diagnostics.push({
+          level: "warn",
+          code: "MISSING_TLS_FINGERPRINT",
+          message: `Peer ${peer.deviceId.slice(0, 12)}… uses relay/TLS transport without a pinned fingerprint. Add |sha256:... to harden WAN connections.`,
         });
       }
     }

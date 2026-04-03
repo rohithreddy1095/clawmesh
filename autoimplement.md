@@ -201,18 +201,22 @@ Example:
   - message: `feat(cli): normalize relay peer https URLs to wss`
 
 - ✅ Relay/static peer URL normalization in runtime path
-  - commit: pending
+  - commit: `e55744d`
   - message: `feat(mesh): normalize static peer http URLs at runtime boundary`
+
+- ✅ Relay/WSS TLS pinning diagnostics
+  - commit: pending
+  - message: `feat(cli): warn on unpinned relay and wss peers`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Relay/WSS TLS pinning diagnostics**
+**Insecure relay transport diagnostics**
 
 Desired behavior:
-- warn when relay or `wss://` static peers are configured without a TLS fingerprint
+- warn when relay-labeled peers are configured over plain `ws://`
 - keep current connection behavior unchanged
-- make WAN transport usage safer before deeper relay behavior changes
+- make insecure WAN/static transport intent obvious before startup
 
 This is the next practical WAN milestone slice.
 
