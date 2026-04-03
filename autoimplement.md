@@ -169,18 +169,22 @@ Example:
   - message: `feat(mesh): expose peer transport labels in health`
 
 - ✅ WAN peer labeling in runtime status commands
-  - commit: pending
+  - commit: `6de6e93`
   - message: `feat(mesh): show discovery mode in operator status views`
+
+- ✅ CLI startup WAN visibility
+  - commit: `7f671b5`
+  - message: `feat(cli): show discovery mode and peer transport at startup`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**CLI startup WAN visibility**
+**Transport-label visibility in startup validation/reporting**
 
 Desired behavior:
-- `clawmesh start` output should make discovery/static mode obvious
-- static peer transport labels should be visible at startup for relay/WAN debugging
+- preflight/startup surfaces should make WAN transport intent obvious before connect attempts
 - keep behavior observational only
+- preserve current static/LAN behavior
 
 This is the next practical WAN bridge slice.
 
