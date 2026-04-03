@@ -13,12 +13,21 @@ export function formatProposalSummaryLine(
     TaskProposal,
     "taskId" | "summary" | "approvalLevel" | "status" | "plannerDeviceId" | "plannerRole"
   >,
-  opts?: { includeStatus?: boolean },
+  opts?: {
+    includeStatus?: boolean;
+    leader?: { deviceId: string; role?: "planner" | "standby-planner" };
+  },
 ): string {
   const owner = formatProposalOwner(proposal);
+  const leader = opts?.leader ? formatProposalOwner({
+    plannerDeviceId: opts.leader.deviceId,
+    plannerRole: opts.leader.role,
+  }) : undefined;
   const prefix = `[${proposal.taskId.slice(0, 8)}]`;
   const base = opts?.includeStatus === false
     ? `${prefix} ${proposal.approvalLevel} ${proposal.summary}`
     : `${prefix} ${proposal.status.toUpperCase()} ${proposal.approvalLevel} — ${proposal.summary}`;
-  return owner ? `${base} (owner: ${owner})` : base;
+  if (!owner) return base;
+  if (leader && leader !== owner) return `${base} (owner: ${owner}; leader: ${leader})`;
+  return `${base} (owner: ${owner})`;
 }

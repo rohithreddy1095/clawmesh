@@ -49,4 +49,23 @@ describe("formatProposalSummaryLine", () => {
       plannerRole: undefined,
     })).toBe("[abcd1234] AWAITING_APPROVAL L2 — Irrigate zone-1");
   });
+
+  it("shows leader handoff hint when current leader differs from proposal owner", () => {
+    expect(formatProposalSummaryLine(proposal, {
+      leader: { deviceId: "planner-newleader999", role: "planner" },
+    })).toBe(
+      "[abcd1234] AWAITING_APPROVAL L2 — Irrigate zone-1 (owner: standby-planner:planner-abcd…; leader: planner:planner-newl…)"
+    );
+  });
+
+  it("does not repeat leader when owner already matches elected leader", () => {
+    expect(formatProposalSummaryLine({
+      ...proposal,
+      plannerRole: "planner",
+    }, {
+      leader: { deviceId: "planner-abcdef1234567890", role: "planner" },
+    })).toBe(
+      "[abcd1234] AWAITING_APPROVAL L2 — Irrigate zone-1 (owner: planner:planner-abcd…)"
+    );
+  });
 });

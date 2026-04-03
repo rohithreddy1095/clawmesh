@@ -378,7 +378,16 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           ctx.ui.notify("No proposals.", "info");
           return;
         }
-        const lines = proposals.map((p) => formatProposalSummaryLine(p));
+        const plannerLeader = runtime.getPlannerLeader();
+        const leader = plannerLeader.kind === "none"
+          ? undefined
+          : {
+              deviceId: plannerLeader.deviceId,
+              role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+                ? plannerLeader.role
+                : undefined,
+            };
+        const lines = proposals.map((p) => formatProposalSummaryLine(p, { leader }));
         ctx.ui.notify(lines.join("\n"), "info");
       },
     });
@@ -464,6 +473,16 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         ? `\nDATA FRESHNESS WARNINGS:\n${freshnessWarnings.join("\n")}`
         : "";
 
+      const plannerLeader = runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
+
       const snapshot = [
         `\n\n# Live Mesh Snapshot (${new Date().toISOString()})`,
         `Connected peers: ${peers.length}`,
@@ -472,7 +491,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         relevantSection,
         freshnessSection,
         pending.length > 0
-          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  ${formatProposalSummaryLine(p, { includeStatus: false })}`).join("\n")}`
+          ? `Pending proposals: ${pending.length}\n${pending.map((p) => `  ${formatProposalSummaryLine(p, { includeStatus: false, leader })}`).join("\n")}`
           : "Pending proposals: 0",
       ].filter(Boolean).join("\n");
 

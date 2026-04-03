@@ -262,13 +262,22 @@ export class TelegramChannel {
         return;
       }
 
+      const plannerLeader = this.runtime.getPlannerLeader();
+      const leader = plannerLeader.kind === "none"
+        ? undefined
+        : {
+            deviceId: plannerLeader.deviceId,
+            role: plannerLeader.role === "planner" || plannerLeader.role === "standby-planner"
+              ? plannerLeader.role
+              : undefined,
+          };
       const lines = proposals.slice(-10).map(p => {
         const icon = p.status === "awaiting_approval" ? "⚠️"
           : p.status === "approved" || p.status === "completed" ? "✅"
           : p.status === "rejected" ? "❌"
           : p.status === "executing" ? "⏳"
           : "·";
-        return `${icon} ${formatProposalSummaryLine(p)}`;
+        return `${icon} ${formatProposalSummaryLine(p, { leader })}`;
       });
 
       await ctx.reply(`📋 Proposals (${proposals.length})\n\n${lines.join("\n\n")}`);

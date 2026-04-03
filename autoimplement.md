@@ -133,18 +133,22 @@ Example:
   - message: `feat(mesh): expose duplicate proposal owner to callers`
 
 - ✅ Planner-owner aware proposal summaries
-  - commit: pending
+  - commit: `e2cd046`
   - message: `feat(mesh): surface planner ownership in proposal summaries`
+
+- ✅ Sticky planner ownership hints
+  - commit: pending
+  - message: `feat(mesh): show proposal owner handoff hints`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Sticky planner ownership hints**
+**Approval/rejection owner visibility**
 
 Desired behavior:
-- when a proposal already exists, operator-facing views should make ownership/handoff intent obvious
-- prepare for future leader handoff rules without changing approval semantics yet
-- keep summary formatting consistent across slash commands and channels
+- operator approval/rejection paths should mention the originating planner when helpful
+- make handoff situations obvious during human decisions
+- keep approval semantics unchanged
 
 This is the next practical HA slice.
 
