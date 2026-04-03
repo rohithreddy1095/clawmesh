@@ -141,18 +141,22 @@ Example:
   - message: `feat(mesh): show proposal owner handoff hints`
 
 - ✅ Approval/rejection owner visibility
-  - commit: pending
+  - commit: `119e0b6`
   - message: `feat(mesh): include planner owner in decision notices`
+
+- ✅ Planner-owner visibility in status surfaces
+  - commit: pending
+  - message: `feat(mesh): show proposal owners in status surfaces`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Planner-owner visibility in status surfaces**
+**Planner-owner visibility in RPC summaries**
 
 Desired behavior:
-- surface proposal owner context in broader operational status views where proposals are summarized
-- make HA debugging easier without changing proposal lifecycle behavior
-- keep the slice observational
+- expose proposal owner context in machine-readable status surfaces where proposal summaries are available
+- keep it observational and backward compatible
+- prepare for HA dashboards and relay-era debugging
 
 This is the next practical HA slice.
 
