@@ -17,7 +17,7 @@ import { isTrustedPeer } from "./peer-trust.js";
 // ─── Types ──────────────────────────────────────────────────
 
 export type AutoConnectDecision =
-  | { action: "connect"; url: string; reason: string }
+  | { action: "connect"; url: string; reason: string; transportLabel: string }
   | { action: "skip"; reason: string };
 
 export type AutoConnectOptions = {
@@ -113,6 +113,7 @@ export class AutoConnectManager {
       action: "connect",
       url,
       reason: `discovered via mDNS at ${url}`,
+      transportLabel: "mdns",
     };
   }
 

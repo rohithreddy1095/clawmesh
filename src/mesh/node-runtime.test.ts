@@ -323,4 +323,32 @@ describe("MeshNodeRuntime", () => {
 
     expect(node.runtime.discovery).toBeUndefined();
   });
+
+  it("labels auto-connected discovery peers as mdns", async () => {
+    const nodeB = await harness.startNode({
+      name: "node-b-mdns",
+      capabilities: ["channel:clawmesh"],
+    });
+    const nodeA = await harness.startNode({
+      name: "node-a-mdns",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!nodeA || !nodeB || !nodeA.runtime.discovery) return;
+
+    await harness.trust(nodeA, nodeB);
+    nodeA.runtime.discovery.emit("peer-discovered", {
+      deviceId: nodeB.identity.deviceId,
+      displayName: nodeB.runtime.displayName,
+      host: "127.0.0.1",
+      port: nodeB.address.port,
+      discoveredAtMs: Date.now(),
+    });
+
+    const connected = await nodeA.runtime.waitForPeerConnected(nodeB.identity.deviceId, 2_000);
+    expect(connected).toBe(true);
+
+    const peerSeenByA = nodeA.runtime.listConnectedPeers().find((p) => p.deviceId === nodeB.identity.deviceId);
+    expect(peerSeenByA?.transportLabel).toBe("mdns");
+  });
 });

@@ -20,7 +20,7 @@ export type StartupDiagnostic = {
 export interface StartupValidationInput {
   deviceId?: string;
   port?: number;
-  staticPeers?: Array<{ deviceId: string; url: string }>;
+  staticPeers?: Array<{ deviceId: string; url: string; transportLabel?: string }>;
   discoveryEnabled?: boolean;
   capabilities?: string[];
   thresholds?: Array<{ ruleId?: string; metric?: string }>;
@@ -92,6 +92,21 @@ export function validateStartupConfig(input: StartupValidationInput): StartupDia
             code: "NO_STATIC_PEERS",
             message: "No static peers configured. Will rely on mDNS discovery.",
           });
+    }
+    const transportLabels = [...new Set(input.staticPeers.map((peer) => peer.transportLabel).filter(Boolean))];
+    if (transportLabels.length > 0) {
+      diagnostics.push({
+        level: "info",
+        code: "STATIC_PEER_TRANSPORTS",
+        message: `Static peer transport labels configured: ${transportLabels.join(", ")}`,
+      });
+    }
+    if (input.discoveryEnabled === false && input.staticPeers.some((peer) => !peer.transportLabel)) {
+      diagnostics.push({
+        level: "warn",
+        code: "UNLABELED_STATIC_PEER_TRANSPORT",
+        message: "Discovery is disabled but one or more static peers have no transport label. Add labels like relay, vpn, or lan for clearer WAN debugging.",
+      });
     }
   }
 

@@ -75,6 +75,28 @@ describe("validateStartupConfig", () => {
     expect(diagnostics.some(d => d.code === "NO_STATIC_PEERS")).toBe(false);
   });
 
+  it("reports configured static peer transport labels", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh", transportLabel: "relay" },
+        { deviceId: "peer-b", url: "ws://10.0.0.5:18789", transportLabel: "lan" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "STATIC_PEER_TRANSPORTS" && d.message.includes("relay, lan"))).toBe(true);
+  });
+
+  it("warns when discovery is disabled and static peers have no transport labels", () => {
+    const diagnostics = validateStartupConfig({
+      deviceId: "d1",
+      discoveryEnabled: false,
+      staticPeers: [
+        { deviceId: "peer-a", url: "wss://relay.example.com/mesh" },
+      ],
+    });
+    expect(diagnostics.some(d => d.code === "UNLABELED_STATIC_PEER_TRANSPORT")).toBe(true);
+  });
+
   it("info on no capabilities", () => {
     const diagnostics = validateStartupConfig({
       deviceId: "d1",

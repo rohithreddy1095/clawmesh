@@ -28,6 +28,7 @@ describe("AutoConnectManager", () => {
     if (decision.action === "connect") {
       expect(decision.url).toBe("ws://192.168.1.39:18789");
       expect(decision.reason).toContain("mDNS");
+      expect(decision.transportLabel).toBe("mdns");
     }
   });
 

@@ -360,7 +360,7 @@ export class MeshNodeRuntime {
           void this.autoConnect.evaluateWithTrust(peer).then((decision) => {
             if (decision.action === "connect") {
               this.log.info(`mesh: auto-connecting to trusted peer ${peer.deviceId.slice(0, 12)}… at ${decision.url}`);
-              this.connectToPeer({ deviceId: peer.deviceId, url: decision.url });
+              this.connectToPeer({ deviceId: peer.deviceId, url: decision.url, transportLabel: decision.transportLabel });
             }
           }).catch((err) => {
             this.log.warn(`mesh: auto-connect evaluation failed for ${peer.deviceId.slice(0, 12)}…: ${String(err)}`);
