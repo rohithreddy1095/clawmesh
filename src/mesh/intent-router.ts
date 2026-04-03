@@ -26,8 +26,13 @@ export type IntentRouterDeps = {
   displayName?: string;
   contextPropagator: ContextPropagator;
   broadcastToUI: (event: string, payload: unknown) => void;
-  /** If set, routes to real planner. If null, uses mock fallback. */
+  /** If set, routes to real local planner. */
   handlePlannerIntent?: (text: string, opts: { conversationId: string; requestId: string }) => void;
+  /** If set, forwards the intent to a remote planner leader. Returns true when forwarded. */
+  forwardPlannerIntent?: (
+    text: string,
+    opts: { conversationId: string; requestId: string },
+  ) => boolean | Promise<boolean>;
   log: { info: (msg: string) => void };
 };
 
@@ -64,10 +69,10 @@ export function extractIntentFromForward(
  * Route an extracted intent to the planner or mock fallback.
  * Broadcasts human_input context and handles the response path.
  */
-export function routeIntent(
+export async function routeIntent(
   intent: IntentParseRequest,
   deps: IntentRouterDeps,
-): void {
+): Promise<void> {
   const { text, conversationId, requestId } = intent;
 
   // Broadcast human input context
@@ -77,40 +82,61 @@ export function routeIntent(
   });
 
   if (deps.handlePlannerIntent) {
-    // Real planner available
     deps.log.info(`[pi-planner] Operator intent: "${text}" (conv=${conversationId.slice(0, 8)})`);
     deps.handlePlannerIntent(text, { conversationId, requestId });
-  } else {
-    // Mock fallback
-    deps.log.info(`[mock-pi] Received natural language intent: "${text}"`);
+    return;
+  }
 
-    // Send thinking status
+  if (deps.forwardPlannerIntent) {
+    const forwarded = await deps.forwardPlannerIntent(text, { conversationId, requestId });
+    if (forwarded) {
+      deps.log.info(`[mesh-planner] Forwarded operator intent: "${text}" (conv=${conversationId.slice(0, 8)})`);
+      return;
+    }
+
     deps.broadcastToUI("context.frame", {
       kind: "agent_response",
       frameId: randomUUID(),
       sourceDeviceId: deps.deviceId,
       sourceDisplayName: deps.displayName,
       timestamp: Date.now(),
-      data: { conversationId, requestId, message: "", status: "thinking" },
+      data: {
+        conversationId,
+        requestId,
+        message: "No planner leader is currently reachable for this command.",
+        status: "error",
+      },
       trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
     });
-
-    // Send mock response after delay
-    setTimeout(() => {
-      deps.broadcastToUI("context.frame", {
-        kind: "agent_response",
-        frameId: randomUUID(),
-        sourceDeviceId: deps.deviceId,
-        sourceDisplayName: deps.displayName,
-        timestamp: Date.now(),
-        data: {
-          conversationId,
-          requestId,
-          message: `I received your intent: "${text}". This is a simulated response — enable the Pi planner (--pi-planner) for real intelligence.`,
-          status: "complete",
-        },
-        trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
-      });
-    }, 2000);
+    return;
   }
+
+  deps.log.info(`[mock-pi] Received natural language intent: "${text}"`);
+
+  deps.broadcastToUI("context.frame", {
+    kind: "agent_response",
+    frameId: randomUUID(),
+    sourceDeviceId: deps.deviceId,
+    sourceDisplayName: deps.displayName,
+    timestamp: Date.now(),
+    data: { conversationId, requestId, message: "", status: "thinking" },
+    trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+  });
+
+  setTimeout(() => {
+    deps.broadcastToUI("context.frame", {
+      kind: "agent_response",
+      frameId: randomUUID(),
+      sourceDeviceId: deps.deviceId,
+      sourceDisplayName: deps.displayName,
+      timestamp: Date.now(),
+      data: {
+        conversationId,
+        requestId,
+        message: `I received your intent: "${text}". This is a simulated response — enable the Pi planner (--pi-planner) for real intelligence.`,
+        status: "complete",
+      },
+      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+    });
+  }, 2000);
 }

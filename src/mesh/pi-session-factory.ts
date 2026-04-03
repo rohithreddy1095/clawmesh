@@ -36,13 +36,11 @@ export function createAndStartPiSession(opts: PiSessionFactoryOpts): PiSession {
     proactiveIntervalMs: opts.proactiveIntervalMs ?? 60_000,
     onProposalCreated: (proposal) => {
       rt.peerRegistry.broadcastEvent("planner.proposal", proposal);
-      rt.broadcastToUI("planner.proposal", proposal);
       rt.eventBus.emit("proposal.created", { proposal });
       opts.onProposalCreated?.(proposal);
     },
     onProposalResolved: (proposal) => {
       rt.peerRegistry.broadcastEvent("planner.proposal.resolved", proposal);
-      rt.broadcastToUI("planner.proposal.resolved", proposal);
       rt.eventBus.emit("proposal.resolved", { proposal });
       opts.onProposalResolved?.(proposal);
     },

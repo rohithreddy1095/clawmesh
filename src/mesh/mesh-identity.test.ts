@@ -5,9 +5,15 @@ import { tmpdir } from "node:os";
 import { deriveNamedMeshId, loadOrCreateMeshId } from "./mesh-identity.js";
 
 describe("mesh identity", () => {
-  it("deriveNamedMeshId is deterministic for same name + originator", () => {
+  it("deriveNamedMeshId is deterministic for the same mesh name", () => {
     const id1 = deriveNamedMeshId("bhoomi-main", "device-abc");
     const id2 = deriveNamedMeshId("bhoomi-main", "device-abc");
+    expect(id1).toBe(id2);
+  });
+
+  it("deriveNamedMeshId is shared across devices for the same mesh name", () => {
+    const id1 = deriveNamedMeshId("bhoomi-main", "device-abc");
+    const id2 = deriveNamedMeshId("bhoomi-main", "device-xyz");
     expect(id1).toBe(id2);
   });
 
@@ -36,7 +42,7 @@ describe("mesh identity", () => {
         meshName: "bhoomi-main",
         originatorDeviceId: "device-abc",
       });
-      expect(id).toBe(deriveNamedMeshId("bhoomi-main", "device-abc"));
+      expect(id).toBe(deriveNamedMeshId("bhoomi-main"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

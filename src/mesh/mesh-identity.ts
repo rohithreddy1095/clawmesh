@@ -14,9 +14,9 @@ function resolveMeshIdPath(stateDir?: string): string {
   return path.join(resolveStateDir(stateDir), "mesh", "mesh-id");
 }
 
-export function deriveNamedMeshId(meshName: string, originatorDeviceId: string): string {
+export function deriveNamedMeshId(meshName: string, _originatorDeviceId?: string): string {
   return createHash("sha256")
-    .update(`clawmesh|mesh|${meshName}|${originatorDeviceId}`)
+    .update(`clawmesh|mesh|${meshName}`)
     .digest("hex");
 }
 
@@ -25,7 +25,7 @@ export function loadOrCreateMeshId(params: {
   meshName?: string;
   originatorDeviceId?: string;
 } = {}): string {
-  if (params.meshName && params.originatorDeviceId) {
+  if (params.meshName) {
     return deriveNamedMeshId(params.meshName, params.originatorDeviceId);
   }
 

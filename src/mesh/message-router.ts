@@ -84,7 +84,7 @@ export async function routeInboundMessage(
     const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
     const intent = extractIntentFromForward(fwdParams);
     if (intent) {
-      routeIntent(intent, deps.intentRouterDeps);
+      await routeIntent(intent, deps.intentRouterDeps);
       return { handled: true, kind: "intent" };
     }
     // Not an intent — fall through to normal RPC dispatch

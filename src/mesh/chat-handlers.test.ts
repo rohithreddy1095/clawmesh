@@ -75,6 +75,21 @@ describe("chat.proposal.approve", () => {
     expect(calls[0].payload).toEqual({ proposal: { taskId: "t-1", status: "approved" } });
   });
 
+  it("forwards approval to a remote planner when no local session exists", async () => {
+    const invokeRemotePlannerRpc = vi.fn().mockResolvedValue({
+      ok: true,
+      payload: { proposal: { taskId: "t-1", status: "approved" } },
+    });
+    const handlers = createChatHandlers(makeDeps({ invokeRemotePlannerRpc }));
+    const { respond, calls } = makeRespond();
+
+    await handlers["chat.proposal.approve"]({ params: { taskId: "t-1" }, respond });
+
+    expect(invokeRemotePlannerRpc).toHaveBeenCalledWith("chat.proposal.approve", { taskId: "t-1" });
+    expect(calls[0].ok).toBe(true);
+    expect(calls[0].payload).toEqual({ proposal: { taskId: "t-1", status: "approved" } });
+  });
+
   it("returns NOT_FOUND when proposal doesn't exist", async () => {
     const session = makeMockSession({ approveProposal: vi.fn().mockResolvedValue(null) });
     const handlers = createChatHandlers(makeDeps({ getPiSession: () => session }));
@@ -102,20 +117,35 @@ describe("chat.proposal.reject", () => {
     expect(calls[0].error.code).toBe("NO_PLANNER");
   });
 
-  it("rejects a valid proposal", () => {
+  it("rejects a valid proposal", async () => {
     const session = makeMockSession();
     const handlers = createChatHandlers(makeDeps({ getPiSession: () => session }));
     const { respond, calls } = makeRespond();
-    handlers["chat.proposal.reject"]({ params: { taskId: "t-1" }, respond });
+    await handlers["chat.proposal.reject"]({ params: { taskId: "t-1" }, respond });
     expect(session.rejectProposal).toHaveBeenCalledWith("t-1");
     expect(calls[0].ok).toBe(true);
   });
 
-  it("returns NOT_FOUND when proposal doesn't exist", () => {
+  it("forwards rejection to a remote planner when no local session exists", async () => {
+    const invokeRemotePlannerRpc = vi.fn().mockResolvedValue({
+      ok: true,
+      payload: { proposal: { taskId: "t-1", status: "rejected" } },
+    });
+    const handlers = createChatHandlers(makeDeps({ invokeRemotePlannerRpc }));
+    const { respond, calls } = makeRespond();
+
+    await handlers["chat.proposal.reject"]({ params: { taskId: "t-1" }, respond });
+
+    expect(invokeRemotePlannerRpc).toHaveBeenCalledWith("chat.proposal.reject", { taskId: "t-1" });
+    expect(calls[0].ok).toBe(true);
+    expect(calls[0].payload).toEqual({ proposal: { taskId: "t-1", status: "rejected" } });
+  });
+
+  it("returns NOT_FOUND when proposal doesn't exist", async () => {
     const session = makeMockSession({ rejectProposal: vi.fn().mockReturnValue(null) });
     const handlers = createChatHandlers(makeDeps({ getPiSession: () => session }));
     const { respond, calls } = makeRespond();
-    handlers["chat.proposal.reject"]({ params: { taskId: "bad" }, respond });
+    await handlers["chat.proposal.reject"]({ params: { taskId: "bad" }, respond });
     expect(calls[0].ok).toBe(false);
     expect(calls[0].error.code).toBe("NOT_FOUND");
   });

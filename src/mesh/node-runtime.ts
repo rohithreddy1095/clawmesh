@@ -171,6 +171,21 @@ export class MeshNodeRuntime {
     this.eventBus = new MeshEventBus();
     wireEventLog(this.eventBus, this.eventLog);
     wireCorrelationTracker(this.eventBus, this.correlationTracker);
+    this.eventBus.on("ui.broadcast", ({ event, payload }) => {
+      this.uiBroadcaster.broadcast(event, payload);
+    });
+    this.eventBus.on("context.frame.broadcast", ({ frame }) => {
+      this.eventBus.emit("ui.broadcast", { event: "context.frame", payload: frame });
+    });
+    this.eventBus.on("context.frame.ingested", ({ frame }) => {
+      this.eventBus.emit("ui.broadcast", { event: "context.frame", payload: frame });
+    });
+    this.eventBus.on("proposal.created", ({ proposal }) => {
+      this.eventBus.emit("ui.broadcast", { event: "planner.proposal", payload: proposal });
+    });
+    this.eventBus.on("proposal.resolved", ({ proposal }) => {
+      this.eventBus.emit("ui.broadcast", { event: "planner.proposal.resolved", payload: proposal });
+    });
     this.contextPropagator = new ContextPropagator({
       identity: this.identity,
       peerRegistry: this.peerRegistry,
@@ -268,6 +283,23 @@ export class MeshNodeRuntime {
     this.rpcDispatcher.registerAll(createChatHandlers({
       uiBroadcaster: this.uiBroadcaster,
       getPiSession: () => this.piSession,
+      invokeRemotePlannerRpc: async (method, params) => {
+        const targetDeviceId = this.getRemotePlannerLeaderDeviceId();
+        if (!targetDeviceId) {
+          return { ok: false, error: { code: "NO_PLANNER", message: "Pi planner not active" } };
+        }
+        const result = await this.peerRegistry.invoke({
+          deviceId: targetDeviceId,
+          method,
+          params,
+          timeoutMs: 30_000,
+        });
+        return {
+          ok: result.ok,
+          payload: result.payload,
+          error: result.error ?? undefined,
+        };
+      },
       log: this.log,
     }));
     this.rpcDispatcher.registerAll(createEventsHandlers({
@@ -282,7 +314,7 @@ export class MeshNodeRuntime {
    * Send an event to all UI WebSocket subscribers (browsers that called chat.subscribe).
    */
   broadcastToUI(event: string, payload: unknown): void {
-    this.uiBroadcaster.broadcast(event, payload);
+    this.eventBus.emit("ui.broadcast", { event, payload });
   }
 
   async start(): Promise<{ host: string; port: number }> {
@@ -570,6 +602,47 @@ export class MeshNodeRuntime {
     });
   }
 
+  private getRemotePlannerLeaderDeviceId(): string | null {
+    const leader = this.getPlannerLeader();
+    return leader.kind === "peer" ? leader.deviceId : null;
+  }
+
+  private async forwardPlannerIntentToLeader(
+    text: string,
+    opts: { conversationId: string; requestId: string },
+  ): Promise<boolean> {
+    const targetDeviceId = this.getRemotePlannerLeaderDeviceId();
+    if (!targetDeviceId) {
+      return false;
+    }
+
+    const result = await this.peerRegistry.invoke({
+      deviceId: targetDeviceId,
+      method: "mesh.message.forward",
+      params: {
+        channel: "clawmesh",
+        to: "agent:pi",
+        originGatewayId: this.identity.deviceId,
+        idempotencyKey: randomUUID(),
+        commandDraft: {
+          source: { nodeId: this.identity.deviceId, role: "operator" },
+          target: { kind: "capability", ref: "agent:pi" },
+          operation: {
+            name: "intent:parse",
+            params: {
+              text,
+              conversationId: opts.conversationId,
+              requestId: opts.requestId,
+            },
+          },
+        },
+      },
+      timeoutMs: 30_000,
+    });
+
+    return result.ok;
+  }
+
   private async handleInboundMessage(socket: WebSocket, connId: string, raw: string): Promise<void> {
     // Reject oversized messages before parsing
     const sizeCheck = validateMessageSize(raw);
@@ -593,6 +666,9 @@ export class MeshNodeRuntime {
         handlePlannerIntent: this.piSession
           ? (text, opts) => this.piSession!.handleOperatorIntent(text, opts)
           : undefined,
+        forwardPlannerIntent: this.piSession
+          ? undefined
+          : (text, opts) => this.forwardPlannerIntentToLeader(text, opts),
         log: this.log,
       },
     });

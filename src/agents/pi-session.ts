@@ -38,7 +38,7 @@ import {
   parseModelSpec,
 } from "./planner-prompt-builder.js";
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
-import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
+import { buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 import { shouldProcessPlannerTrigger, shouldWakePlannerOnActivityChange } from "./planner-activity-gate.js";
 
@@ -349,12 +349,9 @@ export class PiSession {
   }
 
   private broadcastAgentResponse(data: AgentResponseData): void {
-    const frame = buildAgentResponseFrame(
+    this.runtime.contextPropagator.broadcastAgentResponse({
       data,
-      this.runtime.identity.deviceId,
-      this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
-    );
-    this.runtime.broadcastToUI("context.frame", frame);
+    });
   }
 
   async approveProposal(taskId: string, approvedBy = "operator"): Promise<TaskProposal | null> {
