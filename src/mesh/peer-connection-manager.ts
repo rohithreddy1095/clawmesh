@@ -21,7 +21,7 @@ import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
-import { normalizeMeshPeerUrl } from "./peer-url.js";
+import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl } from "./peer-url.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -70,8 +70,17 @@ export class PeerConnectionManager {
   connectToPeer(peer: MeshStaticPeer): void {
     if (this.clients.has(peer.deviceId)) return;
 
+    const normalizedUrl = normalizeMeshPeerUrl(peer.url);
+    const securityPosture = getMeshStaticPeerSecurityPosture(peer);
+    const transportContext = [
+      normalizedUrl,
+      peer.transportLabel ? `via ${peer.transportLabel}` : undefined,
+      `(${securityPosture})`,
+    ].filter(Boolean).join(" ");
+    this.deps.log.info(`mesh: outbound connecting ${peer.deviceId.slice(0, 12)}… ${transportContext}`);
+
     const client = new MeshPeerClient({
-      url: normalizeMeshPeerUrl(peer.url),
+      url: normalizedUrl,
       remoteDeviceId: peer.deviceId,
       identity: this.deps.identity,
       peerRegistry: this.deps.peerRegistry,
