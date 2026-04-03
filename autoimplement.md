@@ -121,18 +121,22 @@ Example:
   - message: `feat(mesh): wake standby planners on promotion`
 
 - ✅ Planner identity broadcast for duplicate suppression
-  - commit: pending
+  - commit: `40ba419`
   - message: `feat(mesh): stamp proposals with planner identity`
+
+- ✅ Per-planner duplicate suppression keys
+  - commit: pending
+  - message: `feat(mesh): track proposal dedup ownership by planner`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Per-planner duplicate suppression keys**
+**Proposal owner visibility on duplicate rejection**
 
 Desired behavior:
-- duplicate suppression should distinguish proposals by originating planner identity
-- keep current cross-mesh safety while making ownership/debugging clearer
-- foundation for future sticky planner ownership and handoff rules
+- when a duplicate proposal is rejected, the caller should learn which planner currently owns that suppression slot
+- logs/details should make planner ownership obvious for debugging and HA handoff analysis
+- keep the behavior backward compatible for existing proposal flows
 
 This is the next practical HA slice.
 

@@ -18,6 +18,7 @@ import {
   findPeerForCapability,
   summarizeProposals,
   countPending,
+  buildDuplicateProposalNotice,
 } from "./mesh-extension-helpers.js";
 import type { ContextFrame } from "../../mesh/context-types.js";
 
@@ -224,6 +225,23 @@ describe("countPending for capacity checks", () => {
 
   it("returns 0 for empty map", () => {
     expect(countPending(new Map())).toBe(0);
+  });
+});
+
+// ── duplicate proposal notice ─────────────────────────
+
+describe("buildDuplicateProposalNotice", () => {
+  it("includes owner planner when known", () => {
+    const text = buildDuplicateProposalNotice("irrigate", "actuator:pump:P1", "planner-abcdef123456");
+    expect(text).toContain("irrigate");
+    expect(text).toContain("actuator:pump:P1");
+    expect(text).toContain("planner-abcd");
+  });
+
+  it("falls back to generic message when owner is unknown", () => {
+    const text = buildDuplicateProposalNotice("open", "actuator:valve:V1");
+    expect(text).toContain("open");
+    expect(text).not.toContain("Owned by planner");
   });
 });
 

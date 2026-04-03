@@ -29,6 +29,7 @@ import {
   findPeerForCapability as _findPeerForCapability,
   summarizeProposals,
   countPending,
+  buildDuplicateProposalNotice,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
 import { ProposalDedup } from "../proposal-dedup.js";
@@ -250,7 +251,7 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
           const existing = proposalDedup.getRecord(dedupSignature);
           log.info(`[mesh-ext] Deduplicated proposal: ${operation} on ${targetRef} (owner=${existing?.plannerDeviceId ?? "unknown"})`);
           return {
-            content: [{ type: "text", text: `A similar action was already proposed recently (${operation} on ${targetRef}). Wait for the existing proposal to be resolved.` }],
+            content: [{ type: "text", text: buildDuplicateProposalNotice(operation, targetRef, existing?.plannerDeviceId) }],
             details: { ok: false, reason: "deduplicated", ownerPlannerDeviceId: existing?.plannerDeviceId },
           };
         }

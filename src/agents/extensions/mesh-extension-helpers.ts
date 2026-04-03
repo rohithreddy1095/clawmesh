@@ -91,6 +91,16 @@ export function countPending(proposals: Map<string, TaskProposal>): number {
   return count;
 }
 
+export function buildDuplicateProposalNotice(
+  operation: string,
+  targetRef: string,
+  ownerPlannerDeviceId?: string,
+): string {
+  const base = `A similar action was already proposed recently (${operation} on ${targetRef}). Wait for the existing proposal to be resolved.`;
+  if (!ownerPlannerDeviceId) return base;
+  return `${base} Owned by planner ${ownerPlannerDeviceId.slice(0, 12)}….`;
+}
+
 /**
  * Format uptime in a compact human-readable format.
  * Extracted from mesh-tui.ts for reuse and testability.
