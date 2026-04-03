@@ -125,18 +125,22 @@ Example:
   - message: `feat(mesh): stamp proposals with planner identity`
 
 - ✅ Per-planner duplicate suppression keys
-  - commit: pending
+  - commit: `5094ce0`
   - message: `feat(mesh): track proposal dedup ownership by planner`
+
+- ✅ Proposal owner visibility on duplicate rejection
+  - commit: pending
+  - message: `feat(mesh): expose duplicate proposal owner to callers`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**Proposal owner visibility on duplicate rejection**
+**Planner-owner aware proposal summaries**
 
 Desired behavior:
-- when a duplicate proposal is rejected, the caller should learn which planner currently owns that suppression slot
-- logs/details should make planner ownership obvious for debugging and HA handoff analysis
-- keep the behavior backward compatible for existing proposal flows
+- proposal listings and operator-facing summaries should show planner ownership consistently
+- make HA debugging easier when proposals survive leader changes
+- keep existing proposal lifecycle semantics unchanged
 
 This is the next practical HA slice.
 
