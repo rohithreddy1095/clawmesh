@@ -21,7 +21,7 @@ import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
-import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl } from "./peer-url.js";
+import { getMeshStaticPeerSecurityPosture, normalizeMeshPeerUrl, requiresPinnedWanTransport } from "./peer-url.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -78,15 +78,15 @@ export class PeerConnectionManager {
       `(${securityPosture})`,
     ].filter(Boolean).join(" ");
 
-    if (peer.transportLabel === "relay" && securityPosture === "insecure") {
+    if (requiresPinnedWanTransport(peer) && securityPosture === "insecure") {
       this.deps.log.warn(
-        `mesh: refusing insecure relay connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+        `mesh: refusing insecure ${peer.transportLabel} connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
       );
       return;
     }
-    if (peer.transportLabel === "relay" && securityPosture === "tls-unpinned") {
+    if (requiresPinnedWanTransport(peer) && securityPosture === "tls-unpinned") {
       this.deps.log.warn(
-        `mesh: refusing unpinned relay connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
+        `mesh: refusing unpinned ${peer.transportLabel} connection ${peer.deviceId.slice(0, 12)}… ${transportContext}`,
       );
       return;
     }

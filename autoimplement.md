@@ -237,18 +237,22 @@ Example:
   - message: `feat(mesh): refuse insecure relay ws connections`
 
 - ✅ Pinned relay enforcement slice
-  - commit: pending
+  - commit: `47a7ba3`
   - message: `feat(mesh): refuse unpinned relay tls connections`
+
+- ✅ WAN pinning policy broadening review
+  - commit: pending
+  - message: `feat(mesh): enforce vpn transport safety like relay`
 
 ## Next Planned Slice
 
 ### Red/Green target
-**WAN pinning policy broadening review**
+**Generic WAN-labeled transport enforcement**
 
 Desired behavior:
-- decide whether TLS pinning enforcement should remain relay-only or widen to other WAN-labeled peers
-- keep LAN/static compatibility intact
-- continue with the smallest policy-backed enforcement step next
+- treat non-local transport labels as WAN by default
+- keep explicit local labels like `lan` and `mdns` permissive
+- continue transport safety enforcement without special-casing every future WAN label
 
 This is the next practical WAN milestone slice.
 

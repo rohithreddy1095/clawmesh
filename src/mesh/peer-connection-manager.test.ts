@@ -194,6 +194,42 @@ describe("PeerConnectionManager", () => {
     );
   });
 
+  it("refuses insecure ws connections for vpn-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "vpn-peer",
+      url: "ws://vpn.example.com/mesh",
+      transportLabel: "vpn",
+    });
+
+    expect(manager.has("vpn-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing insecure vpn connection"),
+    );
+  });
+
+  it("refuses unpinned tls connections for vpn-labeled peers", () => {
+    const warn = vi.fn();
+    deps = createDeps({ log: { info: vi.fn(), warn } });
+    manager = new PeerConnectionManager(deps);
+
+    manager.connectToPeer({
+      deviceId: "vpn-peer",
+      url: "wss://vpn.example.com/mesh",
+      transportLabel: "vpn",
+    });
+
+    expect(manager.has("vpn-peer")).toBe(false);
+    expect(peerClientInstances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("refusing unpinned vpn connection"),
+    );
+  });
+
   it("normalizes https relay URLs before creating the client", () => {
     manager.connectToPeer({
       deviceId: "secure-peer",
