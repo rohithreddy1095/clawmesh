@@ -155,6 +155,28 @@ describe("describePlannerTrace", () => {
     expect(result[1]).toEqual({ label: "Queue depth", value: "2" });
     expect(result[2]).toEqual({ label: "Active trigger", value: "check zone-1" });
     expect(result[3]).toEqual({ label: "Active tool", value: "query_world_model" });
+    expect(result[4]).toEqual({ label: "Last tool", value: "query_world_model" });
+  });
+
+  it("does not present the last tool as active when the planner is idle", () => {
+    const status: MeshRuntimeStatus = {
+      localDeviceId: "node-1",
+      connectedPeers: 0,
+      peers: [],
+      plannerRuntime: {
+        mode: "active",
+        stage: "idle",
+        running: false,
+        queueDepth: 0,
+        queue: { operatorIntent: 0, thresholdBreach: 0, proactiveCheck: 0 },
+        lastToolName: "query_world_model",
+        updatedAtMs: 1_000,
+      },
+    };
+
+    const result = describePlannerTrace(null, status);
+    expect(result[3]).toEqual({ label: "Active tool", value: "none" });
+    expect(result[4]).toEqual({ label: "Last tool", value: "query_world_model" });
   });
 });
 
