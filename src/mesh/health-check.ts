@@ -19,6 +19,7 @@ import type { RpcHandlerFn, RpcHandlerMap } from "./rpc-dispatcher.js";
 import type { MetricSnapshot } from "./metrics-collector.js";
 import type { PlannerActivity, PlannerLeader } from "./planner-election.js";
 import type { MeshNodeRole } from "./types.js";
+import type { PlannerRuntimeSnapshot } from "../agents/planner-runtime-state.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ export type HealthCheckResult = {
   plannerModelSpec?: string;
   plannerLeader?: PlannerLeader;
   plannerActivity?: PlannerActivity;
+  plannerRuntime?: PlannerRuntimeSnapshot;
   discoveryEnabled?: boolean;
   configuredStaticPeers?: Array<{
     deviceId: string;
@@ -84,6 +86,7 @@ export type HealthCheckDeps = {
   getPlannerModelSpec?: () => string | undefined;
   getPlannerLeader?: () => PlannerLeader;
   getPlannerActivity?: () => PlannerActivity;
+  getPlannerRuntime?: () => PlannerRuntimeSnapshot | undefined;
   isDiscoveryEnabled?: () => boolean;
   getConfiguredStaticPeers?: () => Array<{
     deviceId: string;
@@ -155,6 +158,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
     plannerModelSpec: deps.getPlannerModelSpec?.(),
     plannerLeader: deps.getPlannerLeader?.(),
     plannerActivity: deps.getPlannerActivity?.(),
+    plannerRuntime: deps.getPlannerRuntime?.(),
     discoveryEnabled: deps.isDiscoveryEnabled?.(),
     configuredStaticPeers: deps.getConfiguredStaticPeers?.(),
     memoryUsageMB,

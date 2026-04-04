@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPlannerQueueMix,
   buildRuntimeTimeline,
   buildSystemEventTimeline,
   derivePlannerRuntimeSummary,
   describePlannerSurface,
+  describePlannerTrace,
   formatRelativeTime,
 } from "../ui/src/lib/runtime-telemetry.js";
 import type { ContextFrame, MeshRuntimeEvent, MeshRuntimeHealth, MeshRuntimeStatus } from "../ui/src/lib/store.js";
@@ -42,6 +44,29 @@ describe("derivePlannerRuntimeSummary", () => {
 
     expect(result.stage).toBe("idle");
     expect(result.lastAgentMessage).toContain("all good");
+    expect(result.lastUpdatedLabel).toBe("just now");
+  });
+
+  it("prefers backend planner runtime trace over inferred frame state", () => {
+    const result = derivePlannerRuntimeSummary([
+      frame({ kind: "human_input", timestamp: 7_000, data: { intent: "older message" } }),
+    ], 10_000, {
+      mode: "active",
+      stage: "tool",
+      running: true,
+      queueDepth: 2,
+      queue: { operatorIntent: 1, thresholdBreach: 1, proactiveCheck: 0 },
+      activeTriggerType: "operator_intent",
+      activeReason: "check zone-1",
+      activeToolName: "query_world_model",
+      lastToolName: "query_world_model",
+      lastIntent: "check zone-1",
+      updatedAtMs: 9_000,
+    });
+
+    expect(result.stage).toBe("tool");
+    expect(result.stageLabel).toBe("Tool");
+    expect(result.lastIntent).toBe("check zone-1");
     expect(result.lastUpdatedLabel).toBe("just now");
   });
 });
@@ -101,6 +126,50 @@ describe("describePlannerSurface", () => {
     expect(result[0]).toEqual({ label: "Planner mode", value: "active" });
     expect(result[1]).toEqual({ label: "Planner model", value: "local-llama/gemma-4-E2B-it" });
     expect(result[2].value).toContain("local:planner:abc123456789");
+  });
+});
+
+describe("describePlannerTrace", () => {
+  it("surfaces live queue/tool details from backend runtime state", () => {
+    const status: MeshRuntimeStatus = {
+      localDeviceId: "node-1",
+      connectedPeers: 0,
+      peers: [],
+      plannerRuntime: {
+        mode: "active",
+        stage: "tool",
+        running: true,
+        queueDepth: 2,
+        queue: { operatorIntent: 1, thresholdBreach: 1, proactiveCheck: 0 },
+        activeTriggerType: "operator_intent",
+        activeReason: "check zone-1",
+        activeToolName: "query_world_model",
+        lastToolName: "query_world_model",
+        lastIntent: "check zone-1",
+        updatedAtMs: 1_000,
+      },
+    };
+
+    const result = describePlannerTrace(null, status);
+    expect(result[0]).toEqual({ label: "Runtime stage", value: "Tool" });
+    expect(result[1]).toEqual({ label: "Queue depth", value: "2" });
+    expect(result[2]).toEqual({ label: "Active trigger", value: "check zone-1" });
+    expect(result[3]).toEqual({ label: "Active tool", value: "query_world_model" });
+  });
+});
+
+describe("buildPlannerQueueMix", () => {
+  it("returns queue bars for operator, threshold, and proactive work", () => {
+    const result = buildPlannerQueueMix({
+      mode: "active",
+      stage: "queued",
+      running: false,
+      queueDepth: 3,
+      queue: { operatorIntent: 1, thresholdBreach: 2, proactiveCheck: 0 },
+      updatedAtMs: 1_000,
+    });
+
+    expect(result.map((entry) => entry.count)).toEqual([1, 2, 0]);
   });
 });
 

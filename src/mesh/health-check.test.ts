@@ -166,6 +166,32 @@ describe("computeHealthCheck", () => {
     });
   });
 
+  it("reports planner runtime snapshot when provided", () => {
+    const deps = createDeps({
+      getPlannerRuntime: () => ({
+        mode: "active",
+        stage: "tool",
+        running: true,
+        queueDepth: 2,
+        queue: { operatorIntent: 1, thresholdBreach: 1, proactiveCheck: 0 },
+        activeTriggerType: "operator_intent",
+        activeReason: "check zone-1",
+        activeConversationId: "conv-1",
+        activeRequestId: "req-1",
+        activeToolName: "query_world_model",
+        lastToolName: "query_world_model",
+        lastIntent: "check zone-1",
+        updatedAtMs: 1234,
+      }),
+    } as any);
+    const result = computeHealthCheck(deps as any);
+    expect(result.plannerRuntime).toMatchObject({
+      stage: "tool",
+      queueDepth: 2,
+      activeToolName: "query_world_model",
+    });
+  });
+
   it("reports whether discovery is enabled", () => {
     const deps = createDeps({
       isDiscoveryEnabled: () => false,

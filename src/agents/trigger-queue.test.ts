@@ -179,6 +179,24 @@ describe("TriggerQueue", () => {
     expect(queue.peek()).toBeUndefined();
   });
 
+  it("reports queue stats by trigger type", () => {
+    queue.enqueueIntent("hello");
+    queue.enqueueThresholdBreach({
+      ruleId: "r1",
+      promptHint: "dry",
+      metric: "moisture",
+      frame: makeFrame(),
+    });
+    queue.enqueueProactiveCheck([]);
+
+    expect(queue.getStats()).toEqual({
+      total: 3,
+      operatorIntent: 1,
+      thresholdBreach: 1,
+      proactiveCheck: 1,
+    });
+  });
+
   // ─── Max size ──────────────────────────────
 
   it("rejects lowest priority when at maxSize", () => {

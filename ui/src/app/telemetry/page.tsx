@@ -16,10 +16,12 @@ import {
 import { useMesh } from "@/lib/useMesh";
 import { useMeshStore } from "@/lib/store";
 import {
+    buildPlannerQueueMix,
     buildRuntimeTimeline,
     buildSystemEventTimeline,
     derivePlannerRuntimeSummary,
     describePlannerSurface,
+    describePlannerTrace,
     formatRelativeTime,
 } from "@/lib/runtime-telemetry";
 
@@ -37,9 +39,10 @@ export default function TelemetryPage() {
     const { isConnected } = useMesh();
     const { runtimeHealth, runtimeStatus, runtimeEvents, frames } = useMeshStore();
 
+    const plannerRuntime = runtimeStatus?.plannerRuntime ?? runtimeHealth?.plannerRuntime ?? null;
     const plannerSummary = useMemo(
-        () => derivePlannerRuntimeSummary(frames),
-        [frames],
+        () => derivePlannerRuntimeSummary(frames, Date.now(), plannerRuntime),
+        [frames, plannerRuntime],
     );
     const timeline = useMemo(
         () => buildRuntimeTimeline(frames, Date.now(), 14),
@@ -53,12 +56,21 @@ export default function TelemetryPage() {
         () => describePlannerSurface(runtimeHealth, runtimeStatus),
         [runtimeHealth, runtimeStatus],
     );
+    const plannerTrace = useMemo(
+        () => describePlannerTrace(runtimeHealth, runtimeStatus),
+        [runtimeHealth, runtimeStatus],
+    );
+    const plannerQueueMix = useMemo(
+        () => buildPlannerQueueMix(plannerRuntime),
+        [plannerRuntime],
+    );
 
     const latestHeartbeat = runtimeHealth?.timestamp
         ? formatRelativeTime(Date.now() - new Date(runtimeHealth.timestamp).getTime())
         : "awaiting heartbeat";
     const pendingProposals = runtimeStatus?.pendingProposals ?? [];
     const peerDetails = runtimeHealth?.peers.details ?? [];
+    const maxQueueMix = Math.max(1, ...plannerQueueMix.map((entry) => entry.count));
 
     const cards = [
         {
@@ -71,13 +83,15 @@ export default function TelemetryPage() {
         {
             label: "Planner State",
             value: plannerSummary.stageLabel,
-            detail: plannerSummary.lastUpdatedLabel,
+            detail: plannerRuntime?.activeToolName
+                ? `tool: ${plannerRuntime.activeToolName}`
+                : plannerSummary.lastUpdatedLabel,
             icon: BrainCircuit,
             tone: plannerSummary.stage === "error"
                 ? "text-mesh-alert"
-                : plannerSummary.stage === "thinking"
+                : plannerSummary.stage === "thinking" || plannerSummary.stage === "tool"
                     ? "text-claw-accent"
-                    : plannerSummary.stage === "queued"
+                    : plannerSummary.stage === "queued" || plannerSummary.stage === "observing" || plannerSummary.stage === "suspended"
                         ? "text-foreground/70"
                         : "text-white",
         },
@@ -209,6 +223,45 @@ export default function TelemetryPage() {
                 </div>
 
                 <div className="flex flex-col gap-6">
+                    <div className="glass-panel p-6">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="section-label">Planner Lane</p>
+                                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Live Queue & Tool State</h2>
+                            </div>
+                            <div className="rounded-2xl border border-claw-accent/20 bg-claw-accent/10 p-2 text-claw-accent">
+                                <BrainCircuit className="h-5 w-5" />
+                            </div>
+                        </div>
+                        <div className="mt-5 space-y-3">
+                            {plannerTrace.map((row) => (
+                                <div key={row.label} className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                                    <p className="section-label">{row.label}</p>
+                                    <p className="mt-2 text-sm font-medium break-all text-white">{row.value}</p>
+                                </div>
+                            ))}
+                            <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                                <p className="section-label">Queue mix</p>
+                                <div className="mt-4 space-y-3">
+                                    {plannerQueueMix.map((entry) => (
+                                        <div key={entry.key}>
+                                            <div className="flex items-center justify-between gap-3 text-sm text-white">
+                                                <span>{entry.label}</span>
+                                                <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-foreground/45">{entry.count}</span>
+                                            </div>
+                                            <div className="mt-2 h-2 rounded-full bg-white/8">
+                                                <div
+                                                    className={`h-2 rounded-full ${entry.tone}`}
+                                                    style={{ width: `${Math.max((entry.count / maxQueueMix) * 100, entry.count > 0 ? 8 : 0)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="glass-panel p-6">
                         <div className="flex items-center justify-between gap-3">
                             <div>

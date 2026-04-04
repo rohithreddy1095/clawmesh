@@ -246,6 +246,7 @@ export class MeshNodeRuntime {
       getPlannerActivity: () => this.getPlannerActivity(),
       getPlannerMode: () => this.piSession?.mode,
       getPlannerModelSpec: () => this.opts.piSessionModelSpec,
+      getPlannerRuntime: () => this.getPlannerRuntime(),
       isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getConfiguredStaticPeers: () => this.getConfiguredStaticPeers(),
       getPendingProposals: () => this.getPendingProposalSummaries(),
@@ -279,6 +280,7 @@ export class MeshNodeRuntime {
       getPlannerModelSpec: () => this.opts.piSessionModelSpec,
       getPlannerLeader: () => this.getPlannerLeader(),
       getPlannerActivity: () => this.getPlannerActivity(),
+      getPlannerRuntime: () => this.getPlannerRuntime(),
       isDiscoveryEnabled: () => !this.opts.disableDiscovery,
       getConfiguredStaticPeers: () => this.getConfiguredStaticPeers(),
       getMetrics: () => this.metrics.snapshot(),
@@ -546,6 +548,10 @@ export class MeshNodeRuntime {
 
   shouldHandleAutonomousPlanner(): boolean {
     return this.getPlannerActivity().shouldHandleAutonomous;
+  }
+
+  getPlannerRuntime() {
+    return this.piSession?.getPlannerRuntime();
   }
 
   getPendingProposalSummaries() {

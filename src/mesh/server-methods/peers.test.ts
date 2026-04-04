@@ -45,6 +45,21 @@ describe("mesh.peers handler", () => {
       }),
       getPlannerMode: () => "active",
       getPlannerModelSpec: () => "local-llama/gemma-4-E2B-it",
+      getPlannerRuntime: () => ({
+        mode: "active",
+        stage: "tool",
+        running: true,
+        queueDepth: 2,
+        queue: { operatorIntent: 1, thresholdBreach: 1, proactiveCheck: 0 },
+        activeTriggerType: "operator_intent",
+        activeReason: "check zone-1",
+        activeConversationId: "conv-1",
+        activeRequestId: "req-1",
+        activeToolName: "query_world_model",
+        lastToolName: "query_world_model",
+        lastIntent: "check zone-1",
+        updatedAtMs: 1234,
+      }),
       isDiscoveryEnabled: () => false,
       getConfiguredStaticPeers: () => ([{
         deviceId: "peer-static",
@@ -119,6 +134,7 @@ describe("mesh.peers handler", () => {
       plannerActivity?: { state: string; leader: { kind: string } };
       plannerMode?: string;
       plannerModelSpec?: string;
+      plannerRuntime?: { stage: string; activeToolName?: string; queueDepth: number };
       configuredStaticPeers?: Array<{ transportLabel?: string; url: string; securityPosture?: string }>;
       pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
@@ -128,6 +144,9 @@ describe("mesh.peers handler", () => {
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
     expect(s.plannerMode).toBe("active");
     expect(s.plannerModelSpec).toBe("local-llama/gemma-4-E2B-it");
+    expect(s.plannerRuntime?.stage).toBe("tool");
+    expect(s.plannerRuntime?.activeToolName).toBe("query_world_model");
+    expect(s.plannerRuntime?.queueDepth).toBe(2);
     expect(s.discoveryEnabled).toBe(false);
     expect(s.configuredStaticPeers?.[0].url).toBe("wss://relay.example.com/mesh");
     expect(s.configuredStaticPeers?.[0].transportLabel).toBe("relay");
