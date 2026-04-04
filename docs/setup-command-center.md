@@ -13,7 +13,7 @@ cd clawmesh
 pnpm install
 ```
 
-*(Note: The command center requires the Pi-mono packages for the intelligence layer. If using local workspace links, ensure `pi-mono` is checked out adjacently and built.)*
+The command center uses the published `@mariozechner/pi-*` packages from the npm registry; no sibling `pi-mono` checkout is required.
 
 ## 2. Check Identity
 

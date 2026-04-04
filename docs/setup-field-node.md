@@ -16,9 +16,9 @@ corepack enable pnpm
 ```
 *(Or use `curl -fsSL https://get.pnpm.io/install.sh | sh -`)*
 
-## 2. Deployment (No Pi deps needed)
+## 2. Deployment (No planner setup needed)
 
-You do not need the `@mariozechner/pi-*` packages on a field node. If deploying from a Command Center checkout, it is recommended to replace `file:` dependencies in `package.json` with npm registry versions, or strip them entirely.
+You do not need planner configuration on a field node unless you explicitly enable planner features. The repository now uses published `@mariozechner/pi-*` package versions by default, so a normal `pnpm install` works without editing `package.json` first.
 
 ```bash
 # On the field node
