@@ -28,7 +28,11 @@ export type MeshPeer = {
     deviceId: string;
     displayName?: string;
     capabilities: string[];
-    lastSeenMs: number;
+    lastSeenMs?: number;
+    outbound?: boolean;
+    role?: string;
+    transportLabel?: string;
+    connectedAtMs?: number;
 };
 
 export type ChatMessage = {
