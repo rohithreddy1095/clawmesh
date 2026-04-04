@@ -43,6 +43,8 @@ describe("mesh.peers handler", () => {
         role: "planner",
         leader: { kind: "local", deviceId: "local-device", role: "planner" },
       }),
+      getPlannerMode: () => "active",
+      getPlannerModelSpec: () => "local-llama/gemma-4-E2B-it",
       isDiscoveryEnabled: () => false,
       getConfiguredStaticPeers: () => ([{
         deviceId: "peer-static",
@@ -115,6 +117,8 @@ describe("mesh.peers handler", () => {
       peers: unknown[];
       discoveryEnabled?: boolean;
       plannerActivity?: { state: string; leader: { kind: string } };
+      plannerMode?: string;
+      plannerModelSpec?: string;
       configuredStaticPeers?: Array<{ transportLabel?: string; url: string; securityPosture?: string }>;
       pendingProposals?: Array<{ plannerOwner?: string; summary: string }>;
     };
@@ -122,6 +126,8 @@ describe("mesh.peers handler", () => {
     expect(s.connectedPeers).toBe(1);
     expect(s.peers).toHaveLength(1);
     expect((s.peers[0] as { role?: string }).role).toBe("planner");
+    expect(s.plannerMode).toBe("active");
+    expect(s.plannerModelSpec).toBe("local-llama/gemma-4-E2B-it");
     expect(s.discoveryEnabled).toBe(false);
     expect(s.configuredStaticPeers?.[0].url).toBe("wss://relay.example.com/mesh");
     expect(s.configuredStaticPeers?.[0].transportLabel).toBe("relay");

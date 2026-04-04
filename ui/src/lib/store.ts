@@ -56,6 +56,99 @@ export type Proposal = {
     resolvedBy?: string;
 };
 
+export type PlannerLeaderSummary = {
+    kind: string;
+    deviceId: string;
+    role?: string;
+};
+
+export type PlannerActivitySummary = {
+    state: string;
+    role?: string;
+    shouldHandleAutonomous?: boolean;
+    leader: PlannerLeaderSummary;
+};
+
+export type RuntimeStaticPeer = {
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+    securityPosture?: string;
+};
+
+export type RuntimePendingProposal = {
+    taskId: string;
+    summary: string;
+    approvalLevel: string;
+    status: string;
+    plannerDeviceId?: string;
+    plannerRole?: string;
+    plannerOwner?: string;
+};
+
+export type MeshRuntimeStatus = {
+    localDeviceId: string;
+    connectedPeers: number;
+    peers: Array<{
+        deviceId: string;
+        displayName?: string;
+        outbound: boolean;
+        role?: string;
+        transportLabel?: string;
+        connectedAtMs: number;
+    }>;
+    plannerActivity?: PlannerActivitySummary;
+    plannerMode?: string;
+    plannerModelSpec?: string;
+    discoveryEnabled?: boolean;
+    configuredStaticPeers?: RuntimeStaticPeer[];
+    pendingProposals?: RuntimePendingProposal[];
+};
+
+export type MeshRuntimeHealth = {
+    status: string;
+    nodeId: string;
+    displayName?: string;
+    uptimeMs: number;
+    startedAt: string;
+    peers: {
+        connected: number;
+        details: Array<{
+            deviceId: string;
+            displayName?: string;
+            capabilities: string[];
+            role?: string;
+            transportLabel?: string;
+            connectedMs: number;
+            outbound: boolean;
+        }>;
+    };
+    worldModel: {
+        entries: number;
+        frameLogSize: number;
+    };
+    capabilities: {
+        local: string[];
+        meshTotal: number;
+    };
+    plannerMode?: string;
+    plannerModelSpec?: string;
+    plannerLeader?: PlannerLeaderSummary;
+    plannerActivity?: PlannerActivitySummary;
+    discoveryEnabled?: boolean;
+    configuredStaticPeers?: RuntimeStaticPeer[];
+    memoryUsageMB?: number;
+    version: string;
+    timestamp: string;
+};
+
+export type MeshRuntimeEvent = {
+    type: string;
+    timestamp: number;
+    message: string;
+    data?: Record<string, unknown>;
+};
+
 interface MeshState {
     // Connection state
     isConnected: boolean;
@@ -68,6 +161,14 @@ interface MeshState {
     // World Model (Context Frames)
     frames: ContextFrame[];
     addFrame: (frame: ContextFrame) => void;
+
+    // Runtime status / heartbeat
+    runtimeStatus: MeshRuntimeStatus | null;
+    setRuntimeStatus: (status: MeshRuntimeStatus) => void;
+    runtimeHealth: MeshRuntimeHealth | null;
+    setRuntimeHealth: (health: MeshRuntimeHealth) => void;
+    runtimeEvents: MeshRuntimeEvent[];
+    setRuntimeEvents: (events: MeshRuntimeEvent[]) => void;
 
     // Chat messages
     chatMessages: ChatMessage[];
@@ -112,6 +213,13 @@ export const useMeshStore = create<MeshState>((set, get) => ({
             }
             return { frames: newFrames };
         }),
+
+    runtimeStatus: null,
+    setRuntimeStatus: (status) => set({ runtimeStatus: status }),
+    runtimeHealth: null,
+    setRuntimeHealth: (health) => set({ runtimeHealth: health }),
+    runtimeEvents: [],
+    setRuntimeEvents: (events) => set({ runtimeEvents: events }),
 
     chatMessages: [],
     addChatMessage: (msg) =>
