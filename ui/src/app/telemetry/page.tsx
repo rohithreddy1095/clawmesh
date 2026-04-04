@@ -45,11 +45,11 @@ export default function TelemetryPage() {
         [frames, plannerRuntime],
     );
     const timeline = useMemo(
-        () => buildRuntimeTimeline(frames, Date.now(), 14),
+        () => buildRuntimeTimeline(frames, Date.now(), 12),
         [frames],
     );
     const refreshSafeTimeline = useMemo(
-        () => (timeline.length > 0 ? timeline : buildSystemEventTimeline(runtimeEvents, Date.now(), 14)),
+        () => (timeline.length > 0 ? timeline : buildSystemEventTimeline(runtimeEvents, Date.now(), 12)),
         [timeline, runtimeEvents],
     );
     const plannerSurface = useMemo(
@@ -71,6 +71,7 @@ export default function TelemetryPage() {
     const pendingProposals = runtimeStatus?.pendingProposals ?? [];
     const peerDetails = runtimeHealth?.peers.details ?? [];
     const maxQueueMix = Math.max(1, ...plannerQueueMix.map((entry) => entry.count));
+    const activityMinHeightClass = refreshSafeTimeline.length <= 2 ? "min-h-[400px]" : "min-h-[500px]";
 
     const cards = [
         {
@@ -112,27 +113,27 @@ export default function TelemetryPage() {
     ];
 
     return (
-        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-4">
+        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-3">
             <section>
-                <div className="glass-panel relative overflow-hidden p-5 sm:p-6">
+                <div className="glass-panel relative overflow-hidden p-4 sm:p-5">
                     <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_84%_16%,rgba(255,120,68,0.12),transparent_22%),radial-gradient(circle_at_18%_28%,rgba(69,176,203,0.12),transparent_24%)]"
                     />
                     <div className="relative">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
                                 <p className="section-label">Live Runtime Ops</p>
-                                <h1 className="mt-2 flex items-center gap-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                                    <Activity className="text-claw-accent" size={32} />
+                                <h1 className="mt-1.5 flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                                    <Activity className="text-claw-accent" size={26} />
                                     Planner Heartbeat
                                 </h1>
-                                <p className="mt-3 max-w-3xl text-sm leading-6 text-foreground/60">
-                                    Real backend state from <code>mesh.health</code>, <code>mesh.status</code>, and live context frames.
+                                <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground/55 sm:text-sm">
+                                    Backend truth from <code>mesh.health</code>, <code>mesh.status</code>, and live frames.
                                 </p>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <div className="flex flex-wrap gap-2 lg:max-w-[48%] lg:justify-end">
                                 <div className={`rounded-full border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] ${isConnected ? "border-mesh-active/20 bg-mesh-active/10 text-mesh-active" : "border-mesh-alert/20 bg-mesh-alert/10 text-mesh-alert"}`}>
                                     {isConnected ? "connected" : "offline"}
                                 </div>
@@ -145,19 +146,19 @@ export default function TelemetryPage() {
                             </div>
                         </div>
 
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                             {cards.map((card) => {
                                 const Icon = card.icon;
                                 return (
-                                    <div key={card.label} className="metric-card py-4">
+                                    <div key={card.label} className="metric-card py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <p className="section-label">{card.label}</p>
                                             <Icon className={card.tone} size={16} />
                                         </div>
-                                        <p className={`mt-2 text-2xl font-semibold tracking-tight ${card.tone}`}>
+                                        <p className={`mt-1.5 text-xl font-semibold tracking-tight ${card.tone} sm:text-2xl`}>
                                             {card.value}
                                         </p>
-                                        <p className="mt-1 text-xs leading-5 text-foreground/55">{card.detail}</p>
+                                        <p className="mt-1 text-[11px] leading-4 text-foreground/55 sm:text-xs sm:leading-5">{card.detail}</p>
                                     </div>
                                 );
                             })}
@@ -166,28 +167,28 @@ export default function TelemetryPage() {
                 </div>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-                <div className="glass-panel p-6">
+            <section className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                <div className="glass-panel p-5">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="section-label">Planner Lane</p>
-                            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Live Queue & Tool State</h2>
+                            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Queue & Tool State</h2>
                         </div>
                         <div className="rounded-2xl border border-claw-accent/20 bg-claw-accent/10 p-2 text-claw-accent">
                             <BrainCircuit className="h-5 w-5" />
                         </div>
                     </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {plannerTrace.map((row) => (
-                            <div key={row.label} className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                            <div key={row.label} className="rounded-2xl border border-white/6 bg-white/[0.03] p-3.5">
                                 <p className="section-label">{row.label}</p>
                                 <p className="mt-2 text-sm font-medium break-all text-white">{row.value}</p>
                             </div>
                         ))}
                     </div>
-                    <div className="mt-4 rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                    <div className="mt-3 rounded-2xl border border-white/6 bg-white/[0.03] p-3.5">
                         <p className="section-label">Queue mix</p>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
                             {plannerQueueMix.map((entry) => (
                                 <div key={entry.key}>
                                     <div className="flex items-center justify-between gap-3 text-sm text-white">
@@ -206,33 +207,33 @@ export default function TelemetryPage() {
                     </div>
                 </div>
 
-                <div className="glass-panel p-6">
+                <div className="glass-panel p-5">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="section-label">Planner Surface</p>
-                            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Current Context</h2>
+                            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Current Context</h2>
                         </div>
                         <div className="rounded-2xl border border-claw-accent/20 bg-claw-accent/10 p-2 text-claw-accent">
                             <Clock3 className="h-5 w-5" />
                         </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                         {plannerSurface.map((row) => (
-                            <div key={row.label} className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                            <div key={row.label} className="rounded-2xl border border-white/6 bg-white/[0.03] p-3.5">
                                 <p className="section-label">{row.label}</p>
                                 <p className="mt-2 text-sm font-medium break-all text-white">{row.value}</p>
                             </div>
                         ))}
                     </div>
-                    <div className="mt-4 grid gap-3">
-                        <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                    <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-3.5">
                             <p className="section-label">Latest operator intent</p>
                             <p className="mt-2 text-sm leading-6 text-foreground/70">
                                 {plannerSummary.lastIntent ?? "No operator turn observed in this browser session yet."}
                             </p>
                         </div>
-                        <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+                        <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-3.5">
                             <p className="section-label">Latest planner output</p>
                             <p className="mt-2 text-sm leading-6 text-foreground/70 whitespace-pre-wrap">
                                 {plannerSummary.lastAgentMessage ?? "No recent planner reasoning/output captured yet."}
@@ -242,8 +243,8 @@ export default function TelemetryPage() {
                 </div>
             </section>
 
-            <section className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-                <div className="glass-panel flex min-h-[520px] flex-col overflow-hidden">
+            <section className="grid flex-1 gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+                <div className={`glass-panel flex ${activityMinHeightClass} flex-col overflow-hidden`}>
                     <div className="flex flex-col gap-4 border-b border-white/6 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="section-label">End-to-End Pipeline</p>
@@ -279,12 +280,12 @@ export default function TelemetryPage() {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                    <div className="glass-panel p-6">
+                <div className="grid gap-3 md:grid-cols-2">
+                    <div className="glass-panel p-5">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className="section-label">Peer Heartbeat</p>
-                                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Nodes</h2>
+                                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Nodes</h2>
                             </div>
                             <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-2 text-foreground/60">
                                 <HeartPulse className="h-5 w-5" />
@@ -328,11 +329,11 @@ export default function TelemetryPage() {
                         </div>
                     </div>
 
-                    <div className="glass-panel p-6">
+                    <div className="glass-panel p-5">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className="section-label">Approval Lane</p>
-                                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Pending Proposals</h2>
+                                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Pending Proposals</h2>
                             </div>
                             <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-2 text-foreground/60">
                                 <Siren className="h-5 w-5" />
@@ -364,7 +365,7 @@ export default function TelemetryPage() {
                         </div>
                     </div>
 
-                    <div className="glass-panel p-6">
+                    <div className="glass-panel p-5 md:col-span-2">
                         <div className="flex items-center gap-3">
                             <div className="grid h-11 w-11 place-items-center rounded-2xl border border-claw-accent/20 bg-claw-accent/10 text-claw-accent">
                                 <Bot className="h-5 w-5" />
@@ -374,7 +375,7 @@ export default function TelemetryPage() {
                                 <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Backend Truth</h2>
                             </div>
                         </div>
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
                                 <p className="section-label">Node</p>
                                 <p className="mt-2 text-sm text-white break-all">
