@@ -150,6 +150,16 @@ export function normalizeMeshName(name: string | undefined): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
+export function resolveDiscoveryEnabledOption(opts: { discovery?: boolean; noDiscovery?: boolean }): boolean {
+  if (typeof opts.discovery === "boolean") {
+    return opts.discovery;
+  }
+  if (typeof opts.noDiscovery === "boolean") {
+    return !opts.noDiscovery;
+  }
+  return true;
+}
+
 export function formatDiscoveryMode(enabled: boolean): string {
   return enabled ? "enabled (mDNS)" : "disabled (static/WAN)";
 }
