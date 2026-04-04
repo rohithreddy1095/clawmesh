@@ -47,6 +47,19 @@ These are real screenshots captured from the live local runtime in this reposito
   <strong>Command Center</strong> — Operators talk to the runtime, review outcomes, and keep approvals inside the same control surface.
 </p>
 
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="assets/screenshots/digital-twin-live.png" alt="ClawMesh digital twin" width="100%" />
+      <p><strong>Digital Twin</strong><br/>An operator-friendly world model of logical zones, hydration state, and water-system guardrails.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="assets/screenshots/farm-3d-twin-live.png" alt="ClawMesh 3D farm twin" width="100%" />
+      <p><strong>3D Farm Twin</strong><br/>A spatial twin for zones, water infrastructure, crop layers, and sensor placement. Current view uses placeholder survey geometry as the 3D model evolves.</p>
+    </td>
+  </tr>
+</table>
+
 ---
 
 ## What is ClawMesh?
