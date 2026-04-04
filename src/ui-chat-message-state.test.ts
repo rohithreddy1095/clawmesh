@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mergeChatMessages } from "../ui/src/lib/chat-message-state";
-import type { ChatMessage } from "../ui/src/lib/store";
+import { mergeChatMessages } from "../ui/src/lib/chat-message-state.js";
+import type { ChatMessage } from "../ui/src/lib/store.js";
 
 function message(overrides: Partial<ChatMessage>): ChatMessage {
   return {
