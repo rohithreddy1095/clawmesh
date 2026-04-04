@@ -42,6 +42,7 @@ import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
 import { buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 import { shouldProcessPlannerTrigger, shouldWakePlannerOnActivityChange } from "./planner-activity-gate.js";
+import { partitionSystemTriggersForOperatorTurn, shouldEnqueueProactiveCheck } from "./operator-priority.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -447,6 +448,13 @@ export class PiSession {
 
   private triggerProactiveCheck(): void {
     if (!this.modeCtrl.canMakeLLMCalls()) return; // Silent skip in observing/suspended
+    if (!shouldEnqueueProactiveCheck({
+      running: this.running,
+      pendingTriggerCount: this.triggerQueue.length,
+      hasPendingOperatorIntent: this.triggerQueue.peek()?.type === "operator_intent",
+    })) {
+      return;
+    }
     this.plannerActivity = this.runtime.getPlannerActivity();
     if (!shouldProcessPlannerTrigger(this.plannerActivity, "proactive_check")) return;
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
@@ -494,8 +502,20 @@ export class PiSession {
         activeRequestId = intent.requestId;
         const intentText = cleanIntentText(intent.reason);
 
+        const { immediateSystemTriggers, deferredSystemTriggers } = partitionSystemTriggersForOperatorTurn(systemTriggers);
         const allPatterns = this.patternMemory.getAllPatterns();
-        prompt = buildOperatorPrompt(intentText, systemTriggers, allPatterns);
+        prompt = buildOperatorPrompt(intentText, immediateSystemTriggers, allPatterns);
+
+        for (const deferredTrigger of deferredSystemTriggers) {
+          this.triggerQueue.enqueue({
+            reason: deferredTrigger.reason,
+            frames: deferredTrigger.frames,
+            type: deferredTrigger.type,
+            conversationId: deferredTrigger.conversationId,
+            requestId: deferredTrigger.requestId,
+            dedupKey: deferredTrigger.dedupKey,
+          });
+        }
 
         // Queue remaining operator intents for next cycle
         for (let i = 1; i < operatorIntents.length; i++) {
