@@ -39,6 +39,15 @@ describe("PiSession broadcast wiring validation", () => {
     expect(frame.trust.evidence_sources).toContain("llm");
   });
 
+  it("buildAgentResponseFrame creates queued frame", () => {
+    const frame = buildAgentResponseFrame(
+      { message: "", status: "queued", conversationId: "c1" },
+      "dev-1",
+      "hub",
+    );
+    expect(frame.data.status).toBe("queued");
+  });
+
   it("buildAgentResponseFrame creates thinking frame", () => {
     const frame = buildAgentResponseFrame(
       { message: "", status: "thinking", conversationId: "c1" },

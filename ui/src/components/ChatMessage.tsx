@@ -1,12 +1,13 @@
 "use client";
 
-import { Bot, Loader2, User, AlertTriangle } from "lucide-react";
+import { Bot, Loader2, User, AlertTriangle, Clock3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage as ChatMessageType } from "@/lib/store";
 import { CitationBadge } from "./CitationBadge";
 
 export function ChatMessage({ message }: { message: ChatMessageType }) {
     const isHuman = message.role === "human";
+    const isQueued = message.status === "queued";
     const isThinking = message.status === "thinking";
     const isError = message.status === "error";
 
@@ -40,7 +41,12 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
                             : "bg-white/[0.05] border border-white/8"
                 )}
             >
-                {isThinking ? (
+                {isQueued ? (
+                    <div className="flex items-center gap-2 text-foreground/60">
+                        <Clock3 size={14} />
+                        <span className="text-sm">Queued...</span>
+                    </div>
+                ) : isThinking ? (
                     <div className="flex items-center gap-2 text-mesh-info">
                         <Loader2 size={14} className="animate-spin" />
                         <span className="text-sm">Thinking...</span>
@@ -71,7 +77,7 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
                 )}
 
                 {/* Timestamp */}
-                {!isThinking && (
+                {!isQueued && !isThinking && (
                     <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/30">
                         {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>

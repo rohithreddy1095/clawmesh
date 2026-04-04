@@ -335,13 +335,14 @@ export class PiSession {
       return;
     }
 
-    // Broadcast "thinking" status to UI
+    const isQueuedBehindActiveWork = this.running || (!this.triggerQueue.isEmpty && this.initialized);
+
     if (conversationId) {
       this.broadcastAgentResponse({
         conversationId,
         requestId,
         message: "",
-        status: "thinking",
+        status: isQueuedBehindActiveWork ? "queued" : "thinking",
       });
     }
 
@@ -511,6 +512,15 @@ export class PiSession {
       const toolsNow = this.session.getActiveToolNames();
       const msgCount = this.session.state.messages.length;
       this.log.info(`pi-session: runCycle — sending prompt (tools=${toolsNow.length}, messages=${msgCount})`);
+
+      if (activeConversationId) {
+        this.broadcastAgentResponse({
+          conversationId: activeConversationId,
+          requestId: activeRequestId,
+          message: "",
+          status: "thinking",
+        });
+      }
 
       try {
         if (this.session.isStreaming) {

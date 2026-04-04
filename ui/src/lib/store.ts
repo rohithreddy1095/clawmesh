@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { mergeChatMessages } from "./chat-message-state";
 
 // Copying necessary types from backend for UI
 export type ContextFrameKind =
@@ -38,7 +39,7 @@ export type ChatMessage = {
     timestamp: number;
     citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
     proposals?: string[];
-    status?: "complete" | "thinking" | "error";
+    status?: "complete" | "queued" | "thinking" | "error";
 };
 
 export type Proposal = {
@@ -114,28 +115,9 @@ export const useMeshStore = create<MeshState>((set, get) => ({
 
     chatMessages: [],
     addChatMessage: (msg) =>
-        set((state) => {
-            // Skip if we already have a message with the same id (dedup gossip)
-            if (state.chatMessages.some((m) => m.id === msg.id)) return state;
-
-            // For "thinking" status, replace existing thinking message for same conversationId
-            if (msg.status === "thinking") {
-                const existing = state.chatMessages.find(
-                    (m) => m.conversationId === msg.conversationId && m.status === "thinking"
-                );
-                if (existing) return state; // Already have a thinking indicator
-            }
-
-            // For "complete" or "error", replace the thinking message
-            if (msg.status === "complete" || msg.status === "error") {
-                const filtered = state.chatMessages.filter(
-                    (m) => !(m.conversationId === msg.conversationId && m.status === "thinking")
-                );
-                return { chatMessages: [...filtered, msg] };
-            }
-
-            return { chatMessages: [...state.chatMessages, msg] };
-        }),
+        set((state) => ({
+            chatMessages: mergeChatMessages(state.chatMessages, msg),
+        })),
 
     getChatHistory: (conversationId) => {
         const messages = get().chatMessages;

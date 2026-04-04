@@ -91,7 +91,7 @@ export function useMesh() {
                                 timestamp: frame.timestamp,
                                 citations: data.citations as any,
                                 proposals: data.proposals as string[],
-                                status: status as "complete" | "thinking" | "error",
+                                status: status as "complete" | "queued" | "thinking" | "error",
                             });
                         }
                     }
