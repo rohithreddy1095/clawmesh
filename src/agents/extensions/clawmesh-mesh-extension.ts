@@ -35,6 +35,8 @@ import {
   formatConfiguredStaticPeerLine,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
+import { normalizeQueryWorldModelKind, normalizeQueryWorldModelLimit } from "./query-world-model-args.js";
+import { normalizeProposeTaskArgs } from "./propose-task-args.js";
 import { ProposalDedup } from "../proposal-dedup.js";
 import { buildProposalDecisionNotice, formatPendingProposalStatusLines, formatProposalSummaryLine } from "../proposal-formatting.js";
 
@@ -83,20 +85,19 @@ current farm state before making decisions.`,
       ],
       parameters: Type.Object({
         kind: Type.Optional(
-          Type.Union([
-            Type.Literal("observation"),
-            Type.Literal("event"),
-            Type.Literal("human_input"),
-            Type.Literal("inference"),
-            Type.Literal("all"),
-          ], { description: "Type of context frames to query (default: all)" }),
+          Type.String({ description: "Type of context frames to query (observation|event|human_input|inference|all, default: all)" }),
         ),
-        limit: Type.Optional(Type.Number({ description: "Max frames to return (default: 20)" })),
+        limit: Type.Optional(
+          Type.Union([
+            Type.Number({ description: "Max frames to return (default: 20)" }),
+            Type.String({ description: "Max frames to return (accepts numeric strings too)" }),
+          ]),
+        ),
         zone: Type.Optional(Type.String({ description: "Filter by zone (e.g. 'zone-1')" })),
       }),
       async execute(_toolCallId, args) {
-        const kind = args.kind ?? "all";
-        const limit = args.limit ?? 20;
+        const kind = normalizeQueryWorldModelKind(args.kind);
+        const limit = normalizeQueryWorldModelLimit(args.limit);
 
         let frames: ContextFrame[];
         if (kind === "all") {
@@ -218,22 +219,37 @@ This is the ONLY way to trigger physical actuation (pumps, valves, relays).`,
         "Always cite specific sensor values in your reasoning.",
       ],
       parameters: Type.Object({
-        summary: Type.String({ description: "Short description of the proposed action" }),
-        reasoning: Type.String({ description: "Why this action is needed — cite specific sensor data" }),
+        summary: Type.Optional(Type.String({ description: "Short description of the proposed action" })),
+        reasoning: Type.Optional(Type.String({ description: "Why this action is needed — cite specific sensor data" })),
         targetRef: Type.String({ description: "Capability reference (e.g. 'actuator:pump:P1')" }),
         operation: Type.String({ description: "Operation name (e.g. 'start', 'open')" }),
         operationParams: Type.Optional(
-          Type.Record(Type.String(), Type.Unknown(), { description: "Operation parameters" }),
+          Type.Union([
+            Type.Record(Type.String(), Type.Unknown(), { description: "Operation parameters" }),
+            Type.String({ description: "Operation parameters as a loose object string" }),
+          ]),
         ),
-        approvalLevel: Type.Union([
-          Type.Literal("L1"),
-          Type.Literal("L2"),
-          Type.Literal("L3"),
-        ], { description: "Required approval level" }),
+        approvalLevel: Type.Optional(
+          Type.String({ description: "Required approval level (L1|L2|L3, default: L2)" }),
+        ),
       }),
       async execute(_toolCallId, args): Promise<AgentToolResult<any>> {
-        const { summary, reasoning, targetRef, operation, operationParams } = args;
-        const approvalLevel = (args.approvalLevel as ApprovalLevel) ?? "L2";
+        const normalizedArgs = normalizeProposeTaskArgs(args as Record<string, unknown>);
+        if (!normalizedArgs) {
+          return {
+            content: [{ type: "text", text: "Proposal is missing a valid targetRef or operation." }],
+            details: { ok: false, reason: "invalid_proposal_args" },
+          };
+        }
+
+        const {
+          summary,
+          reasoning,
+          targetRef,
+          operation,
+          operationParams,
+          approvalLevel,
+        } = normalizedArgs;
 
         const peerDeviceId = findPeerForCapability(targetRef);
         if (!peerDeviceId) {

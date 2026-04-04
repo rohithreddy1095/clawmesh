@@ -46,9 +46,9 @@ export const useFarmTwinStore = create<FarmTwinState>((set) => ({
       zoneLive: {
         ...state.zoneLive,
         [zoneId]: {
-          zone_id: zoneId,
           ...state.zoneLive[zoneId],
           ...update,
+          zone_id: zoneId,
           lastUpdate: Date.now(),
         },
       },
@@ -58,9 +58,9 @@ export const useFarmTwinStore = create<FarmTwinState>((set) => ({
       assetLive: {
         ...state.assetLive,
         [assetId]: {
-          asset_id: assetId,
           ...state.assetLive[assetId],
           ...update,
+          asset_id: assetId,
           lastUpdate: Date.now(),
         },
       },

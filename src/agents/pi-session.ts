@@ -14,6 +14,7 @@ import {
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
 import { getModel, type Model } from "@mariozechner/pi-ai";
+import { injectCustomPiModelApiKey, resolveCustomPiModel } from "./custom-model-resolver.js";
 import type { AgentEvent, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { ContextFrame } from "../mesh/context-types.js";
@@ -38,9 +39,10 @@ import {
   parseModelSpec,
 } from "./planner-prompt-builder.js";
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
-import { buildAgentResponseFrame, buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
+import { buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 import { shouldProcessPlannerTrigger, shouldWakePlannerOnActivityChange } from "./planner-activity-gate.js";
+import { partitionSystemTriggersForOperatorTurn, shouldEnqueueProactiveCheck } from "./operator-priority.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -334,13 +336,14 @@ export class PiSession {
       return;
     }
 
-    // Broadcast "thinking" status to UI
+    const isQueuedBehindActiveWork = this.running || (!this.triggerQueue.isEmpty && this.initialized);
+
     if (conversationId) {
       this.broadcastAgentResponse({
         conversationId,
         requestId,
         message: "",
-        status: "thinking",
+        status: isQueuedBehindActiveWork ? "queued" : "thinking",
       });
     }
 
@@ -349,12 +352,9 @@ export class PiSession {
   }
 
   private broadcastAgentResponse(data: AgentResponseData): void {
-    const frame = buildAgentResponseFrame(
+    this.runtime.contextPropagator.broadcastAgentResponse({
       data,
-      this.runtime.identity.deviceId,
-      this.runtime.displayName ?? this.runtime.identity.deviceId.slice(0, 12),
-    );
-    this.runtime.broadcastToUI("context.frame", frame);
+    });
   }
 
   async approveProposal(taskId: string, approvedBy = "operator"): Promise<TaskProposal | null> {
@@ -448,6 +448,13 @@ export class PiSession {
 
   private triggerProactiveCheck(): void {
     if (!this.modeCtrl.canMakeLLMCalls()) return; // Silent skip in observing/suspended
+    if (!shouldEnqueueProactiveCheck({
+      running: this.running,
+      pendingTriggerCount: this.triggerQueue.length,
+      hasPendingOperatorIntent: this.triggerQueue.peek()?.type === "operator_intent",
+    })) {
+      return;
+    }
     this.plannerActivity = this.runtime.getPlannerActivity();
     if (!shouldProcessPlannerTrigger(this.plannerActivity, "proactive_check")) return;
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
@@ -495,8 +502,20 @@ export class PiSession {
         activeRequestId = intent.requestId;
         const intentText = cleanIntentText(intent.reason);
 
+        const { immediateSystemTriggers, deferredSystemTriggers } = partitionSystemTriggersForOperatorTurn(systemTriggers);
         const allPatterns = this.patternMemory.getAllPatterns();
-        prompt = buildOperatorPrompt(intentText, systemTriggers, allPatterns);
+        prompt = buildOperatorPrompt(intentText, immediateSystemTriggers, allPatterns);
+
+        for (const deferredTrigger of deferredSystemTriggers) {
+          this.triggerQueue.enqueue({
+            reason: deferredTrigger.reason,
+            frames: deferredTrigger.frames,
+            type: deferredTrigger.type,
+            conversationId: deferredTrigger.conversationId,
+            requestId: deferredTrigger.requestId,
+            dedupKey: deferredTrigger.dedupKey,
+          });
+        }
 
         // Queue remaining operator intents for next cycle
         for (let i = 1; i < operatorIntents.length; i++) {
@@ -513,6 +532,15 @@ export class PiSession {
       const toolsNow = this.session.getActiveToolNames();
       const msgCount = this.session.state.messages.length;
       this.log.info(`pi-session: runCycle — sending prompt (tools=${toolsNow.length}, messages=${msgCount})`);
+
+      if (activeConversationId) {
+        this.broadcastAgentResponse({
+          conversationId: activeConversationId,
+          requestId: activeRequestId,
+          message: "",
+          status: "thinking",
+        });
+      }
 
       try {
         if (this.session.isStreaming) {
@@ -659,6 +687,13 @@ export class PiSession {
           supportsStreamOptions: false,
         },
       } satisfies Model<"openai-completions">;
+    }
+
+    const customModel = resolveCustomPiModel(provider, modelId);
+    if (customModel) {
+      injectCustomPiModelApiKey(customModel.model, customModel.apiKey);
+      this.log.info(`pi-session: using custom model "${provider}/${modelId}" at ${customModel.model.baseUrl}`);
+      return customModel.model;
     }
 
     const model = getModel(provider as any, modelId as any);

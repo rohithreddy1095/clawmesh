@@ -39,6 +39,16 @@ describe("buildAgentResponseFrame", () => {
     expect(frame.trust.evidence_sources).toContain("llm");
   });
 
+  it("creates queued status frame", () => {
+    const frame = buildAgentResponseFrame(
+      { message: "", status: "queued" },
+      "dev-1",
+      "hub",
+    );
+    expect(frame.data.status).toBe("queued");
+    expect(frame.data.message).toBe("");
+  });
+
   it("creates thinking status frame", () => {
     const frame = buildAgentResponseFrame(
       { message: "", status: "thinking" },

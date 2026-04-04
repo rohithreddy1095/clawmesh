@@ -12,6 +12,8 @@ export function createMeshPeersHandlers(deps: {
   capabilityRegistry: MeshCapabilityRegistry;
   localDeviceId: string;
   getPlannerActivity?: () => PlannerActivity;
+  getPlannerMode?: () => string | undefined;
+  getPlannerModelSpec?: () => string | undefined;
   isDiscoveryEnabled?: () => boolean;
   getConfiguredStaticPeers?: () => Array<{
     deviceId: string;
@@ -57,6 +59,8 @@ export function createMeshPeersHandlers(deps: {
           connectedAtMs: p.connectedAtMs,
         })),
         plannerActivity: deps.getPlannerActivity?.(),
+        plannerMode: deps.getPlannerMode?.(),
+        plannerModelSpec: deps.getPlannerModelSpec?.(),
         discoveryEnabled: deps.isDiscoveryEnabled?.(),
         configuredStaticPeers: deps.getConfiguredStaticPeers?.(),
         pendingProposals: deps.getPendingProposals?.(),

@@ -11,7 +11,7 @@ export interface AgentResponseData {
   conversationId?: string;
   requestId?: string;
   message: string;
-  status: "complete" | "thinking" | "error";
+  status: "complete" | "queued" | "thinking" | "error";
   proposals?: string[];
   citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
 }

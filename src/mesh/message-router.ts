@@ -84,7 +84,15 @@ export async function routeInboundMessage(
     const fwdParams = (frame.params ?? {}) as Record<string, unknown>;
     const intent = extractIntentFromForward(fwdParams);
     if (intent) {
-      routeIntent(intent, deps.intentRouterDeps);
+      await routeIntent(intent, deps.intentRouterDeps);
+      if (typeof frame.id === "string") {
+        socket.send(JSON.stringify({
+          type: "res",
+          id: frame.id,
+          ok: true,
+          payload: { accepted: true },
+        }));
+      }
       return { handled: true, kind: "intent" };
     }
     // Not an intent — fall through to normal RPC dispatch

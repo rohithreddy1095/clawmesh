@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { WebSocket } from "ws";
 import { buildLlmOnlyActuationTrust } from "./node-runtime.js";
 import { MeshRuntimeHarness } from "./test-helpers.js";
 
@@ -369,5 +370,64 @@ describe("MeshNodeRuntime", () => {
 
     const peerSeenByA = nodeA.runtime.listConnectedPeers().find((p) => p.deviceId === nodeB.identity.deviceId);
     expect(peerSeenByA?.transportLabel).toBe("mdns");
+  });
+
+  it("rebroadcasts remote context and proposal events to local UI subscribers", async () => {
+    const planner = await harness.startNode({
+      name: "planner-ui-bridge",
+      role: "planner",
+      capabilities: ["channel:clawmesh"],
+    });
+    const gateway = await harness.startNode({
+      name: "gateway-ui-bridge",
+      role: "viewer",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!planner || !gateway) return;
+
+    const connected = await harness.connect(gateway, planner);
+    expect(connected).toBe(true);
+
+    const socket = new WebSocket(harness.urlFor(gateway));
+    const received: Array<{ event: string; payload: any }> = [];
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timed out waiting for UI subscription")), 2_000);
+      socket.on("open", () => {
+        socket.send(JSON.stringify({ type: "req", id: "sub-1", method: "chat.subscribe" }));
+      });
+      socket.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw));
+        if (parsed.type === "res" && parsed.id === "sub-1" && parsed.ok) {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+    });
+
+    socket.on("message", (raw) => {
+      const parsed = JSON.parse(String(raw));
+      if (parsed.type === "event") {
+        received.push({ event: parsed.event, payload: parsed.payload });
+      }
+    });
+
+    planner.runtime.contextPropagator.broadcastAgentResponse({
+      data: { conversationId: "conv-1", requestId: "req-1", message: "hello from planner", status: "complete" },
+    });
+    planner.runtime.peerRegistry.broadcastEvent("planner.proposal", {
+      taskId: "task-1",
+      summary: "Irrigate zone-1",
+      status: "awaiting_approval",
+      approvalLevel: "L2",
+    });
+
+    await vi.waitFor(() => {
+      expect(received.some((entry) => entry.event === "context.frame" && entry.payload?.data?.message === "hello from planner")).toBe(true);
+      expect(received.some((entry) => entry.event === "planner.proposal" && entry.payload?.taskId === "task-1")).toBe(true);
+    }, { timeout: 2_000 });
+
+    socket.close();
   });
 });

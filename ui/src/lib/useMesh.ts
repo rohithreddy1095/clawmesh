@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { useMeshStore, type ContextFrame, type MeshPeer, type Proposal } from "./store";
+import {
+    useMeshStore,
+    type ContextFrame,
+    type MeshPeer,
+    type Proposal,
+    type MeshRuntimeHealth,
+    type MeshRuntimeStatus,
+} from "./store";
 
-const WS_URL = typeof window !== "undefined"
+const DEFAULT_WS_URL = typeof window !== "undefined"
   ? `ws://${window.location.hostname}:18789`
   : "ws://localhost:18789";
+
+const WS_URL = process.env.NEXT_PUBLIC_MESH_URL || DEFAULT_WS_URL;
 
 /** Fallback for mobile browsers on non-HTTPS where uuid() is unavailable. */
 function uuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return uuid();
+    return crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -29,18 +38,29 @@ type MeshCommandParams = {
 export function useMesh() {
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+    const runtimePollInterval = useRef<NodeJS.Timeout | null>(null);
 
     const {
         isConnected,
         setConnected,
         setPeers,
         addFrame,
+        setRuntimeStatus,
+        setRuntimeHealth,
+        setRuntimeEvents,
         addChatMessage,
         addProposal,
         updateProposalStatus,
     } = useMeshStore();
 
     useEffect(() => {
+        function requestRuntimeSnapshot(ws: WebSocket) {
+            ws.send(JSON.stringify({ type: "req", id: `mesh-peers-${uuid()}`, method: "mesh.peers" }));
+            ws.send(JSON.stringify({ type: "req", id: `mesh-status-${uuid()}`, method: "mesh.status" }));
+            ws.send(JSON.stringify({ type: "req", id: `mesh-health-${uuid()}`, method: "mesh.health" }));
+            ws.send(JSON.stringify({ type: "req", id: `mesh-events-${uuid()}`, method: "mesh.events", params: { limit: 20 } }));
+        }
+
         function connect() {
             if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -53,14 +73,23 @@ export function useMesh() {
 
                 // Subscribe to chat events
                 ws.send(JSON.stringify({ type: "req", id: uuid(), method: "chat.subscribe" }));
+                requestRuntimeSnapshot(ws);
 
-                // Ask for currently connected peers on open
-                ws.send(JSON.stringify({ type: "req", id: uuid(), method: "mesh.peers" }));
+                if (runtimePollInterval.current) clearInterval(runtimePollInterval.current);
+                runtimePollInterval.current = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        requestRuntimeSnapshot(ws);
+                    }
+                }, 5000);
             };
 
             ws.onclose = () => {
                 console.log("[useMesh] Disconnected from mesh node");
                 setConnected(false);
+                if (runtimePollInterval.current) {
+                    clearInterval(runtimePollInterval.current);
+                    runtimePollInterval.current = null;
+                }
                 reconnectTimeout.current = setTimeout(connect, 3000);
             };
 
@@ -89,7 +118,7 @@ export function useMesh() {
                                 timestamp: frame.timestamp,
                                 citations: data.citations as any,
                                 proposals: data.proposals as string[],
-                                status: status as "complete" | "thinking" | "error",
+                                status: status as "complete" | "queued" | "thinking" | "error",
                             });
                         }
                     }
@@ -106,8 +135,26 @@ export function useMesh() {
                         updateProposalStatus(proposal.taskId, proposal.status, proposal.resolvedBy);
                     }
 
-                    // Handle generic responses (like our initial peers list request)
-                    if (msg.type === "res" && msg.ok && msg.payload?.peers) {
+                    if (msg.type === "res" && msg.ok && typeof msg.id === "string") {
+                        if (msg.id.startsWith("mesh-peers-") && msg.payload?.peers) {
+                            setPeers(msg.payload.peers as MeshPeer[]);
+                        }
+
+                        if (msg.id.startsWith("mesh-status-") && msg.payload?.localDeviceId) {
+                            setRuntimeStatus(msg.payload as MeshRuntimeStatus);
+                        }
+
+                        if (msg.id.startsWith("mesh-health-") && msg.payload?.nodeId) {
+                            setRuntimeHealth(msg.payload as MeshRuntimeHealth);
+                        }
+
+                        if (msg.id.startsWith("mesh-events-") && Array.isArray(msg.payload?.events)) {
+                            setRuntimeEvents(msg.payload.events);
+                        }
+                    }
+
+                    // Legacy generic peers response fallback
+                    if (msg.type === "res" && msg.ok && msg.payload?.peers && !msg.id) {
                         setPeers(msg.payload.peers as MeshPeer[]);
                     }
 
@@ -121,9 +168,10 @@ export function useMesh() {
 
         return () => {
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+            if (runtimePollInterval.current) clearInterval(runtimePollInterval.current);
             if (wsRef.current) wsRef.current.close();
         };
-    }, [setConnected, setPeers, addFrame, addChatMessage, addProposal, updateProposalStatus]);
+    }, [setConnected, setPeers, setRuntimeStatus, setRuntimeHealth, setRuntimeEvents, addFrame, addChatMessage, addProposal, updateProposalStatus]);
 
     // Command to send mesh forwards
     const sendCommand = useCallback((params: MeshCommandParams) => {

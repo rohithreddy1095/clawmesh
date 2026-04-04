@@ -161,6 +161,7 @@ describe("routeInboundMessage", () => {
     const intentHandler = vi.fn();
     deps.intentRouterDeps.handlePlannerIntent = intentHandler;
 
+    const socket = mockSocket();
     const msg = JSON.stringify({
       type: "req",
       id: "r1",
@@ -177,10 +178,16 @@ describe("routeInboundMessage", () => {
       },
     });
 
-    const result = await routeInboundMessage(msg, mockSocket(), "c1", deps);
+    const result = await routeInboundMessage(msg, socket, "c1", deps);
 
     expect(result).toEqual({ handled: true, kind: "intent" });
     expect(intentHandler).toHaveBeenCalledWith("irrigate zone-1", expect.any(Object));
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({
+      type: "res",
+      id: "r1",
+      ok: true,
+      payload: { accepted: true },
+    }));
   });
 
   // ─── RPC responses ────────────────────────

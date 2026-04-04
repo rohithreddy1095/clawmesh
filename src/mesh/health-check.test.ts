@@ -132,10 +132,12 @@ describe("computeHealthCheck", () => {
   it("reports healthy when planner is active", () => {
     const deps = createDeps({
       getPlannerMode: () => "active",
+      getPlannerModelSpec: () => "local-llama/gemma-4-E2B-it",
     });
     const result = computeHealthCheck(deps);
     expect(result.status).toBe("healthy");
     expect(result.plannerMode).toBe("active");
+    expect(result.plannerModelSpec).toBe("local-llama/gemma-4-E2B-it");
   });
 
   it("reports planner leader when provided", () => {

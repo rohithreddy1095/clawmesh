@@ -11,6 +11,7 @@ import type { MeshStaticPeer } from "./types.mesh.js";
 import type { DeviceIdentity } from "../infra/device-identity.js";
 import type { ContextFrame } from "./context-types.js";
 import type { MeshNodeRole, PeerSession } from "./types.js";
+import type { TaskProposal } from "../agents/types.js";
 import { MeshPeerClient } from "./peer-client.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import type { MeshCapabilityRegistry } from "./capabilities.js";
@@ -188,6 +189,16 @@ export class PeerConnectionManager {
             this.deps.eventBus.emit("peer.disconnected", { deviceId: targetDeviceId, reason: "peer down" });
             this.deps.log.info(`mesh: peer down ${targetDeviceId.slice(0, 12)}… (reported by ${peer.deviceId.slice(0, 12)}…)`);
           }
+          return;
+        }
+
+        if (event === "planner.proposal") {
+          this.deps.eventBus.emit("proposal.created", { proposal: payload as TaskProposal });
+          return;
+        }
+
+        if (event === "planner.proposal.resolved") {
+          this.deps.eventBus.emit("proposal.resolved", { proposal: payload as TaskProposal });
           return;
         }
 

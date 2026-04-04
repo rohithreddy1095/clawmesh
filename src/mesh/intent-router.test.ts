@@ -123,11 +123,11 @@ describe("routeIntent", () => {
     };
   });
 
-  it("routes to planner when handlePlannerIntent is set", () => {
+  it("routes to planner when handlePlannerIntent is set", async () => {
     const plannerHandler = vi.fn();
     deps.handlePlannerIntent = plannerHandler;
 
-    routeIntent(
+    await routeIntent(
       { text: "irrigate zone-1", conversationId: "conv-1", requestId: "req-1" },
       deps,
     );
@@ -138,10 +138,10 @@ describe("routeIntent", () => {
     });
   });
 
-  it("uses mock fallback when no planner is set", () => {
+  it("uses mock fallback when no planner is set", async () => {
     vi.useFakeTimers();
 
-    routeIntent(
+    await routeIntent(
       { text: "check status", conversationId: "conv-1", requestId: "req-1" },
       deps,
     );
@@ -162,7 +162,37 @@ describe("routeIntent", () => {
     vi.useRealTimers();
   });
 
-  it("broadcasts human_input context frame", () => {
+  it("forwards to a remote planner when configured", async () => {
+    const forwardPlannerIntent = vi.fn(async () => true);
+    deps.forwardPlannerIntent = forwardPlannerIntent;
+
+    await routeIntent(
+      { text: "check pumps", conversationId: "conv-2", requestId: "req-2" },
+      deps,
+    );
+
+    expect(forwardPlannerIntent).toHaveBeenCalledWith("check pumps", {
+      conversationId: "conv-2",
+      requestId: "req-2",
+    });
+    expect(broadcastedFrames).toHaveLength(0);
+  });
+
+  it("broadcasts an error when no remote planner is reachable", async () => {
+    deps.forwardPlannerIntent = vi.fn(async () => false);
+
+    await routeIntent(
+      { text: "check pumps", conversationId: "conv-3", requestId: "req-3" },
+      deps,
+    );
+
+    expect(broadcastedFrames).toHaveLength(1);
+    const response = broadcastedFrames[0] as any;
+    expect(response.data.status).toBe("error");
+    expect(response.data.message).toContain("No planner leader");
+  });
+
+  it("broadcasts human_input context frame", async () => {
     let broadcastedContext = false;
     propagator.onLocalBroadcast = (frame) => {
       if (frame.kind === "human_input") {
@@ -171,7 +201,7 @@ describe("routeIntent", () => {
       }
     };
 
-    routeIntent(
+    await routeIntent(
       { text: "test intent", conversationId: "c", requestId: "r" },
       deps,
     );

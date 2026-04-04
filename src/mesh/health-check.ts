@@ -53,6 +53,7 @@ export type HealthCheckResult = {
     meshTotal: number;
   };
   plannerMode?: string;
+  plannerModelSpec?: string;
   plannerLeader?: PlannerLeader;
   plannerActivity?: PlannerActivity;
   discoveryEnabled?: boolean;
@@ -80,6 +81,7 @@ export type HealthCheckDeps = {
   capabilityRegistry: MeshCapabilityRegistry;
   worldModel: WorldModel;
   getPlannerMode?: () => string | undefined;
+  getPlannerModelSpec?: () => string | undefined;
   getPlannerLeader?: () => PlannerLeader;
   getPlannerActivity?: () => PlannerActivity;
   isDiscoveryEnabled?: () => boolean;
@@ -150,6 +152,7 @@ export function computeHealthCheck(deps: HealthCheckDeps): HealthCheckResult {
       meshTotal: meshCapCount,
     },
     plannerMode,
+    plannerModelSpec: deps.getPlannerModelSpec?.(),
     plannerLeader: deps.getPlannerLeader?.(),
     plannerActivity: deps.getPlannerActivity?.(),
     discoveryEnabled: deps.isDiscoveryEnabled?.(),

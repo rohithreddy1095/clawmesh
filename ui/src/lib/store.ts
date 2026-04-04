@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { mergeChatMessages } from "./chat-message-state";
 
 // Copying necessary types from backend for UI
 export type ContextFrameKind =
@@ -27,7 +28,11 @@ export type MeshPeer = {
     deviceId: string;
     displayName?: string;
     capabilities: string[];
-    lastSeenMs: number;
+    lastSeenMs?: number;
+    outbound?: boolean;
+    role?: string;
+    transportLabel?: string;
+    connectedAtMs?: number;
 };
 
 export type ChatMessage = {
@@ -38,7 +43,7 @@ export type ChatMessage = {
     timestamp: number;
     citations?: Array<{ metric: string; value: unknown; zone?: string; timestamp: number }>;
     proposals?: string[];
-    status?: "complete" | "thinking" | "error";
+    status?: "complete" | "queued" | "thinking" | "error";
 };
 
 export type Proposal = {
@@ -55,6 +60,99 @@ export type Proposal = {
     resolvedBy?: string;
 };
 
+export type PlannerLeaderSummary = {
+    kind: string;
+    deviceId: string;
+    role?: string;
+};
+
+export type PlannerActivitySummary = {
+    state: string;
+    role?: string;
+    shouldHandleAutonomous?: boolean;
+    leader: PlannerLeaderSummary;
+};
+
+export type RuntimeStaticPeer = {
+    deviceId: string;
+    url: string;
+    transportLabel?: string;
+    securityPosture?: string;
+};
+
+export type RuntimePendingProposal = {
+    taskId: string;
+    summary: string;
+    approvalLevel: string;
+    status: string;
+    plannerDeviceId?: string;
+    plannerRole?: string;
+    plannerOwner?: string;
+};
+
+export type MeshRuntimeStatus = {
+    localDeviceId: string;
+    connectedPeers: number;
+    peers: Array<{
+        deviceId: string;
+        displayName?: string;
+        outbound: boolean;
+        role?: string;
+        transportLabel?: string;
+        connectedAtMs: number;
+    }>;
+    plannerActivity?: PlannerActivitySummary;
+    plannerMode?: string;
+    plannerModelSpec?: string;
+    discoveryEnabled?: boolean;
+    configuredStaticPeers?: RuntimeStaticPeer[];
+    pendingProposals?: RuntimePendingProposal[];
+};
+
+export type MeshRuntimeHealth = {
+    status: string;
+    nodeId: string;
+    displayName?: string;
+    uptimeMs: number;
+    startedAt: string;
+    peers: {
+        connected: number;
+        details: Array<{
+            deviceId: string;
+            displayName?: string;
+            capabilities: string[];
+            role?: string;
+            transportLabel?: string;
+            connectedMs: number;
+            outbound: boolean;
+        }>;
+    };
+    worldModel: {
+        entries: number;
+        frameLogSize: number;
+    };
+    capabilities: {
+        local: string[];
+        meshTotal: number;
+    };
+    plannerMode?: string;
+    plannerModelSpec?: string;
+    plannerLeader?: PlannerLeaderSummary;
+    plannerActivity?: PlannerActivitySummary;
+    discoveryEnabled?: boolean;
+    configuredStaticPeers?: RuntimeStaticPeer[];
+    memoryUsageMB?: number;
+    version: string;
+    timestamp: string;
+};
+
+export type MeshRuntimeEvent = {
+    type: string;
+    timestamp: number;
+    message: string;
+    data?: Record<string, unknown>;
+};
+
 interface MeshState {
     // Connection state
     isConnected: boolean;
@@ -67,6 +165,14 @@ interface MeshState {
     // World Model (Context Frames)
     frames: ContextFrame[];
     addFrame: (frame: ContextFrame) => void;
+
+    // Runtime status / heartbeat
+    runtimeStatus: MeshRuntimeStatus | null;
+    setRuntimeStatus: (status: MeshRuntimeStatus) => void;
+    runtimeHealth: MeshRuntimeHealth | null;
+    setRuntimeHealth: (health: MeshRuntimeHealth) => void;
+    runtimeEvents: MeshRuntimeEvent[];
+    setRuntimeEvents: (events: MeshRuntimeEvent[]) => void;
 
     // Chat messages
     chatMessages: ChatMessage[];
@@ -112,30 +218,18 @@ export const useMeshStore = create<MeshState>((set, get) => ({
             return { frames: newFrames };
         }),
 
+    runtimeStatus: null,
+    setRuntimeStatus: (status) => set({ runtimeStatus: status }),
+    runtimeHealth: null,
+    setRuntimeHealth: (health) => set({ runtimeHealth: health }),
+    runtimeEvents: [],
+    setRuntimeEvents: (events) => set({ runtimeEvents: events }),
+
     chatMessages: [],
     addChatMessage: (msg) =>
-        set((state) => {
-            // Skip if we already have a message with the same id (dedup gossip)
-            if (state.chatMessages.some((m) => m.id === msg.id)) return state;
-
-            // For "thinking" status, replace existing thinking message for same conversationId
-            if (msg.status === "thinking") {
-                const existing = state.chatMessages.find(
-                    (m) => m.conversationId === msg.conversationId && m.status === "thinking"
-                );
-                if (existing) return state; // Already have a thinking indicator
-            }
-
-            // For "complete" or "error", replace the thinking message
-            if (msg.status === "complete" || msg.status === "error") {
-                const filtered = state.chatMessages.filter(
-                    (m) => !(m.conversationId === msg.conversationId && m.status === "thinking")
-                );
-                return { chatMessages: [...filtered, msg] };
-            }
-
-            return { chatMessages: [...state.chatMessages, msg] };
-        }),
+        set((state) => ({
+            chatMessages: mergeChatMessages(state.chatMessages, msg),
+        })),
 
     getChatHistory: (conversationId) => {
         const messages = get().chatMessages;

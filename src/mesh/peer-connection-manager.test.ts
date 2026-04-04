@@ -393,4 +393,32 @@ describe("PeerConnectionManager", () => {
 
     expect(deps.peerRegistry.get("healthy-peer")).toBeDefined();
   });
+
+  it("emits proposal.created when a peer sends planner.proposal", async () => {
+    const proposals: any[] = [];
+    deps.eventBus.on("proposal.created", ({ proposal }) => proposals.push(proposal));
+
+    manager.connectToPeer({ deviceId: "planner-peer", url: "ws://127.0.0.1:19999" });
+    const plannerClient = peerClientInstances[0];
+
+    await plannerClient.__emitEvent("planner.proposal", { taskId: "t-1", summary: "Irrigate zone-1" });
+
+    expect(proposals).toEqual([
+      expect.objectContaining({ taskId: "t-1", summary: "Irrigate zone-1" }),
+    ]);
+  });
+
+  it("emits proposal.resolved when a peer sends planner.proposal.resolved", async () => {
+    const proposals: any[] = [];
+    deps.eventBus.on("proposal.resolved", ({ proposal }) => proposals.push(proposal));
+
+    manager.connectToPeer({ deviceId: "planner-peer", url: "ws://127.0.0.1:19999" });
+    const plannerClient = peerClientInstances[0];
+
+    await plannerClient.__emitEvent("planner.proposal.resolved", { taskId: "t-1", status: "approved" });
+
+    expect(proposals).toEqual([
+      expect.objectContaining({ taskId: "t-1", status: "approved" }),
+    ]);
+  });
 });
