@@ -14,6 +14,7 @@ import {
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
 import { getModel, type Model } from "@mariozechner/pi-ai";
+import { injectCustomPiModelApiKey, resolveCustomPiModel } from "./custom-model-resolver.js";
 import type { AgentEvent, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { ContextFrame } from "../mesh/context-types.js";
@@ -656,6 +657,13 @@ export class PiSession {
           supportsStreamOptions: false,
         },
       } satisfies Model<"openai-completions">;
+    }
+
+    const customModel = resolveCustomPiModel(provider, modelId);
+    if (customModel) {
+      injectCustomPiModelApiKey(customModel.model, customModel.apiKey);
+      this.log.info(`pi-session: using custom model "${provider}/${modelId}" at ${customModel.model.baseUrl}`);
+      return customModel.model;
     }
 
     const model = getModel(provider as any, modelId as any);
