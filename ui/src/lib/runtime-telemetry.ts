@@ -128,7 +128,8 @@ export function describePlannerTrace(
     { label: "Runtime stage", value: plannerRuntime ? formatPlannerStageLabel(normalizePlannerStage(plannerRuntime.stage)) : "idle" },
     { label: "Queue depth", value: String(plannerRuntime?.queueDepth ?? 0) },
     { label: "Active trigger", value: plannerRuntime?.activeReason ?? plannerRuntime?.activeTriggerType ?? "none" },
-    { label: "Active tool", value: plannerRuntime?.activeToolName ?? plannerRuntime?.lastToolName ?? "none" },
+    { label: "Active tool", value: plannerRuntime?.activeToolName ?? "none" },
+    { label: "Last tool", value: plannerRuntime?.lastToolName ?? "none" },
     { label: "Last error", value: plannerRuntime?.lastError ?? "none" },
   ];
 }
