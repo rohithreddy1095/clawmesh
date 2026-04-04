@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "@/lib/utils";
+import { formatDeviceIdShort } from "@/lib/device-id";
 import { Cpu, Server, Sprout, Network, Activity } from "lucide-react";
 
 export type MeshNodeType = "planner" | "brain" | "field" | "sensor";
@@ -64,8 +65,11 @@ export const MeshNode = memo(({ data, selected }: NodeProps<MeshNodeData>) => {
                     </div>
                     <div>
                         <div className="leading-tight font-semibold text-foreground">{data.label}</div>
-                        <div className="font-mono text-[10px] tracking-[0.2em] text-foreground/45">
-                            {data.deviceId}
+                        <div
+                            className="font-mono text-[10px] tracking-[0.2em] text-foreground/45"
+                            title={data.deviceId}
+                        >
+                            {formatDeviceIdShort(data.deviceId)}
                         </div>
                     </div>
                 </div>
