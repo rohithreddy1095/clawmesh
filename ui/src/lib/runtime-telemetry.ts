@@ -1,4 +1,10 @@
-import type { ContextFrame, MeshRuntimeEvent, MeshRuntimeHealth, MeshRuntimeStatus } from "./store";
+import type {
+  ContextFrame,
+  MeshRuntimeEvent,
+  MeshRuntimeHealth,
+  MeshRuntimeStatus,
+  PlannerRuntimeSnapshot,
+} from "./store";
 
 export type RuntimeTimelineEntry = {
   id: string;
@@ -9,7 +15,7 @@ export type RuntimeTimelineEntry = {
 };
 
 export type PlannerRuntimeSummary = {
-  stage: "idle" | "queued" | "thinking" | "error";
+  stage: "idle" | "queued" | "thinking" | "tool" | "error" | "observing" | "suspended";
   stageLabel: string;
   conversationId?: string;
   lastIntent?: string;
@@ -20,6 +26,7 @@ export type PlannerRuntimeSummary = {
 export function derivePlannerRuntimeSummary(
   frames: ContextFrame[],
   now = Date.now(),
+  plannerRuntime?: PlannerRuntimeSnapshot | null,
 ): PlannerRuntimeSummary {
   const latestAgentResponse = latestFrameOfKind(frames, "agent_response");
   const latestHumanInput = latestFrameOfKind(frames, "human_input");
@@ -28,24 +35,32 @@ export function derivePlannerRuntimeSummary(
     .filter((frame): frame is ContextFrame => !!frame)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
 
+  if (plannerRuntime) {
+    const stage = normalizePlannerStage(plannerRuntime.stage);
+    return {
+      stage,
+      stageLabel: formatPlannerStageLabel(stage),
+      conversationId:
+        plannerRuntime.activeConversationId ||
+        (latestAgentResponse?.data?.conversationId as string | undefined),
+      lastIntent: plannerRuntime.lastIntent || (latestHumanInput?.data?.intent as string | undefined),
+      lastAgentMessage:
+        (latestAgentResponse?.data?.message as string | undefined) ||
+        (latestInference?.data?.reasoning as string | undefined),
+      lastUpdatedLabel: plannerRuntime.updatedAtMs
+        ? formatRelativeTime(now - plannerRuntime.updatedAtMs)
+        : latestRelevant
+          ? formatRelativeTime(now - latestRelevant.timestamp)
+          : "No recent activity",
+    };
+  }
+
   const status = String(latestAgentResponse?.data?.status ?? "");
-  const stage = status === "queued"
-    ? "queued"
-    : status === "thinking"
-      ? "thinking"
-      : status === "error"
-        ? "error"
-        : "idle";
+  const stage = normalizePlannerStage(status);
 
   return {
     stage,
-    stageLabel: stage === "queued"
-      ? "Queued"
-      : stage === "thinking"
-        ? "Thinking"
-        : stage === "error"
-          ? "Error"
-          : "Idle",
+    stageLabel: formatPlannerStageLabel(stage),
     conversationId: latestAgentResponse?.data?.conversationId as string | undefined,
     lastIntent: latestHumanInput?.data?.intent as string | undefined,
     lastAgentMessage:
@@ -104,10 +119,58 @@ export function describePlannerSurface(
   ];
 }
 
+export function describePlannerTrace(
+  runtimeHealth: MeshRuntimeHealth | null,
+  runtimeStatus: MeshRuntimeStatus | null,
+): Array<{ label: string; value: string }> {
+  const plannerRuntime = runtimeStatus?.plannerRuntime ?? runtimeHealth?.plannerRuntime;
+  return [
+    { label: "Runtime stage", value: plannerRuntime ? formatPlannerStageLabel(normalizePlannerStage(plannerRuntime.stage)) : "idle" },
+    { label: "Queue depth", value: String(plannerRuntime?.queueDepth ?? 0) },
+    { label: "Active trigger", value: plannerRuntime?.activeReason ?? plannerRuntime?.activeTriggerType ?? "none" },
+    { label: "Active tool", value: plannerRuntime?.activeToolName ?? plannerRuntime?.lastToolName ?? "none" },
+    { label: "Last error", value: plannerRuntime?.lastError ?? "none" },
+  ];
+}
+
+export function buildPlannerQueueMix(plannerRuntime?: PlannerRuntimeSnapshot | null): Array<{ key: string; label: string; count: number; tone: string }> {
+  return [
+    { key: "operatorIntent", label: "Operator", count: plannerRuntime?.queue.operatorIntent ?? 0, tone: "bg-claw-accent" },
+    { key: "thresholdBreach", label: "Threshold", count: plannerRuntime?.queue.thresholdBreach ?? 0, tone: "bg-mesh-info" },
+    { key: "proactiveCheck", label: "Proactive", count: plannerRuntime?.queue.proactiveCheck ?? 0, tone: "bg-white/55" },
+  ];
+}
+
 function latestFrameOfKind(frames: ContextFrame[], kind: ContextFrame["kind"]): ContextFrame | undefined {
   return [...frames]
     .filter((frame) => frame.kind === kind)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
+}
+
+function normalizePlannerStage(stage: string | undefined): PlannerRuntimeSummary["stage"] {
+  if (stage === "queued" || stage === "thinking" || stage === "tool" || stage === "error" || stage === "observing" || stage === "suspended") {
+    return stage;
+  }
+  return "idle";
+}
+
+function formatPlannerStageLabel(stage: PlannerRuntimeSummary["stage"]): string {
+  switch (stage) {
+    case "queued":
+      return "Queued";
+    case "thinking":
+      return "Thinking";
+    case "tool":
+      return "Tool";
+    case "error":
+      return "Error";
+    case "observing":
+      return "Observing";
+    case "suspended":
+      return "Suspended";
+    default:
+      return "Idle";
+  }
 }
 
 function timelineTitle(frame: ContextFrame): string {

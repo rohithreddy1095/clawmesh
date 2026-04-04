@@ -90,6 +90,27 @@ export type RuntimePendingProposal = {
     plannerOwner?: string;
 };
 
+export type PlannerRuntimeSnapshot = {
+    mode: string;
+    stage: string;
+    running: boolean;
+    queueDepth: number;
+    queue: {
+        operatorIntent: number;
+        thresholdBreach: number;
+        proactiveCheck: number;
+    };
+    activeTriggerType?: string;
+    activeReason?: string;
+    activeConversationId?: string;
+    activeRequestId?: string;
+    activeToolName?: string;
+    lastToolName?: string;
+    lastIntent?: string;
+    lastError?: string;
+    updatedAtMs: number;
+};
+
 export type MeshRuntimeStatus = {
     localDeviceId: string;
     connectedPeers: number;
@@ -104,6 +125,7 @@ export type MeshRuntimeStatus = {
     plannerActivity?: PlannerActivitySummary;
     plannerMode?: string;
     plannerModelSpec?: string;
+    plannerRuntime?: PlannerRuntimeSnapshot;
     discoveryEnabled?: boolean;
     configuredStaticPeers?: RuntimeStaticPeer[];
     pendingProposals?: RuntimePendingProposal[];
@@ -139,6 +161,7 @@ export type MeshRuntimeHealth = {
     plannerModelSpec?: string;
     plannerLeader?: PlannerLeaderSummary;
     plannerActivity?: PlannerActivitySummary;
+    plannerRuntime?: PlannerRuntimeSnapshot;
     discoveryEnabled?: boolean;
     configuredStaticPeers?: RuntimeStaticPeer[];
     memoryUsageMB?: number;

@@ -39,6 +39,13 @@ export type TriggerEntry = {
   dedupKey?: string;
 };
 
+export type TriggerQueueStats = {
+  total: number;
+  operatorIntent: number;
+  thresholdBreach: number;
+  proactiveCheck: number;
+};
+
 // ─── Queue ──────────────────────────────────────────────────
 
 export class TriggerQueue {
@@ -178,6 +185,15 @@ export class TriggerQueue {
   /** Whether the queue is empty. */
   get isEmpty(): boolean {
     return this.queue.length === 0;
+  }
+
+  getStats(): TriggerQueueStats {
+    return {
+      total: this.queue.length,
+      operatorIntent: this.queue.filter((entry) => entry.type === "operator_intent").length,
+      thresholdBreach: this.queue.filter((entry) => entry.type === "threshold_breach").length,
+      proactiveCheck: this.queue.filter((entry) => entry.type === "proactive_check").length,
+    };
   }
 
   /** Clear all pending triggers. */

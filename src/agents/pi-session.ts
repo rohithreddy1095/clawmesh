@@ -26,6 +26,7 @@ import {
 } from "./extensions/clawmesh-mesh-extension.js";
 import { PatternMemory } from "./pattern-memory.js";
 import { TriggerQueue, type TriggerEntry } from "./trigger-queue.js";
+import { PlannerRuntimeState } from "./planner-runtime-state.js";
 import { ModeController } from "./mode-controller.js";
 import { ProposalManager } from "./proposal-manager.js";
 import { ingestFrame, extractPatterns, isPatternFrame } from "./frame-ingestor.js";
@@ -99,6 +100,7 @@ export class PiSession {
   readonly patternMemory: PatternMemory;
   private readonly proposalManager: ProposalManager;
   private readonly modeCtrl: ModeController;
+  private readonly plannerRuntime = new PlannerRuntimeState();
 
   private session!: AgentSession;
   private readonly triggerQueue = new TriggerQueue();
@@ -131,6 +133,7 @@ export class PiSession {
       errorThreshold: opts.errorThreshold,
       observingCooldownMs: opts.observingCooldownMs,
       onModeChange: (mode, reason) => {
+        this.plannerRuntime.updateMode(mode);
         if (mode === "observing") this.scheduleProbe();
         if (mode === "suspended") this.clearProbeTimer();
         opts.onModeChange?.(mode, reason);
@@ -320,6 +323,8 @@ export class PiSession {
       const cleanup = this.plannerActivityListeners.pop();
       cleanup?.();
     }
+    this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
+    this.plannerRuntime.finishCycle();
     if (this.initialized) {
       void this.session.abort();
     }
@@ -333,6 +338,8 @@ export class PiSession {
     if (!this.modeCtrl.canMakeLLMCalls()) {
       this.log.warn(`[pi-session] Operator intent received but mode is '${this.modeCtrl.mode}'. Queuing — use 'resume' to re-enable LLM calls.`);
       this.triggerQueue.enqueueIntent(text, { conversationId, requestId });
+      this.plannerRuntime.noteQueuedIntent(text);
+      this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
       return;
     }
 
@@ -348,6 +355,8 @@ export class PiSession {
     }
 
     this.triggerQueue.enqueueIntent(text, { conversationId, requestId });
+    this.plannerRuntime.noteQueuedIntent(text);
+    this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
     void this.runCycle();
   }
 
@@ -390,6 +399,10 @@ export class PiSession {
 
   getSession(): AgentSession {
     return this.session;
+  }
+
+  getPlannerRuntime() {
+    return this.plannerRuntime.getSnapshot();
   }
 
   /**
@@ -441,6 +454,7 @@ export class PiSession {
         this.extensionState.recentTriggerFrameIds = this.extensionState.recentTriggerFrameIds.slice(-10);
       }
     }
+    this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
     if (!this.triggerQueue.isEmpty) {
       void this.runCycle();
     }
@@ -460,6 +474,7 @@ export class PiSession {
     const recentFrames = this.runtime.worldModel.getRecentFrames(5);
     if (recentFrames.length === 0) return;
     this.triggerQueue.enqueueProactiveCheck(recentFrames);
+    this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
     void this.runCycle();
   }
 
@@ -485,12 +500,15 @@ export class PiSession {
     }
 
     this.running = true;
+    let cycleFailed = false;
 
     try {
       // Drain all triggers from the priority queue (sorted by priority)
       const { operatorIntents, systemTriggers } = this.triggerQueue.drain();
+      this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
       if (operatorIntents.length === 0 && systemTriggers.length === 0) return;
 
+      const activeTrigger = operatorIntents[0] ?? systemTriggers[0];
       let prompt: string;
       let activeConversationId: string | undefined;
       let activeRequestId: string | undefined;
@@ -528,6 +546,9 @@ export class PiSession {
       } else {
         prompt = buildPlannerPrompt(systemTriggers);
       }
+
+      this.plannerRuntime.startCycle(activeTrigger);
+      this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
 
       const toolsNow = this.session.getActiveToolNames();
       const msgCount = this.session.state.messages.length;
@@ -583,7 +604,9 @@ export class PiSession {
           }
         } else {
           // Empty content — likely rate limit or silent error
+          cycleFailed = true;
           this.modeCtrl.recordFailure("LLM returned no content (possible rate limit)", false);
+          this.plannerRuntime.markError("LLM returned no content (possible rate limit)");
           if (activeConversationId) {
             this.broadcastAgentResponse({
               conversationId: activeConversationId,
@@ -594,7 +617,9 @@ export class PiSession {
           }
         }
       } catch (promptErr) {
+        cycleFailed = true;
         this.modeCtrl.recordFailure(`prompt failed: ${promptErr}`, isPermanentLLMError(promptErr));
+        this.plannerRuntime.markError(`prompt failed: ${String(promptErr)}`);
         if (activeConversationId) {
           this.broadcastAgentResponse({
             conversationId: activeConversationId,
@@ -606,9 +631,15 @@ export class PiSession {
       }
 
     } catch (err) {
+      cycleFailed = true;
+      this.plannerRuntime.markError(`cycle error: ${String(err)}`);
       this.log.error(`pi-session: cycle error: ${err}`);
     } finally {
       this.running = false;
+      this.plannerRuntime.updateQueue(this.triggerQueue.getStats());
+      if (!cycleFailed) {
+        this.plannerRuntime.finishCycle();
+      }
       // Only drain queue if still active
       if (this.modeCtrl.canMakeLLMCalls() && !this.triggerQueue.isEmpty && !this.stopped) {
         setTimeout(() => void this.runCycle(), 2000);
@@ -623,9 +654,11 @@ export class PiSession {
       case "skip":
         return;
       case "message_start":
+        this.plannerRuntime.markThinking();
         this.log.info(`pi-session: LLM responding (model=${classified.model})`);
         break;
       case "message_error":
+        this.plannerRuntime.markError(`message error: ${classified.error}`);
         this.log.error(`pi-session: message error: ${classified.error}`);
         break;
       case "assistant_text":
@@ -636,12 +669,15 @@ export class PiSession {
         });
         break;
       case "tool_calls":
+        this.plannerRuntime.markThinking();
         this.log.info(`pi-session: tool calls: ${classified.names.join(", ")}`);
         break;
       case "tool_start":
+        this.plannerRuntime.markToolStart(classified.name);
         this.log.info(`pi-session: tool ${classified.name}(${classified.args})`);
         break;
       case "tool_error":
+        this.plannerRuntime.markToolError(classified.name);
         this.log.warn(`pi-session: tool ${classified.name} error`);
         break;
       case "auto_retry":
