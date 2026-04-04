@@ -9,6 +9,7 @@ import {
   buildDefaultCapabilities,
   resolveRuntimeRole,
   normalizeMeshName,
+  resolveDiscoveryEnabledOption,
   formatDiscoveryMode,
   formatStaticPeerSummary,
 } from "./cli-config.js";
@@ -256,6 +257,20 @@ describe("normalizeMeshName", () => {
 
   it("returns undefined for blank names", () => {
     expect(normalizeMeshName("   ")).toBeUndefined();
+  });
+});
+
+describe("resolveDiscoveryEnabledOption", () => {
+  it("uses Commander-style discovery=false when --no-discovery is passed", () => {
+    expect(resolveDiscoveryEnabledOption({ discovery: false })).toBe(false);
+  });
+
+  it("supports the legacy noDiscovery-shaped option for callers", () => {
+    expect(resolveDiscoveryEnabledOption({ noDiscovery: true })).toBe(false);
+  });
+
+  it("defaults to discovery enabled", () => {
+    expect(resolveDiscoveryEnabledOption({})).toBe(true);
   });
 });
 
