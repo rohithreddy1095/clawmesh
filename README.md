@@ -324,7 +324,6 @@ This backend is not an arbitrary pile of technologies. Each major piece exists b
 
 - Node.js
 - `pnpm`
-- a sibling checkout of `../pi-mono` for the current local `file:` dependencies in this repo
 
 Optional but commonly needed:
 
@@ -705,7 +704,7 @@ Important current realities:
 - WAN/static deployment support includes transport labeling, posture reporting, and enforcement for WAN-style links
 - the browser UI is tied to real runtime surfaces rather than mock cards
 - the package is **not yet published to npm**
-- the current checkout still expects local `file:` dependencies from a sibling `../pi-mono`
+- the repo now uses published Pi SDK package versions instead of sibling workspace `file:` links
 
 So today this repo is best treated as:
 
