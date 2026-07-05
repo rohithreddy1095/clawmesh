@@ -260,3 +260,45 @@ claimed composition from "local LLM evidence cannot actuate" to
 Full spec-level detail, slice order, acceptance criteria, and the
 operational traps from today's deployment:
 `docs/HANDOFF-2026-07-05-inference-phase.md` (committable; no credentials).
+
+## 2026-07-05 — Phase 3 direction sketch: boot-to-mesh (the appliance phase)
+
+**Decision (direction, not yet implementation-ready):** after Phase 2
+lands, Phase 3 turns a ClawMesh node from an engineer-started process into
+an appliance — "switch it on and it is a node," the Bluetooth experience.
+Four pillars, sequenced after Phase 2 because discovery (Slice 1) and
+capability serving (Slice 3) are its preconditions:
+
+1. **Daemonization / boot-to-mesh.** Node identity + role + mesh
+   membership + served capabilities move from CLI flags into a persisted
+   node config (`~/.clawmesh/node.json`). Service units own the lifecycle:
+   systemd on the Jetson, launchd on the Mac. Power-on = config load =
+   discovery = join. Crash = restart = rejoin (context.sync already
+   bounds the catch-up).
+2. **Known-meshes store (plural).** Today one `mesh-id` file persists one
+   mesh. Bluetooth remembers every paired device; ClawMesh must remember
+   every joined mesh — per-mesh: mesh id, display name, trust set, join
+   policy (auto-join / ask / never). On boot the node joins whichever
+   known mesh is audible on the network it woke up on.
+3. **Pairing ceremony.** Replace manual two-sided `trust add <deviceId>`
+   with an explicit pairing mode: both devices enter a short pairing
+   window, exchange identity keys over the LAN, and each side displays a
+   short authentication string derived from both public keys; a human
+   confirms match on both ends before trust is persisted.
+   **Conception note (invention log):** the pairing ceremony is what keeps
+   "self-forming" compatible with "trust-gated actuation" — discovery may
+   see anyone, but dialing/joining requires prior ceremony, and the trust
+   tier of a peer is bound at pairing time. Unpaired peers are never
+   dialed, only logged. This is part of the claimed composition (explicit
+   pairing gating a self-forming actuation-capable mesh), not generic UX.
+4. **Local RPC auth.** The node port currently answers unauthenticated
+   RPCs (`mesh.status`, `chat.subscribe`, …). Acceptable on a dev desk;
+   not for an appliance that auto-joins whatever WiFi it wakes up on.
+   Operator/UI RPCs get an explicit local credential (token file readable
+   only by the operating user; no silent loopback exemption). This
+   changes the threat model write-up in PROTOCOL.md.
+
+A full Phase 3 handoff (decisions pre-made, slice order, acceptance
+criteria) gets written at Phase 2 completion, same discipline as
+`docs/HANDOFF-2026-07-05-inference-phase.md`. Long-running agent work in
+the meantime is governed by `docs/OVERSIGHT.md` (added today).
