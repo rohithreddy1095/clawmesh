@@ -600,3 +600,96 @@ handoff still lists it as the final optional slice.
 `scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
 state dir or localhost node processes remain. A pre-existing Mac command
 center process for the `bhoomi` mesh was observed and left untouched.
+
+## 2026-07-05 — Phase 2 Slice 4: N=3 measurement pass
+
+**What changed:** no production code changed in this slice. This was a
+measurement/logging slice using the committed live harness from earlier
+slices.
+
+**Topology measured:** localhost N=3 chain, `local-node1` (mock sensor +
+actuator) → `local-node2` → `local-node3`; node3 had no direct node1 link.
+Fresh identities for the successful run:
+- node1 `0e55b9789dcfe64140005a522afcb483d033d584e81c74c9e1d39f562529170c`
+- node2 `8b4695d90f14fd86a60a508e920c5fc03978d92e1395184a6b71123a7e4e4f5a`
+- node3 `fd2804a6d7b590c99d8e9e395edeb526b6b87e535a10f8fe7e44d37a96f95e2a`
+
+**Measurements and verification:**
+- `scripts/local-mesh.sh up 3` reported the expected chain:
+  node1 peers `local-node2`; node2 peers `local-node1,local-node3`;
+  node3 peers `local-node2`.
+- 2-hop delivery:
+  `node scripts/frame-listen.mjs ws://127.0.0.1:19003 12 <node1-id>`
+  observed 3 node1 observation frames at node3, all
+  `T2_operational_observation`; same-host delta mean 2 ms, p50 2 ms,
+  min 2 ms, max 3 ms.
+- Pre-partition world state:
+  `node scripts/mesh-rpc.mjs ws://127.0.0.1:19003 mesh.world.query '{"limit":8}'`
+  returned `BEFORE_SYNC count=5 entries=1 recent=5`.
+- Partition/rejoin/context.sync:
+  killed node3 (`pid=14324` in the successful run), waited 13 s while node1
+  continued producing frames, restarted node3 with the same identity and
+  static peer to node2, waited 10 s, then queried node3.
+  `mesh.peers` showed node3 reconnected to node2. `mesh.world.query
+  '{"limit":12}'` returned `SYNC_RESULT count=10 entries=1 recent=10
+  fromNode1=10 sincePartition=5`, proving context.sync converged missed
+  node1 frames through node2 after rejoin.
+- Safety canary:
+  used a dedicated canary-client identity trusted by node1, with
+  `MESH_NAME=localmesh`.
+  `scripts/safety-canary.sh ws://127.0.0.1:19001 <node1-id>` ran all shots:
+  A rejected `ACTUATION_DECLARATION_REQUIRED`, B rejected
+  `LLM_ONLY_ACTUATION_BLOCKED`, C executed. CANARY GREEN.
+- Test gate carried forward from the immediately preceding Slice 3 commit:
+  `pnpm exec vitest run src/mesh/ src/agents/` → 136 files / 2102 tests
+  passed; `pnpm exec vitest run src/cli/` → 7 files / 124 tests passed;
+  `pnpm exec tsc --noEmit` passed. No code changed after those gates except
+  this log entry.
+- Cleanup:
+  `scripts/local-mesh.sh clean` completed and removed
+  `/tmp/clawmesh-local-mesh`.
+
+**Hardware acceptance:** UNCHECKED. The handoff's preferred N=3 real-LAN
+topology (`node3 ↔ mac-cc ↔ Jetson`) could not be run because the Jetson
+remained unreachable and its host key could not be verified. Evidence from
+Slice 3 still applies on this network: SSH to `192.168.1.50` and
+`192.168.1.36` failed with `No route to host`, and `ssh-keyscan` returned no
+ed25519 key to compare with the required
+`SHA256:fTE7beVBYROu6KGfslsVbA2bZ91FPAeJeE+aPtO7j78` fingerprint.
+
+**Next:** Slice 5 — typecheck debt. Note: `pnpm exec tsc --noEmit` already
+passes after Slice 3's type cleanups, so Slice 5 may be a confirmation/logging
+slice unless new debt appears.
+
+### REVIEW 2026-07-05
+
+| Slice | Status | Commit range | Tag |
+|---|---|---|---|
+| 1 — mDNS discovery repair | done | `20b4b01` | `slice-1-done-20260705` |
+| 2 — CLI truth | done | `20b4b01..slice-2-done-20260705` | `slice-2-done-20260705` |
+| 3 — LLM capability + streaming inference | done | `slice-2-done-20260705..slice-3-done-20260705` | `slice-3-done-20260705` |
+| 4 — N=3 measurements | done | `slice-3-done-20260705..slice-4-done-20260705` | `slice-4-done-20260705` |
+| 5 — typecheck debt | untouched | — | — |
+
+**Acceptance evidence:** Slice 4 local N=3 evidence is listed above:
+2-hop frame delivery observed, partition/rejoin context.sync convergence
+observed, and full canary green. Hardware N=3 remains explicitly unchecked
+because the Jetson could not be reached or host-key verified. Earlier slices'
+evidence is in their dated entries.
+
+**Canary status:** last run 2026-07-05 against localhost node1
+`ws://127.0.0.1:19001` with a dedicated canary identity in the `localmesh`
+named mesh; CANARY GREEN for A, B, and C.
+
+**Deviations & objections:** no design objections logged. The real-LAN N=3
+measurement is unverified, not claimed; localhost N=3 is the verified
+protocol evidence for this slice.
+
+**Open threads:** Slice 5 typecheck confirmation remains. Jetson reachability
+is still the blocker for hardware LLM and real-LAN N=3 evidence.
+
+**Repo state:** expected after this entry is committed and tagged: branch
+`main`, local-only, ahead of `origin/main`, nothing pushed to GitHub.
+`scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
+state dir or localhost node processes remain. The pre-existing Mac command
+center process for the `bhoomi` mesh was left untouched.
