@@ -752,3 +752,63 @@ prepared from the completed Phase 2 state.
 `scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
 state dir or localhost node processes remain. The pre-existing Mac command
 center process for the `bhoomi` mesh was left untouched.
+
+## 2026-07-05 — REVIEW (Tier 2/3): Phase 2 accepted after hardware pass; two defects found and fixed
+
+Reviewed the implementation agent's Phase 2 run (slices 1–5, commits
+20b4b01..1174a6b) per docs/OVERSIGHT.md, then closed the hardware
+checklist the agent could not reach (its sandbox had no LAN route; the
+Jetson was fine from the Mac).
+
+**Review verdict on the agent's work: good.** Sacred trust files
+untouched; all suites reproduced green (143 files / 2233 tests after
+review changes; tsc clean); PROTOCOL.md covers every new wire symbol
+(llm.* family, mesh.world.query, discovery TXT); provenance helper +
+the three required tests present; llm-infer handler enforces the
+prescribed limits (120 s timeout, 8 KiB chunks, 1 MiB bufferedAmount
+abort, concurrency 1). Honest reporting: hardware items left explicitly
+unchecked, nothing pushed.
+
+**Hardware verification (all now closed):**
+- Discovery: mesh formed on real LAN with ZERO --peer flags, both sides.
+- Canary GREEN 3/3 (A/B/C incl. positive T3+human actuation).
+- Cross-hardware llm.infer: Mac streamed a completion from a
+  Jetson-served model over WiFi (scripts/llm-serve-test.ts, new harness
+  tool — deterministic provider; real-model/nanochat serving still open).
+- Handshake regression: p50 20.3 ms vs 22.3 ms baseline — no regression.
+
+**Defect 1 (found by hardware run; invisible to localhost harness which
+uses --no-discovery): bidirectional dial fight.** With browse fixed on
+BOTH nodes for the first time, each side dialed the other; device-keyed
+newest-wins registration displaced the opposite connection, the closed
+socket's client reconnected, and the link churned (28+ handshakes in
+minutes, zero disconnect logs — displacement pre-empts the unregister
+path). Fix (normative, PROTOCOL.md §4): only the LOWER deviceId dials a
+discovered peer; the higher side stands its outbound client down once
+the designated dialer's inbound lands. A stricter registry-level
+rejection of crossing connections was tried first and REVERTED the same
+evening: the canary caught it locking out same-identity ephemeral tools
+(demo-actuate, benches). Registry stays newest-wins with
+displaced-socket close; regression test pins the tooling behavior.
+Post-fix soak: 1 stable session, 2 connect events / 10 min.
+
+**Defect 2: canary shot C flake.** demo-actuate's ephemeral runtime ran
+discovery; ciao's prober raced the short-lived shutdown and crashed the
+process intermittently. Plus a macOS bash-3.2 empty-array/set -u bug in
+the agent's canary edit made shot C fail before dialing. Both fixed;
+canary GREEN 3/3 on hardware.
+
+**Conception note (invention log):** the dial tie-break (lower deviceId
+initiates; higher yields to the designated dialer's inbound connection)
+is now part of the self-forming design: deterministic single-link
+convergence between mutually-discovering trusted peers, without
+timestamps or extra wire messages.
+
+**Still open after this review:** N=3 on real hardware (localhost N=3
+done by agent: 2-hop delivery, partition/rejoin converged); real-model
+(nanochat) serving on the Jetson; Rohith's items (GitHub push decision,
+Jetson password rotation, Gemini key).
+
+Phase 2 definition-of-done: met, with the two real-model/N=3-hardware
+residuals noted above. Tree at 13209a2, tagged
+checkpoint-20260705-phase2-reviewed. Jetson synced to same commit.
