@@ -123,6 +123,25 @@ export class MeshPeerClient {
     }
   }
 
+  /**
+   * Tear down a connection believed dead (e.g. stale-detected) and let the
+   * normal close path unregister + schedule a reconnect. Unlike stop(),
+   * the client stays alive and will re-handshake.
+   */
+  forceReconnect() {
+    if (this.closed) {
+      return;
+    }
+    if (this.ws) {
+      // terminate(): the socket is presumed dead, so don't wait for a
+      // close handshake that may never complete. The close event then
+      // unregisters the session and schedules the reconnect.
+      this.ws.terminate();
+    }
+    // ws === null means the close path already ran and a reconnect timer
+    // is pending — scheduling another would stack timers.
+  }
+
   /** Step 1: ask the server for a single-use challenge nonce. */
   private sendMeshChallenge() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {

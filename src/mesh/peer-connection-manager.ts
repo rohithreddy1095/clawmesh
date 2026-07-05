@@ -53,6 +53,9 @@ export class PeerConnectionManager {
     staleThresholdMs: 90_000, // 90 seconds without activity = stale
     onStaleDetected: (deviceId) => {
       this.deps.log.warn(`mesh: stale connection detected for ${deviceId.slice(0, 12)}…`);
+      // A stale connection is presumed dead: tear it down so the client's
+      // reconnect path re-handshakes instead of leaving a zombie session.
+      this.clients.get(deviceId)?.forceReconnect();
     },
   });
 

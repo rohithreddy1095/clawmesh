@@ -22,6 +22,7 @@ vi.mock("./peer-client.js", () => {
 
     start() {}
     stop() {}
+    forceReconnect = vi.fn();
 
     __simulateConnected(session?: any) {
       this.opts.onConnected?.(
@@ -115,6 +116,20 @@ describe("PeerConnectionManager", () => {
     expect(manager.has("peer-1")).toBe(true);
     expect(manager.size).toBe(1);
     manager.stopAll(); // cleanup
+  });
+
+  it("stale detection forces the outbound client to reconnect", () => {
+    // Observed on first real deployment (2026-07-05): a silently-dead
+    // connection was flagged stale but never torn down, leaving a zombie
+    // peer that stopped receiving frames until process restart.
+    manager.connectToPeer({ deviceId: "peer-1", url: "ws://127.0.0.1:19999" });
+    const client = peerClientInstances[0];
+    client.__simulateConnected();
+
+    manager.connectionHealth.checkAll(Date.now() + 120_000);
+
+    expect(client.forceReconnect).toHaveBeenCalled();
+    manager.stopAll();
   });
 
   it("connectToPeer is idempotent", () => {

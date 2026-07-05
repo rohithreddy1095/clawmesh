@@ -20,10 +20,19 @@ export class PeerRegistry {
   private pendingRpc = new Map<string, PendingRpc>();
 
   register(session: PeerSession): void {
-    // If a peer reconnects, close the old session first.
+    // If a peer reconnects, close the old session first. The displaced
+    // socket must actually be closed — leaving it open strands the far
+    // side on a connection we will never send to again.
     const existing = this.peersById.get(session.deviceId);
     if (existing) {
       this.unregister(existing.connId);
+      if (existing.connId !== session.connId) {
+        try {
+          existing.socket.close(1000, "superseded by newer connection from same device");
+        } catch {
+          // already closing/closed — registry cleanup above is what matters
+        }
+      }
     }
     this.peersById.set(session.deviceId, session);
     this.peersByConn.set(session.connId, session.deviceId);

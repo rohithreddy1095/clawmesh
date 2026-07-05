@@ -59,6 +59,21 @@ describe("PeerRegistry", () => {
       expect(registry.getByConnId("conn-old")).toBeUndefined();
       expect(registry.getByConnId("conn-new")).toBe(newSession);
     });
+
+    it("closes the displaced session's socket so it cannot linger half-open", () => {
+      // Observed on first real deployment (2026-07-05): a second connection
+      // from the same deviceId displaced the registry entry but the old
+      // socket stayed open — the far side kept a zombie connection and
+      // never received frames again.
+      const oldMock = createMockSocket();
+      const { session: oldSession } = createSession({ connId: "conn-old", socket: oldMock.socket });
+      registry.register(oldSession);
+
+      const { session: newSession } = createSession({ connId: "conn-new" });
+      registry.register(newSession);
+
+      expect(oldMock.close).toHaveBeenCalled();
+    });
   });
 
   describe("unregister()", () => {
