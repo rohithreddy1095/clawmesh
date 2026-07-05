@@ -154,3 +154,82 @@ verification checklist (incl. live-firing the actuation gate over real
 hardware and cheap first measurements): `docs/HANDOFF-2026-07-05-deploy.md`
 (gitignored — contains device credentials; delete after bootstrap).
 This will be the first real-LAN test of handshake v2.
+
+## 2026-07-05 — First real mesh booted: Mac + Jetson over LAN (Claude Code)
+
+**Milestone:** the mesh is live on real hardware. Mac (`mac-cc`, planner,
+192.168.1.41) ↔ Jetson (`jetson-field-01`, field node, 192.168.1.50,
+hostname `rohith-jetson`) over WiFi, mesh `bhoomi` (named mesh id via
+`--mesh-name`; both nodes' persisted random mesh ids had diverged, which
+correctly rejected the first connect).
+
+**Deployment notes (deviations from runbook):**
+- Jetson DHCP moved .39 → .50; identified by matching its ed25519 SSH host
+  key fingerprint against known_hosts. Handoff's `netson` hostname is wrong
+  and mDNS names don't resolve.
+- Synced via git push to the Jetson clone (branch `deploy-20260705`), not
+  rsync — tree was committed first, and git can't leak the gitignored
+  credential-bearing handoff file.
+- `clawmesh.mjs` is a shell wrapper: run `./clawmesh.mjs`, not
+  `npx tsx clawmesh.mjs` (handoff step 2/5 as written fails).
+- mDNS discovery is broken on BOTH nodes (`ciao: createServiceBrowser is
+  not a function`) — mesh formed via `--peer` static entry. Discovery needs
+  its own slice.
+- Trust exchange was already in place from March sessions.
+
+**Verification checklist: all green.**
+- Handshake v2 over real LAN: no AUTH_NONCE_* errors, mutual connect.
+- `mesh.peers`/`mesh.status` consistent on both sides (CLI `peers`/`world`
+  are placeholder stubs — checked via WS RPC; stubs violate "UI reflects
+  backend truth" in spirit and should be wired or removed).
+- Jetson mock-sensor frames ingest into Mac world model (59+ observed;
+  UI showed 185 frames cached).
+- `context.sync` fires on every connect (34/50 new frames on first syncs).
+- **Safety gate live-fired over the wire, receiver side:**
+  `action_type:"communication"` → `actuator:*` rejected
+  `ACTUATION_DECLARATION_REQUIRED`; LLM-only evidence rejected
+  `LLM_ONLY_ACTUATION_BLOCKED` (also rejected sender-side by demo-actuate
+  --llm-only); properly declared T3+human executed (valve-1 active, trust
+  metadata in actuator history). Executor-side `refusedCount` stayed 0 —
+  correct: the receiver protocol gate rejects first; the executor re-gate
+  is defense-in-depth, only reachable if the RPC layer is bypassed.
+- UI (Next.js, port auto-assigned) rendered live topology, events
+  (peer.connect/disconnect), world model counts, planner lane `observing`
+  (honest: no valid Gemini key on Mac — planner needs a key before it can
+  be exercised).
+
+**Measurements (2-node WiFi LAN, N=15–20):**
+- Handshake v2 3-message exchange: p50 22.3 ms, mean 34.5 ms
+  (challenge RTT p50 6.6 ms; sign+connect RTT p50 14.7 ms). TCP+WS setup
+  adds p50 17.1 ms before that.
+- `mesh.ping` RTT p50 8.0 ms → one-way transit ≈ 4 ms.
+- Frame propagation Jetson→Mac measured as `frame.timestamp` vs receipt:
+  mean −60 ms — cross-host clock offset (Jetson ~60–75 ms ahead) dominates;
+  true transit is bounded by ping. Cross-host one-way latency needs clock
+  sync or an echo protocol; don't publish the raw delta.
+- Partition/rejoin: field node down 2 min → reconnect within client
+  backoff (≤30 s) of return; `context.sync` recovered the gap (3 new,
+  12 dup). Bounded convergence behaves as documented.
+
+**Two wire-level bugs found by the deployment and fixed (Red/Green):**
+1. `PeerRegistry.register` displaced a same-device session without closing
+   its socket. Observed live: bench/demo connections using the Mac's
+   identity clobbered the real `mac-cc` session on the Jetson; the Mac kept
+   a half-open zombie connection and received nothing until restart.
+   Fix: registry closes the displaced socket (`1000 superseded`).
+2. Stale detection (`ConnectionHealthMonitor`) only logged despite its
+   docstring claiming auto-removal. Fix: `MeshPeerClient.forceReconnect()`
+   terminates the stale socket so the close path re-handshakes.
+   Note: same-identity concurrent connections remain newest-wins; if a
+   second operator surface ever needs to coexist, sessions need per-conn
+   identity, not per-device.
+Also: `refusedCount`/`lastRefusal` were in-process only; now exposed in
+the actuator state snapshot so the wire carries refusal telemetry.
+
+**Cross-host clock offset is real** (~60–380 ms observed): wall-clock
+frame timestamps are not comparable across nodes. Relevant to the gossip
+"no logical clocks" caveat — any convergence claim in the paper/spec must
+not assume comparable timestamps.
+
+**Next:** measurements at N>2 nodes; fix mDNS discovery; wire real
+`peers`/`world` CLI commands to a running node; inference-as-capability.
