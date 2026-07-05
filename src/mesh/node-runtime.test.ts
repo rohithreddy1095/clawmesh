@@ -372,22 +372,28 @@ describe("MeshNodeRuntime", () => {
       capabilities: ["channel:clawmesh"],
     });
 
-    if (!nodeA || !nodeB || !nodeA.runtime.discovery) return;
+    if (!nodeA || !nodeB) return;
+
+    // Dial tie-break: only the lower deviceId dials, so inject the
+    // discovery event on the designated dialer.
+    const [dialer, target] =
+      nodeA.identity.deviceId < nodeB.identity.deviceId ? [nodeA, nodeB] : [nodeB, nodeA];
+    if (!dialer.runtime.discovery) return;
 
     await harness.trust(nodeA, nodeB);
-    nodeA.runtime.discovery.emit("peer-discovered", {
-      deviceId: nodeB.identity.deviceId,
-      displayName: nodeB.runtime.displayName,
+    dialer.runtime.discovery.emit("peer-discovered", {
+      deviceId: target.identity.deviceId,
+      displayName: target.runtime.displayName,
       host: "127.0.0.1",
-      port: nodeB.address.port,
+      port: target.address.port,
       discoveredAtMs: Date.now(),
     });
 
-    const connected = await nodeA.runtime.waitForPeerConnected(nodeB.identity.deviceId, 2_000);
+    const connected = await dialer.runtime.waitForPeerConnected(target.identity.deviceId, 2_000);
     expect(connected).toBe(true);
 
-    const peerSeenByA = nodeA.runtime.listConnectedPeers().find((p) => p.deviceId === nodeB.identity.deviceId);
-    expect(peerSeenByA?.transportLabel).toBe("mdns");
+    const peerSeen = dialer.runtime.listConnectedPeers().find((p) => p.deviceId === target.identity.deviceId);
+    expect(peerSeen?.transportLabel).toBe("mdns");
   });
 
   it("does not dial untrusted discovered peers", async () => {
@@ -400,20 +406,26 @@ describe("MeshNodeRuntime", () => {
       capabilities: ["channel:clawmesh"],
     });
 
-    if (!nodeA || !nodeB || !nodeA.runtime.discovery) return;
+    if (!nodeA || !nodeB) return;
 
-    nodeA.runtime.discovery.emit("peer-discovered", {
-      deviceId: nodeB.identity.deviceId,
-      displayName: nodeB.runtime.displayName,
+    // Use the designated dialer (lower deviceId) so the skip is provably
+    // the trust gate, not the dial tie-break.
+    const [dialer, target] =
+      nodeA.identity.deviceId < nodeB.identity.deviceId ? [nodeA, nodeB] : [nodeB, nodeA];
+    if (!dialer.runtime.discovery) return;
+
+    dialer.runtime.discovery.emit("peer-discovered", {
+      deviceId: target.identity.deviceId,
+      displayName: target.runtime.displayName,
       host: "127.0.0.1",
-      port: nodeB.address.port,
+      port: target.address.port,
       discoveredAtMs: Date.now(),
     });
 
-    const connected = await nodeA.runtime.waitForPeerConnected(nodeB.identity.deviceId, 300);
+    const connected = await dialer.runtime.waitForPeerConnected(target.identity.deviceId, 300);
     expect(connected).toBe(false);
-    expect(nodeA.runtime.peerConnections.has(nodeB.identity.deviceId)).toBe(false);
-    expect(nodeA.runtime.autoConnect.getAttemptCount(nodeB.identity.deviceId)).toBe(0);
+    expect(dialer.runtime.peerConnections.has(target.identity.deviceId)).toBe(false);
+    expect(dialer.runtime.autoConnect.getAttemptCount(target.identity.deviceId)).toBe(0);
   });
 
   it("rebroadcasts remote context and proposal events to local UI subscribers", async () => {

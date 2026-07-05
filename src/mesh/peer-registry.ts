@@ -18,12 +18,46 @@ export class PeerRegistry {
   private peersById = new Map<string, PeerSession>();
   private peersByConn = new Map<string, string>();
   private pendingRpc = new Map<string, PendingRpc>();
+  private localDeviceId?: string;
+
+  /** Enables the crossing-connection tie-break; without it, newest wins. */
+  setLocalDeviceId(deviceId: string): void {
+    this.localDeviceId = deviceId;
+  }
+
+  /** The deviceId that initiated a session: us for outbound, them for inbound. */
+  private initiatorOf(session: PeerSession): string | undefined {
+    return session.outbound ? this.localDeviceId : session.deviceId;
+  }
 
   register(session: PeerSession): void {
-    // If a peer reconnects, close the old session first. The displaced
-    // socket must actually be closed — leaving it open strands the far
-    // side on a connection we will never send to again.
     const existing = this.peersById.get(session.deviceId);
+    if (existing && existing.connId !== session.connId && this.localDeviceId) {
+      // Crossing connections (both sides dialed each other): both
+      // registries must keep the SAME one or displacement ping-pongs
+      // forever. Winner: the connection initiated by the LOWER deviceId.
+      // Same initiator (a plain reconnect) falls through to newest-wins.
+      const existingInitiator = this.initiatorOf(existing);
+      const newInitiator = this.initiatorOf(session);
+      if (
+        existingInitiator !== undefined &&
+        newInitiator !== undefined &&
+        existingInitiator !== newInitiator &&
+        existingInitiator < newInitiator
+      ) {
+        // Existing session wins — reject the newcomer outright.
+        try {
+          session.socket.close(1000, "crossing connection lost dial tie-break");
+        } catch {
+          // already closing/closed
+        }
+        return;
+      }
+    }
+
+    // If a peer reconnects (or loses the tie-break above), close the old
+    // session. The displaced socket must actually be closed — leaving it
+    // open strands the far side on a connection we will never send to again.
     if (existing) {
       this.unregister(existing.connId);
       if (existing.connId !== session.connId) {

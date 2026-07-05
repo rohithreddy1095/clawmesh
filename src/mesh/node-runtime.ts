@@ -153,6 +153,8 @@ export class MeshNodeRuntime {
   constructor(opts: MeshNodeRuntimeOptions) {
     this.opts = opts;
     this.identity = opts.identity;
+    this.peerRegistry.setLocalDeviceId(opts.identity.deviceId);
+    this.autoConnect.setLocalDeviceId(opts.identity.deviceId);
     this.host = opts.host ?? "0.0.0.0";
     this.requestedPort = opts.port ?? 18789;
     this.displayName = opts.displayName;

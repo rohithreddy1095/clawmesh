@@ -118,6 +118,20 @@ describe("PeerConnectionManager", () => {
     manager.stopAll(); // cleanup
   });
 
+  it("stops its outbound client when the lower-id peer's inbound connection wins the dial tie-break", () => {
+    // local identity "mgr-test-device" > "aaa-peer": the peer is the
+    // designated dialer, so once its inbound connection lands, our own
+    // outbound client must stand down instead of reconnect-fighting.
+    manager.connectToPeer({ deviceId: "aaa-peer", url: "ws://127.0.0.1:19999" });
+    expect(manager.has("aaa-peer")).toBe(true);
+
+    deps.eventBus.emit("peer.connected", {
+      session: { ...makeSession("aaa-peer"), outbound: false },
+    });
+
+    expect(manager.has("aaa-peer")).toBe(false);
+  });
+
   it("stale detection forces the outbound client to reconnect", () => {
     // Observed on first real deployment (2026-07-05): a silently-dead
     // connection was flagged stale but never torn down, leaving a zombie

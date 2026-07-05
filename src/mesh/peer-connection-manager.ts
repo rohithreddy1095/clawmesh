@@ -67,6 +67,23 @@ export class PeerConnectionManager {
       this.connectionHealth.checkAll();
     }, 30_000);
     this.healthTimer.unref(); // Don't keep process alive
+
+    // Dial tie-break, client side: if the peer (lower deviceId) is the
+    // designated dialer and its inbound connection has landed, our own
+    // outbound client must stand down — otherwise its reconnect loop
+    // keeps fighting the winning connection.
+    this.deps.eventBus.on("peer.connected", ({ session }) => {
+      if (session.outbound) return;
+      if (this.deps.identity.deviceId <= session.deviceId) return;
+      const client = this.clients.get(session.deviceId);
+      if (client) {
+        client.stop();
+        this.clients.delete(session.deviceId);
+        this.deps.log.info(
+          `mesh: yielding outbound dial to inbound connection from ${session.deviceId.slice(0, 12)}… (tie-break)`,
+        );
+      }
+    });
   }
 
   /**

@@ -36,9 +36,15 @@ export class AutoConnectManager {
   private readonly attempts = new Map<string, number[]>(); // deviceId → timestamps
   private readonly connectedPeers = new Set<string>();
   private readonly deadPeers = new Set<string>();
+  private localDeviceId?: string;
 
   constructor(opts?: AutoConnectOptions) {
     this.maxAttemptsPerHour = opts?.maxAttemptsPerHour ?? 5;
+  }
+
+  /** Enables the dial tie-break: only the lower deviceId dials a discovered peer. */
+  setLocalDeviceId(deviceId: string): void {
+    this.localDeviceId = deviceId;
   }
 
   /**
@@ -79,6 +85,17 @@ export class AutoConnectManager {
     // Already connected
     if (this.connectedPeers.has(peer.deviceId)) {
       return { action: "skip", reason: "already connected" };
+    }
+
+    // Dial tie-break: when both sides discover each other, only the LOWER
+    // deviceId dials; the higher one waits for the inbound connection.
+    // Without this, crossing dials displace each other in the device-keyed
+    // registry and the link churns (observed on hardware 2026-07-05).
+    if (this.localDeviceId && this.localDeviceId > peer.deviceId) {
+      return {
+        action: "skip",
+        reason: "dial tie-break: lower-deviceId peer initiates; waiting for inbound",
+      };
     }
 
     // Suppressed because the peer was recently confirmed dead.

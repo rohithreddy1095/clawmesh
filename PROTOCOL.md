@@ -73,6 +73,16 @@ It is NOT a data plane. See §11 for explicit non-guarantees.
   the trust store (§3). Nodes MAY disable discovery entirely and use static
   peer configuration: `<deviceId>=<url>|<tlsFingerprint>|<transportLabel>`
   (fingerprint and label optional for local links; see §2 for WAN rules).
+- **Dial tie-break (normative):** when two nodes discover each other, only
+  the node with the lexicographically LOWER `deviceId` dials; the higher one
+  waits for the inbound connection. If crossing connections race anyway,
+  both registries MUST converge on the same survivor — the connection
+  initiated by the lower `deviceId` — closing the loser with code 1000.
+  A node whose outbound dial loses the tie-break MUST stand its dialer
+  down rather than reconnect. (Without this rule, device-keyed session
+  replacement makes crossing dials displace each other in a loop; observed
+  on hardware 2026-07-05.) The tie-break applies to discovery-initiated
+  dials only; statically configured peers always dial as configured.
 
 ## 5. Envelope
 

@@ -22,6 +22,30 @@ describe("AutoConnectManager", () => {
 
   // ─── Basic evaluation ──────────────────────
 
+  describe("dial tie-break (localDeviceId set)", () => {
+    // Only the LOWER deviceId dials a discovered peer; the higher one
+    // waits for the inbound connection. Prevents the bidirectional
+    // dial fight observed on hardware 2026-07-05 (registry displacement
+    // churn, 28+ handshakes in minutes).
+    it("dials when our deviceId is lower than the peer's", () => {
+      manager.setLocalDeviceId("aaaa");
+      const decision = manager.evaluate(makePeer({ deviceId: "ffff" }));
+      expect(decision.action).toBe("connect");
+    });
+
+    it("waits for inbound when our deviceId is higher than the peer's", () => {
+      manager.setLocalDeviceId("ffff");
+      const decision = manager.evaluate(makePeer({ deviceId: "aaaa" }));
+      expect(decision.action).toBe("skip");
+      expect((decision as { reason?: string }).reason).toMatch(/tie-break/);
+    });
+
+    it("applies no tie-break when localDeviceId is not set", () => {
+      const decision = manager.evaluate(makePeer({ deviceId: "aaaa" }));
+      expect(decision.action).toBe("connect");
+    });
+  });
+
   it("decides to connect for new discovered peer", () => {
     const decision = manager.evaluate(makePeer());
     expect(decision.action).toBe("connect");
