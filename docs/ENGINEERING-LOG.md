@@ -302,3 +302,24 @@ A full Phase 3 handoff (decisions pre-made, slice order, acceptance
 criteria) gets written at Phase 2 completion, same discipline as
 `docs/HANDOFF-2026-07-05-inference-phase.md`. Long-running agent work in
 the meantime is governed by `docs/OVERSIGHT.md` (added today).
+
+## 2026-07-05 — Live-mesh test harness committed (scripts/), first 2-hop delivery observed
+
+**Milestone:** the ad-hoc probes from the first deployment are now a
+committed harness so incremental agent sessions verify against a live
+mesh instead of rebuilding throwaway tooling: `scripts/mesh-rpc.mjs`
+(RPC probe), `scripts/frame-listen.mjs` (event-stream frame listener),
+`scripts/handshake-bench.ts` (v2 timing, baseline p50 22.3 ms),
+`scripts/safety-canary.sh` (the three-shot actuation-gate invariant;
+exits nonzero on any wrong answer), `scripts/local-mesh.sh` (N-node
+localhost chain mesh with isolated `CLAWMESH_STATE_DIR` identities and
+pre-exchanged trust — protocol verification without hardware).
+Usage: `scripts/README.md`. Oversight checklist now calls these scripts.
+
+**Validated today:** canary GREEN against the live Jetson (all three
+shots). Localhost chain `up 3`: correct chain topology in `mesh.peers`,
+canary A/B green on node1, and — a first for this codebase — **2-hop
+gossip delivery observed**: node1 observation frames (T2) arrived at
+node3, which has no direct node1 link, via node2 (same-host delta ~2 ms,
+3/3 frames). Hop-limit-3 flood works at N=3 on localhost; the real-LAN
+N=3 measurement remains Phase 2 Slice 4.

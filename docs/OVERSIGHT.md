@@ -60,20 +60,23 @@ Run against the real mesh (boot commands are in the active handoff).
    flowing (world model count increasing); UI reflects it.
 2. **Safety canary — the three-shot live-fire.** This is the IP; it must
    behave identically forever, regardless of what shipped that week:
-   - mis-declared (`action_type:"communication"` → `actuator:*`) is
-     rejected `ACTUATION_DECLARATION_REQUIRED`;
-   - LLM-only evidence is rejected `LLM_ONLY_ACTUATION_BLOCKED`
-     (`demo-actuate --llm-only` covers sender side);
-   - properly declared T3+human executes (`demo-actuate`, then check the
-     actuator state RPC shows the command WITH its trust metadata).
-   After Phase 2 Slice 3 lands, add shot four: an `llm.infer` result
-   forwarded toward an actuator is rejected — from a REMOTE node.
-   If any shot gives the wrong answer: stop all agent work, `git bisect`
-   with the canary as the test, revert, log the incident.
-3. **Measurement regression:** re-run the handshake-timing and ping
-   probes (patterns in the 2026-07-05 log; committed under `scripts/`
-   from Phase 2 Slice 4 on). >2× regression = investigate before merging
-   more work.
+   ```bash
+   scripts/safety-canary.sh ws://<jetson-ip>:18789 <jetsonDeviceId>
+   ```
+   (mis-declared → `ACTUATION_DECLARATION_REQUIRED`; LLM-only →
+   `LLM_ONLY_ACTUATION_BLOCKED`; T3+human → executes. Run
+   `demo-actuate --llm-only` separately for the sender-side check.)
+   After Phase 2 Slice 3 lands, extend the script with shot D: an
+   `llm.infer` result forwarded toward an actuator is rejected — from a
+   REMOTE node. CANARY RED: stop all agent work, `git bisect` with the
+   canary as the test, revert, log the incident.
+3. **Measurement regression:**
+   `pnpm exec tsx scripts/handshake-bench.ts ws://<jetson-ip>:18789 20` —
+   baseline p50 22.3 ms (2026-07-05). >2× regression = investigate before
+   merging more work. Frame flow: `node scripts/frame-listen.mjs`.
+   No hardware handy? `scripts/local-mesh.sh up 3` gives a full localhost
+   mesh (see scripts/README.md) — valid for protocol checks, not a
+   substitute for the real-LAN runs the handoff requires.
 4. **IP hygiene sweep:** log entries dated and appended (never edited);
    no doc/commit language calling the tier-gating "standard practice";
    still nothing pushed to GitHub without an explicit OK.
