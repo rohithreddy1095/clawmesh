@@ -233,3 +233,30 @@ not assume comparable timestamps.
 
 **Next:** measurements at N>2 nodes; fix mDNS discovery; wire real
 `peers`/`world` CLI commands to a running node; inference-as-capability.
+
+## 2026-07-05 — Phase 2 handoff written: discovery repair + inference-as-capability
+
+**Decision:** next phase is (1) fix mDNS discovery — root-caused today:
+`discovery.ts` calls `createServiceBrowser` on `@homebridge/ciao`, which
+is an advertise-only library with no browse API; browse side moves to
+`bonjour-service`, advertise stays on ciao, discovered peers must pass the
+same trust gate as static peers (deviceId in TXT record, evaluated before
+dialing) — and (2) inference as a mesh capability: `llm:<provider/model>`
+capability strings matching the pi model-spec format, `--serve-llm` flag,
+`llm.infer` streaming RPC (`llm.chunk` events, seq-ordered, 8 KiB delta
+cap, `bufferedAmount` > 1 MiB aborts with `LLM_BACKPRESSURE` — stream
+abort, not flow control), `llm.cancel`, concurrency cap 1.
+
+**Conception note (invention log):** provenance must survive capability
+forwarding — inference output crossing nodes stays
+`T0_planning_inference` / `evidence_sources:["llm"]` via a single shared
+labeling helper, never enters the world model as observation, and remains
+hard-blocked from actuation at receiver gate and executor regardless of
+which node ran the model or how many hops the result crossed. The
+multi-hop T0-preservation test is a required deliverable, extending the
+claimed composition from "local LLM evidence cannot actuate" to
+"forwarded inference evidence cannot actuate."
+
+Full spec-level detail, slice order, acceptance criteria, and the
+operational traps from today's deployment:
+`docs/HANDOFF-2026-07-05-inference-phase.md` (committable; no credentials).

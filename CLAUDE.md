@@ -76,9 +76,15 @@ convergence), say so plainly.
 
 ## Active handoff
 
-`docs/HANDOFF-2026-07-05-deploy.md` — boot the first real mesh (Mac command
-center + Jetson field node). Contains runbook, verification checklist, and
-device access details (gitignored; delete after bootstrap). Start there.
+`docs/HANDOFF-2026-07-05-inference-phase.md` — Phase 2: fix mDNS discovery
+(self-forming must be true), inference as a mesh capability
+(`llm:<provider/model>` advert + streaming `llm.infer` RPC with T0
+provenance surviving forwarding), N=3 measurements. Design decisions are
+pre-made in the handoff; spec-first, Red/Green. Start there.
+
+(Phase 1 — first real deployment — completed 2026-07-05; see engineering
+log. The old deploy handoff is gitignored and pending deletion once Rohith
+rotates the Jetson password.)
 
 ## Keeping this file current
 
