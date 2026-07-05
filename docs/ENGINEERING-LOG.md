@@ -693,3 +693,62 @@ is still the blocker for hardware LLM and real-LAN N=3 evidence.
 `scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
 state dir or localhost node processes remain. The pre-existing Mac command
 center process for the `bhoomi` mesh was left untouched.
+
+## 2026-07-05 — Phase 2 Slice 5: typecheck confirmation
+
+**What changed:** no code changed in this slice. The handoff listed typecheck
+debt as optional if time remained; Slice 3's resolver/runtime cleanup already
+removed the observed TypeScript errors, so this slice is a confirmation and
+completion-log slice.
+
+**Verification:**
+- `pnpm exec tsc --noEmit` → passed with no errors.
+- The full behavior gate is unchanged from the Slice 3 post-fix run:
+  `pnpm exec vitest run src/mesh/ src/agents/` → 136 files / 2102 tests
+  passed; `pnpm exec vitest run src/cli/` → 7 files / 124 tests passed.
+- Last live verification is the Slice 4 N=3 localhost run immediately above:
+  2-hop node1→node2→node3 delivery observed, context.sync convergence after
+  node3 partition/rejoin observed, and full CANARY GREEN with shot C executed.
+
+**Hardware acceptance:** UNCHECKED. No new hardware-specific typecheck work was
+required, and the Jetson remained unreachable as recorded in Slices 3 and 4.
+
+**Phase 2 status:** complete locally for all slices that can be verified from
+this machine. Real-LAN Jetson evidence remains explicitly unchecked because
+the device could not be reached or host-key verified.
+
+### REVIEW 2026-07-05
+
+| Slice | Status | Commit range | Tag |
+|---|---|---|---|
+| 1 — mDNS discovery repair | done | `20b4b01` | `slice-1-done-20260705` |
+| 2 — CLI truth | done | `20b4b01..slice-2-done-20260705` | `slice-2-done-20260705` |
+| 3 — LLM capability + streaming inference | done | `slice-2-done-20260705..slice-3-done-20260705` | `slice-3-done-20260705` |
+| 4 — N=3 measurements | done | `slice-3-done-20260705..slice-4-done-20260705` | `slice-4-done-20260705` |
+| 5 — typecheck debt | done | `slice-4-done-20260705..slice-5-done-20260705` | `slice-5-done-20260705` |
+
+**Acceptance evidence:** Slices 1-4 evidence is recorded in their entries
+above. Slice 5 evidence is `pnpm exec tsc --noEmit` passing cleanly. Final
+software gates: mesh+agents 136 / 2102 passed; CLI 7 / 124 passed; typecheck
+passed. Live localhost evidence: N=3 2-hop delivery, context.sync after
+partition/rejoin, deterministic LLM inference smoke, and full canary all green.
+Hardware evidence is explicitly unverified because Jetson SSH/fingerprint
+verification could not be reached.
+
+**Canary status:** last run 2026-07-05 against localhost node1
+`ws://127.0.0.1:19001` with a dedicated canary identity in the `localmesh`
+named mesh; CANARY GREEN for A, B, and C.
+
+**Deviations & objections:** no design objections logged. The only deviation
+from preferred acceptance evidence is hardware: Jetson checks are unchecked,
+not claimed, due network reachability failure before host-key verification.
+
+**Open threads:** restore Jetson reachability, then rerun Slice 3 hardware
+inference and Slice 4 real-LAN N=3 measurements. Phase 3 handoff can now be
+prepared from the completed Phase 2 state.
+
+**Repo state:** expected after this entry is committed and tagged: branch
+`main`, local-only, ahead of `origin/main`, nothing pushed to GitHub.
+`scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
+state dir or localhost node processes remain. The pre-existing Mac command
+center process for the `bhoomi` mesh was left untouched.
