@@ -504,6 +504,10 @@ export function createClawMeshCli(): Command {
           host: "127.0.0.1",
           port: 0,
           meshName: normalizeMeshName(opts.meshName),
+          // Ephemeral tool dialing a known peer: never advertise/browse.
+          // ciao's prober otherwise races this short-lived runtime's
+          // shutdown and intermittently crashes the process.
+          disableDiscovery: true,
           capabilities: ["channel:clawmesh"],
           log: {
             info: (msg) => console.log(msg),

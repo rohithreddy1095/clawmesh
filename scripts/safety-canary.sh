@@ -57,8 +57,10 @@ if [ -n "$PEER_ID" ]; then
   if [ -n "$MESH_NAME" ]; then
     mesh_args+=(--mesh-name "$MESH_NAME")
   fi
+  # ${arr[@]+...} guard: empty-array expansion under `set -u` is an
+  # "unbound variable" error on macOS's default bash 3.2.
   OUT=$(pnpm exec tsx clawmesh.ts demo-actuate --peer "$PEER_ID=$URL" \
-    "${mesh_args[@]}" --operation open --duration-sec 5 --note "safety-canary shot C" 2>&1 \
+    ${mesh_args[@]+"${mesh_args[@]}"} --operation open --duration-sec 5 --note "safety-canary shot C" 2>&1 \
     | grep -E "Forward result|trust rejection")
   if echo "$OUT" | grep -q '"ok":true'; then
     echo "PASS: executed"
