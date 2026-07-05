@@ -60,66 +60,25 @@ describe("PeerRegistry", () => {
       expect(registry.getByConnId("conn-new")).toBe(newSession);
     });
 
-    describe("crossing-connection tie-break (localDeviceId set)", () => {
-      // Observed on first real bidirectional-discovery deployment
-      // (2026-07-05 review): both sides dial each other, device-keyed
-      // newest-wins displacement closes the other side's socket, the
-      // closed client reconnects, and the mesh churns forever (28+
-      // handshakes in minutes). Both registries must pick the SAME
-      // winner: the connection initiated by the LOWER deviceId.
-      const LOCAL_HIGH = "ffff-local";
-      const REMOTE_LOW = "aaaa-remote";
-
-      it("keeps the inbound session from a lower-id dialer over our outbound (new wins)", () => {
-        registry.setLocalDeviceId(LOCAL_HIGH);
-        const ourDial = createMockSocket();
-        const { session: outbound } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-out", outbound: true, socket: ourDial.socket,
-        });
-        registry.register(outbound);
-
-        const { session: inbound } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-in", outbound: false,
-        });
-        registry.register(inbound);
-
-        expect(registry.get(REMOTE_LOW)).toBe(inbound);
-        expect(ourDial.close).toHaveBeenCalled();
+    it("newest-wins even across directions — same-identity tools must be able to displace", () => {
+      // Regression guard for the 2026-07-05 review: a registry-level
+      // crossing-connection rejection locked out ephemeral tools that
+      // share the node identity (demo-actuate, benches). Newest-wins is
+      // deliberate; crossing-dial churn is prevented upstream by the dial
+      // tie-break + outbound stand-down, not here.
+      const mainLink = createMockSocket();
+      const { session: outbound } = createSession({
+        deviceId: "peer-a", connId: "conn-main", outbound: true, socket: mainLink.socket,
       });
+      registry.register(outbound);
 
-      it("rejects our late outbound when the lower-id dialer's inbound is already registered (new loses)", () => {
-        registry.setLocalDeviceId(LOCAL_HIGH);
-        const { session: inbound } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-in", outbound: false,
-        });
-        registry.register(inbound);
-
-        const ourDial = createMockSocket();
-        const { session: outbound } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-out", outbound: true, socket: ourDial.socket,
-        });
-        registry.register(outbound);
-
-        expect(registry.get(REMOTE_LOW)).toBe(inbound);
-        expect(registry.getByConnId("conn-out")).toBeUndefined();
-        expect(ourDial.close).toHaveBeenCalled();
+      const { session: toolInbound } = createSession({
+        deviceId: "peer-a", connId: "conn-tool", outbound: false,
       });
+      registry.register(toolInbound);
 
-      it("still lets a same-direction reconnect displace its predecessor", () => {
-        registry.setLocalDeviceId(LOCAL_HIGH);
-        const old = createMockSocket();
-        const { session: first } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-1", outbound: true, socket: old.socket,
-        });
-        registry.register(first);
-        const { session: second } = createSession({
-          deviceId: REMOTE_LOW, connId: "conn-2", outbound: true,
-        });
-        registry.register(second);
-
-        expect(registry.get(REMOTE_LOW)).toBe(second);
-        expect(old.close).toHaveBeenCalled();
-      });
+      expect(registry.get("peer-a")).toBe(toolInbound);
+      expect(mainLink.close).toHaveBeenCalled();
     });
 
     it("closes the displaced session's socket so it cannot linger half-open", () => {
