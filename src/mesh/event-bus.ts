@@ -15,6 +15,7 @@ import { EventEmitter } from "node:events";
 import type { ContextFrame } from "./context-types.js";
 import type { PeerSession } from "./types.js";
 import type { TaskProposal } from "../agents/types.js";
+import type { LlmChunkEvent } from "./llm-types.js";
 
 // ─── Event Map ──────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export interface MeshEventMap {
   "context.frame.ingested": { frame: ContextFrame };
   /** A locally-originated frame was broadcast to peers. */
   "context.frame.broadcast": { frame: ContextFrame };
+  /** A transient LLM stream chunk received from a peer. Not a context frame. */
+  "llm.chunk": { peerDeviceId: string; chunk: LlmChunkEvent };
 
   // ─── Intelligence ──────────────────────────────
   /** An operator sent a natural language intent. */

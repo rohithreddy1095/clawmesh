@@ -20,6 +20,7 @@ import { createGracefulShutdown } from "./graceful-shutdown.js";
 import { resolveRuntimeRole, normalizeMeshName, resolveDiscoveryEnabledOption, formatDiscoveryMode, formatStaticPeerSummary } from "./cli-config.js";
 import { normalizePeerUrl } from "./cli-utils.js";
 import { registerLiveRpcCommands } from "./live-rpc-commands.js";
+import { registerInferCommand } from "./infer-command.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -110,6 +111,12 @@ export function createClawMeshCli(): Command {
       [],
     )
     .option(
+      "--serve-llm <provider/model>",
+      "Serve an LLM model over the mesh via llm.infer (repeatable)",
+      collectOption,
+      [],
+    )
+    .option(
       "--peer <deviceId=url>",
       'Static peer to connect (format: "<deviceId>=<ws://host:port>" or "<deviceId>=<url>|<tlsFingerprint>")',
       collectOption,
@@ -140,6 +147,7 @@ export function createClawMeshCli(): Command {
         discovery?: boolean;
         noDiscovery?: boolean;
         capability: string[];
+        serveLlm: string[];
         peer: string[];
         mockActuator?: boolean;
         mockSensor?: boolean;
@@ -253,6 +261,7 @@ export function createClawMeshCli(): Command {
           meshName: normalizeMeshName(opts.meshName),
           disableDiscovery: !discoveryEnabled,
           capabilities: opts.capability,
+          serveLlmModels: opts.serveLlm,
           staticPeers,
           enableMockActuator: !!opts.mockActuator,
           enablePiSession: !!opts.piPlanner,
@@ -280,6 +289,9 @@ export function createClawMeshCli(): Command {
         console.log(`Device ID:   ${identity.deviceId}`);
         console.log(`Listening:   ws://${address.host}:${address.port}`);
         console.log(`Capabilities: ${capabilities.length > 0 ? capabilities.join(", ") : "(none)"}`);
+        if (opts.serveLlm.length > 0) {
+          console.log(`LLM serving: ${opts.serveLlm.join(", ")}`);
+        }
         if (opts.mockActuator) {
           console.log("Mock actuator: enabled");
         }
@@ -471,6 +483,7 @@ export function createClawMeshCli(): Command {
     .option("--operation <name>", "Operation name", "open")
     .option("--duration-sec <seconds>", "Optional duration parameter", (v) => Number(v))
     .option("--note <note>", "Optional note/audit message")
+    .option("--mesh-name <name>", "Stable named mesh identity")
     .option("--llm-only", "Send intentionally unsafe LLM-only trust metadata (should be rejected)")
     .option("--timeout-ms <ms>", "Peer connect timeout", (v) => Number(v), 12_000)
     .action(
@@ -480,6 +493,7 @@ export function createClawMeshCli(): Command {
         operation: string;
         durationSec?: number;
         note?: string;
+        meshName?: string;
         llmOnly?: boolean;
         timeoutMs: number;
       }) => {
@@ -489,6 +503,7 @@ export function createClawMeshCli(): Command {
           identity,
           host: "127.0.0.1",
           port: 0,
+          meshName: normalizeMeshName(opts.meshName),
           capabilities: ["channel:clawmesh"],
           log: {
             info: (msg) => console.log(msg),
@@ -530,6 +545,8 @@ export function createClawMeshCli(): Command {
         await runtime.stop();
       },
     );
+
+  registerInferCommand(program, parsePeerSpec);
 
   // ── trust ────────────────────────────────────────────────
   const trust = program

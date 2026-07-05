@@ -6,6 +6,7 @@
  */
 
 import type { ContextFrame } from "../mesh/context-types.js";
+import { createLlmEvidenceTrust } from "../mesh/llm-provenance.js";
 
 export interface AgentResponseData {
   conversationId?: string;
@@ -31,7 +32,7 @@ export function buildAgentResponseFrame(
     sourceDisplayName,
     timestamp: Date.now(),
     data: data as unknown as Record<string, unknown>,
-    trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+    trust: createLlmEvidenceTrust(),
   };
 }
 

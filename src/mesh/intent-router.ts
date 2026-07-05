@@ -12,6 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ContextPropagator } from "./context-propagator.js";
+import { createLlmEvidenceTrust } from "./llm-provenance.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ export async function routeIntent(
         message: "No planner leader is currently reachable for this command.",
         status: "error",
       },
-      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+      trust: createLlmEvidenceTrust(),
     });
     return;
   }
@@ -120,7 +121,7 @@ export async function routeIntent(
     sourceDisplayName: deps.displayName,
     timestamp: Date.now(),
     data: { conversationId, requestId, message: "", status: "thinking" },
-    trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+    trust: createLlmEvidenceTrust(),
   });
 
   setTimeout(() => {
@@ -136,7 +137,7 @@ export async function routeIntent(
         message: `I received your intent: "${text}". This is a simulated response — enable the Pi planner (--pi-planner) for real intelligence.`,
         status: "complete",
       },
-      trust: { evidence_sources: ["llm"], evidence_trust_tier: "T0_planning_inference" },
+      trust: createLlmEvidenceTrust(),
     });
   }, 2000);
 }

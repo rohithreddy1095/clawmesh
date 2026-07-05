@@ -331,7 +331,12 @@ on any failure. No layer may assume another layer ran.
 - Capability IDs are colon-separated ASCII strings:
   `<kind>:<name>[:<subName>]` with kinds `channel`, `skill`, `actuator`,
   `sensor` (anything else parses as `custom`). Examples: `channel:telegram`,
-  `actuator:pump:P1`, `llm:gemma-2b` (custom kind today).
+  `actuator:pump:P1`, `llm:nanochat/nano`,
+  `llm:google/gemini-3.1-pro-preview`.
+- LLM capability IDs MUST be `llm:<provider>/<model-id>`, where
+  `<provider>/<model-id>` is the exact model spec accepted by the local model
+  resolver. A node MUST NOT advertise an `llm:` capability unless it has
+  resolved the model locally and can serve `llm.infer` for that model.
 - Advertised in `mesh.connect` (`capabilities: string[]`) and updated via
   `capability_update` context frames.
 - Pattern matching: segment-wise equality; `*` in a pattern segment matches
@@ -355,6 +360,8 @@ on any failure. No layer may assume another layer ran.
 | `mesh.world.query` | `{ limit? ≤200, kind?, sourceDeviceId? }` | read-only world-model snapshot: `{ count, entries, frames, bySourceDeviceId, byKind, byTrustTier, peerTimestamp }` |
 | `mesh.events` | `{ limit? ≤200, type?, sinceMs? }` | `{ events, summary, total }` — system event log |
 | `mesh.trace` | `{ frameId? \| stage? \| {} }` | causal chains from the correlation tracker |
+| `llm.infer` | §10.2.1 | streams `llm.chunk` events, then `{ requestId, finishReason, usage? }` |
+| `llm.cancel` | `{ requestId }` | `{ requestId, cancelled: true }` if an in-flight stream was cancelled |
 | `mesh.message.forward` | §8.2/§8.3 | `{ messageId, channel }` |
 | `context.sync` | §7.3 | §7.3 |
 
@@ -372,6 +379,82 @@ to newest within the selected window) and MUST preserve `sourceDeviceId` and
 `trust.evidence_trust_tier` exactly as ingested, so operator surfaces can
 inspect provenance. `bySourceDeviceId`, `byKind`, and `byTrustTier` are
 breakdowns over the returned frames, not over the entire retained history.
+
+### 10.2 LLM inference RPC
+
+LLM inference is a capability-forwarding control-plane RPC, not a context
+frame type. A node that advertises `llm:<provider>/<model-id>` MUST serve
+`llm.infer` for the matching `<provider>/<model-id>` model spec. The
+concurrency cap is one active inference per node.
+
+#### 10.2.1 `llm.infer` request/response
+
+```jsonc
+// req llm.infer
+{
+  "requestId": "<uuid>",
+  "model": "provider/model-id",
+  "messages": [
+    { "role": "system", "content": "optional system prompt" },
+    { "role": "user", "content": "prompt" }
+  ],
+  "maxTokens": 256,
+  "temperature": 0.2
+}
+
+// event llm.chunk
+{ "requestId": "<same uuid>", "seq": 0, "delta": "token text" }
+
+// final res
+{
+  "requestId": "<same uuid>",
+  "finishReason": "stop",
+  "usage": { "inputTokens": 12, "outputTokens": 42 }
+}
+```
+
+`messages[*].role` MUST be one of `system`, `user`, or `assistant`.
+Responders MUST emit `llm.chunk` events with contiguous `seq` numbers
+starting at 0 and MUST cap each `delta` at 8 KiB. The final RPC response is
+sent only after all chunks have been emitted. `finishReason` is one of
+`stop`, `length`, or `cancelled`.
+
+Before sending each `llm.chunk`, the responder MUST inspect the WebSocket
+`bufferedAmount`. If it exceeds 1 MiB, the responder MUST abort the stream
+with `LLM_BACKPRESSURE`. This is stream abort, not flow control; the ClawMesh
+wire remains a control plane and does not provide general backpressure (§11).
+
+If no matching `llm:` capability/model is locally available, return
+`LLM_MODEL_UNAVAILABLE`. If another inference is active, return `LLM_BUSY`.
+The default server-side timeout is 120 s; timeout returns `LLM_TIMEOUT`.
+
+#### 10.2.2 `llm.cancel`
+
+`llm.cancel` takes `{ requestId }`. If the request is in flight, the responder
+MUST stop producing chunks, complete the inference with final
+`finishReason:"cancelled"`, and return `{ requestId, cancelled: true }` from
+the cancel RPC. If no request is in flight, the responder returns
+`LLM_CANCELLED` (idempotent callers MAY treat this as already gone).
+
+#### 10.2.3 Provenance rule for inference output
+
+`llm.chunk` events and `llm.infer` responses are transient RPC payloads. They
+MUST NOT be ingested into the world model as observations by receivers. If a
+caller wraps inference output into a context frame or command trust metadata,
+the only legal evidence labeling is:
+
+```jsonc
+{
+  "evidence_sources": ["llm"],
+  "evidence_trust_tier": "T0_planning_inference"
+}
+```
+
+This labeling MUST survive forwarding and gossip unchanged. Any actuation
+command whose trust evidence sources are only `llm` remains hard-blocked by
+`LLM_ONLY_ACTUATION_BLOCKED` at the sender gate, receiver forward handler, and
+actuator executor (§8.3), regardless of which peer ran the model or how many
+mesh hops carried the resulting context.
 
 ## 11. Explicit non-guarantees (read before claiming otherwise)
 
@@ -406,6 +489,8 @@ Forward/trust: `LOOP_DETECTED`, `INVALID_COMMAND_ENVELOPE`,
 `TRUST_ENVELOPE_MISMATCH`, `INVALID_TRUST_POLICY`, `TRUST_METADATA_REQUIRED`,
 `ACTUATION_DECLARATION_REQUIRED`, `LLM_ONLY_ACTUATION_BLOCKED`,
 `INSUFFICIENT_TRUST_TIER`, `VERIFICATION_REQUIRED`, `DELIVERY_FAILED`.
+LLM inference: `LLM_MODEL_UNAVAILABLE`, `LLM_BUSY`, `LLM_TIMEOUT`,
+`LLM_BACKPRESSURE`, `LLM_CANCELLED`.
 
 New codes MUST be added here before use.
 

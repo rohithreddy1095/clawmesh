@@ -13,8 +13,7 @@ import {
   SessionManager,
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
-import { getModel, type Model } from "@mariozechner/pi-ai";
-import { injectCustomPiModelApiKey, resolveCustomPiModel } from "./custom-model-resolver.js";
+import type { Model } from "@mariozechner/pi-ai";
 import type { AgentEvent, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { MeshNodeRuntime } from "../mesh/node-runtime.js";
 import type { ContextFrame } from "../mesh/context-types.js";
@@ -37,13 +36,13 @@ import {
   buildPlannerPrompt,
   cleanIntentText,
   extractCitations,
-  parseModelSpec,
 } from "./planner-prompt-builder.js";
 import { buildPlannerSystemPrompt } from "./system-prompt-builder.js";
 import { buildPatternGossipFrame, type AgentResponseData } from "./broadcast-helpers.js";
 import { hasAssistantContent, getLastMessage, findRecentProposalIds } from "./llm-response-helpers.js";
 import { shouldProcessPlannerTrigger, shouldWakePlannerOnActivityChange } from "./planner-activity-gate.js";
 import { partitionSystemTriggersForOperatorTurn, shouldEnqueueProactiveCheck } from "./operator-priority.js";
+import { resolvePiModel } from "./pi-model-resolver.js";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -362,7 +361,7 @@ export class PiSession {
 
   private broadcastAgentResponse(data: AgentResponseData): void {
     this.runtime.contextPropagator.broadcastAgentResponse({
-      data,
+      data: data as unknown as Record<string, unknown>,
     });
   }
 
@@ -695,51 +694,9 @@ export class PiSession {
   // ─── Model resolution ───────────────────────────────────
 
   private resolveModel(spec: string): Model<any> {
-    const { provider, modelId } = parseModelSpec(spec);
-
-    // Local NanoChat model — connects to the NanoChat inference server on this device.
-    // Uses provider "openai" so the SDK resolves OPENAI_API_KEY for auth (set to any
-    // non-empty value since NanoChat ignores it).
-    if (provider === "nanochat") {
-      const port = process.env.NANOCHAT_PORT ?? "8000";
-      const host = process.env.NANOCHAT_HOST ?? "127.0.0.1";
-      if (!process.env.OPENAI_API_KEY) {
-        process.env.OPENAI_API_KEY = "local";
-      }
-      this.log.info(`pi-session: using local NanoChat model "${modelId}" at http://${host}:${port}`);
-      return {
-        id: `nanochat-${modelId}`,
-        name: `NanoChat ${modelId.toUpperCase()} (local)`,
-        api: "openai-completions",
-        provider: "openai",
-        baseUrl: `http://${host}:${port}/v1`,
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 2048,
-        maxTokens: 512,
-        compat: {
-          supportsStore: false,
-          supportsStreamOptions: false,
-        },
-      } satisfies Model<"openai-completions">;
-    }
-
-    const customModel = resolveCustomPiModel(provider, modelId);
-    if (customModel) {
-      injectCustomPiModelApiKey(customModel.model, customModel.apiKey);
-      this.log.info(`pi-session: using custom model "${provider}/${modelId}" at ${customModel.model.baseUrl}`);
-      return customModel.model;
-    }
-
-    const model = getModel(provider as any, modelId as any);
-    if (!model) {
-      throw new Error(
-        `Model "${modelId}" not found for provider "${provider}". ` +
-        `Check available models with: pi-ai models ${provider}`,
-      );
-    }
-    return model;
+    return resolvePiModel(spec, {
+      info: (msg) => this.log.info(msg.replace(/^pi-model:/, "pi-session:")),
+    });
   }
 
   // ─── System prompt ──────────────────────────────────────

@@ -27,7 +27,7 @@ node_dir()  { echo "$BASE/node$1"; }
 node_port() { echo $((PORT_BASE + $1)); }
 
 get_device_id() {
-  CLAWMESH_STATE_DIR="$(node_dir "$1")" pnpm exec tsx clawmesh.ts identity 2>/dev/null \
+  HOME="$(node_dir "$1")" CLAWMESH_STATE_DIR="$(node_dir "$1")" pnpm exec tsx clawmesh.ts identity 2>/dev/null \
     | awk '/Device ID:/{print $3}'
 }
 
@@ -51,8 +51,8 @@ up)
   echo "exchanging trust along the chain (both directions)..."
   for i in $(seq 2 "$N"); do
     prev=$((i - 1))
-    CLAWMESH_STATE_DIR="$(node_dir "$i")"    pnpm exec tsx clawmesh.ts trust add "${IDS[$prev]}" >/dev/null 2>&1 || true
-    CLAWMESH_STATE_DIR="$(node_dir "$prev")" pnpm exec tsx clawmesh.ts trust add "${IDS[$i]}"    >/dev/null 2>&1 || true
+    HOME="$(node_dir "$i")"    CLAWMESH_STATE_DIR="$(node_dir "$i")"    pnpm exec tsx clawmesh.ts trust add "${IDS[$prev]}" >/dev/null 2>&1 || true
+    HOME="$(node_dir "$prev")" CLAWMESH_STATE_DIR="$(node_dir "$prev")" pnpm exec tsx clawmesh.ts trust add "${IDS[$i]}"    >/dev/null 2>&1 || true
   done
 
   echo "starting nodes (chain topology)..."
@@ -65,7 +65,7 @@ up)
       prev=$((i - 1))
       args+=(--peer "${IDS[$prev]}=ws://127.0.0.1:$(node_port "$prev")")
     fi
-    CLAWMESH_STATE_DIR="$(node_dir "$i")" nohup pnpm exec tsx clawmesh.ts "${args[@]}" \
+    HOME="$(node_dir "$i")" CLAWMESH_STATE_DIR="$(node_dir "$i")" nohup pnpm exec tsx clawmesh.ts "${args[@]}" \
       > "$BASE/node$i.log" 2>&1 &
     echo $! >> "$BASE/pids"
     echo "  node$i pid=$! port=$port log=$BASE/node$i.log"
@@ -89,6 +89,7 @@ status)
 down)
   if [ -f "$BASE/pids" ]; then
     while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$BASE/pids"
+    sleep 1
     rm -f "$BASE/pids"
     echo "stopped"
   else
@@ -98,7 +99,16 @@ down)
 
 clean)
   "$0" down || true
-  rm -rf "$BASE"
+  for attempt in 1 2 3; do
+    if rm -rf "$BASE"; then
+      break
+    fi
+    sleep "$attempt"
+  done
+  if [ -d "$BASE" ]; then
+    echo "failed to remove $BASE" >&2
+    exit 1
+  fi
   echo "cleaned $BASE"
   ;;
 

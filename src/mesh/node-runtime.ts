@@ -35,6 +35,10 @@ import { wireEventLog, wireCorrelationTracker, restoreWorldModelSnapshot, saveWo
 import { CorrelationTracker } from "./correlation-tracker.js";
 import { createEventsHandlers } from "./events-rpc.js";
 import { createTraceHandlers } from "./trace-rpc.js";
+import { createLlmInferenceHandlers } from "./server-methods/llm-infer.js";
+import { createPiLlmProvider } from "./llm-provider.js";
+import { createLlmOnlyActuationTrust } from "./llm-provenance.js";
+import type { MeshLlmProvider } from "./llm-types.js";
 import type {
   ClawMeshCommandEnvelopeV1,
   MeshForwardPayload,
@@ -79,6 +83,10 @@ export type MeshNodeRuntimeOptions = {
   onProposalCreated?: (proposal: TaskProposal) => void;
   /** Callback when planner resolves a proposal. */
   onProposalResolved?: (proposal: TaskProposal) => void;
+  /** Provider/model specs this node can serve via llm.infer. */
+  serveLlmModels?: string[];
+  /** Test/runtime injection for LLM serving; if omitted, served models resolve through Pi. */
+  llmProvider?: MeshLlmProvider;
   log?: {
     info: (msg: string) => void;
     warn: (msg: string) => void;
@@ -115,6 +123,7 @@ export class MeshNodeRuntime {
   readonly mockActuator?: MockActuatorController;
   readonly discovery?: MeshDiscovery;
   readonly piSession?: PiSession;
+  readonly llmProvider?: MeshLlmProvider;
   readonly startedAtMs: number = Date.now();
 
   private readonly opts: MeshNodeRuntimeOptions;
@@ -158,6 +167,22 @@ export class MeshNodeRuntime {
       url: normalizeMeshPeerUrl(peer.url),
     }));
     this.log = opts.log ?? DEFAULT_LOGGER;
+
+    const servedLlmModels = normalizeServedLlmModels(opts.serveLlmModels);
+    if (servedLlmModels.length > 0) {
+      this.llmProvider = opts.llmProvider ?? createPiLlmProvider({
+        modelSpecs: servedLlmModels,
+        log: this.log,
+      });
+      for (const modelSpec of servedLlmModels) {
+        const capability = `llm:${modelSpec}`;
+        if (!this.capabilities.includes(capability)) {
+          this.capabilities.push(capability);
+        }
+      }
+    } else if (opts.llmProvider) {
+      this.llmProvider = opts.llmProvider;
+    }
 
     if (opts.enableMockActuator) {
       this.mockActuator = new MockActuatorController({ log: this.log });
@@ -304,7 +329,12 @@ export class MeshNodeRuntime {
         return {
           ok: result.ok,
           payload: result.payload,
-          error: result.error ?? undefined,
+          error: result.error
+            ? {
+                code: result.error.code ?? "REMOTE_PLANNER_ERROR",
+                message: result.error.message ?? "remote planner RPC failed",
+              }
+            : undefined,
         };
       },
       log: this.log,
@@ -315,6 +345,11 @@ export class MeshNodeRuntime {
     this.rpcDispatcher.registerAll(createTraceHandlers({
       correlationTracker: this.correlationTracker,
     }));
+    if (this.llmProvider) {
+      this.rpcDispatcher.registerAll(createLlmInferenceHandlers({
+        provider: this.llmProvider,
+      }));
+    }
   }
 
   /**
@@ -687,11 +722,13 @@ export class MeshNodeRuntime {
 }
 
 export function buildLlmOnlyActuationTrust(): MeshForwardPayload["trust"] {
-  return {
-    action_type: "actuation",
-    evidence_sources: ["llm"],
-    evidence_trust_tier: "T3_verified_action_evidence",
-    minimum_trust_tier: "T2_operational_observation",
-    verification_required: "none",
-  };
+  return createLlmOnlyActuationTrust();
+}
+
+function normalizeServedLlmModels(models: string[] | undefined): string[] {
+  return [...new Set(
+    (models ?? [])
+      .map((model) => model.trim())
+      .filter(Boolean),
+  )];
 }

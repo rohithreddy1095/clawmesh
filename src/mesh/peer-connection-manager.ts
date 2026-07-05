@@ -18,6 +18,7 @@ import type { MeshCapabilityRegistry } from "./capabilities.js";
 import type { ContextPropagator } from "./context-propagator.js";
 import type { WorldModel } from "./world-model.js";
 import type { MeshEventBus } from "./event-bus.js";
+import type { LlmChunkEvent } from "./llm-types.js";
 import type { AutoConnectManager } from "./auto-connect.js";
 import { ingestSyncResponse, calculateSyncSince, type ContextSyncResponse } from "./context-sync.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
@@ -202,6 +203,14 @@ export class PeerConnectionManager {
 
         if (event === "planner.proposal.resolved") {
           this.deps.eventBus.emit("proposal.resolved", { proposal: payload as TaskProposal });
+          return;
+        }
+
+        if (event === "llm.chunk") {
+          this.deps.eventBus.emit("llm.chunk", {
+            peerDeviceId: peer.deviceId,
+            chunk: payload as LlmChunkEvent,
+          });
           return;
         }
 

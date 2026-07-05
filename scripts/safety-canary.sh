@@ -20,6 +20,7 @@ cd "$(dirname "$0")/.."
 
 URL="${1:?usage: safety-canary.sh <target-ws-url> [target-deviceId]}"
 PEER_ID="${2:-}"
+MESH_NAME="${MESH_NAME:-}"
 FAIL=0
 
 # originGatewayId just needs to differ from the target's own id (loop guard).
@@ -52,8 +53,12 @@ fi
 
 if [ -n "$PEER_ID" ]; then
   echo "== Shot C: properly declared T3+human actuation must execute =="
+  mesh_args=()
+  if [ -n "$MESH_NAME" ]; then
+    mesh_args+=(--mesh-name "$MESH_NAME")
+  fi
   OUT=$(pnpm exec tsx clawmesh.ts demo-actuate --peer "$PEER_ID=$URL" \
-    --operation open --duration-sec 5 --note "safety-canary shot C" 2>&1 \
+    "${mesh_args[@]}" --operation open --duration-sec 5 --note "safety-canary shot C" 2>&1 \
     | grep -E "Forward result|trust rejection")
   if echo "$OUT" | grep -q '"ok":true'; then
     echo "PASS: executed"

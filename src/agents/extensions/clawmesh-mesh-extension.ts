@@ -35,6 +35,7 @@ import {
   formatConfiguredStaticPeerLine,
 } from "./mesh-extension-helpers.js";
 import { getDataFreshnessWarnings } from "../../mesh/data-freshness.js";
+import { createLlmEvidenceTrust } from "../../mesh/llm-provenance.js";
 import { normalizeQueryWorldModelKind, normalizeQueryWorldModelLimit } from "./query-world-model-args.js";
 import { normalizeProposeTaskArgs } from "./propose-task-args.js";
 import { ProposalDedup } from "../proposal-dedup.js";
@@ -185,8 +186,7 @@ For actuation (pumps, valves), use propose_task instead.`,
 
         const trust: MeshForwardTrustMetadata = {
           action_type: "observation",
-          evidence_sources: ["llm"],
-          evidence_trust_tier: "T0_planning_inference",
+          ...createLlmEvidenceTrust(),
           minimum_trust_tier: "T0_planning_inference",
           verification_required: "none",
         };

@@ -33,7 +33,7 @@ describe("buildLlmOnlyActuationTrust", () => {
     const trust = buildLlmOnlyActuationTrust()!;
     expect(trust.action_type).toBe("actuation");
     expect(trust.evidence_sources).toContain("llm");
-    expect(trust.evidence_trust_tier).toBe("T3_verified_action_evidence");
+    expect(trust.evidence_trust_tier).toBe("T0_planning_inference");
     expect(trust.minimum_trust_tier).toBe("T2_operational_observation");
   });
 

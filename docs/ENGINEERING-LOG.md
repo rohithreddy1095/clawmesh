@@ -484,3 +484,119 @@ N=3 remains untouched. Slice 5 typecheck debt remains the known pre-existing
 `main`, local-only, ahead of `origin/main`, nothing pushed to GitHub.
 `scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
 state dir or localhost node processes remain.
+
+## 2026-07-05 — Phase 2 Slice 3: LLM capability + streaming inference RPC
+
+**What changed (Spec/Red/Green):**
+- PROTOCOL.md now specifies `llm:<provider>/<model-id>` capability strings,
+  `llm.infer`, `llm.cancel`, transient `llm.chunk` events, the single-active
+  inference cap, timeout/backpressure behavior, and LLM error codes
+  `LLM_MODEL_UNAVAILABLE`, `LLM_BUSY`, `LLM_TIMEOUT`,
+  `LLM_BACKPRESSURE`, and `LLM_CANCELLED`.
+- Added the core LLM wire types, `createLlmInferenceHandlers`, and a Pi-backed
+  model provider. `--serve-llm <provider/model>` resolves through the shared
+  Pi model path before advertising `llm:...`; unresolved models refuse startup
+  instead of lying about capability.
+- Added `clawmesh infer --model <provider/model> [--peer ...] "prompt"` with
+  ordered chunk reassembly. `--mesh-name` is supported for named-mesh demos.
+- Centralized the legal LLM provenance label in `createLlmEvidenceTrust()`:
+  `evidence_sources:["llm"]`, `evidence_trust_tier:"T0_planning_inference"`.
+  Production LLM context/agent-response call sites now use the helper.
+- `llm.chunk` is surfaced as a transient peer event and explicitly does not
+  enter the world model. Required provenance tests cover receiver gate,
+  executor gate, transient chunks, and T0 preservation across a multi-hop
+  context relay.
+- Harness fixes: `local-mesh.sh` now isolates `HOME` as well as
+  `CLAWMESH_STATE_DIR` so world snapshots cannot leak into localhost tests;
+  `clean` waits/retries after stopping nodes. `safety-canary.sh` passes
+  `MESH_NAME` through to shot C, and `demo-actuate --mesh-name` joins named
+  meshes for the positive canary shot.
+- Added `scripts/llm-infer-smoke.ts`, a committed deterministic live smoke:
+  it starts a real LLM-serving mesh node with an injected provider, runs the
+  actual `clawmesh infer` CLI over WebSocket, and verifies streamed chunks do
+  not create world-model frames.
+
+**Verification:**
+- Red tests before implementation:
+  `pnpm exec vitest run src/mesh/llm-provenance.test.ts
+  src/mesh/server-methods/llm-infer.test.ts` failed on missing
+  `./llm-provenance.js` and `./llm-infer.js`.
+- Focused green:
+  `pnpm exec vitest run src/mesh/llm-provenance.test.ts
+  src/mesh/server-methods/llm-infer.test.ts src/mesh/pure-functions-expanded.test.ts`
+  → 3 files / 33 tests passed.
+- Full relevant gate:
+  `pnpm exec vitest run src/mesh/ src/agents/` → 136 files / 2102 tests passed
+  (57.98 s on final run).
+- CLI gate:
+  `pnpm exec vitest run src/cli/` → 7 files / 124 tests passed.
+- Typecheck:
+  `pnpm exec tsc --noEmit` → passed with no errors.
+- LLM live smoke:
+  `pnpm exec tsx scripts/llm-infer-smoke.ts` →
+  `RESULT: stdout="mesh-ok" chunks=2 worldFrames=0`.
+- Localhost live mesh and full canary:
+  ran a single-shell verified sequence because this execution environment
+  reaps background children after tool calls finish:
+  `scripts/local-mesh.sh clean; scripts/local-mesh.sh up 3;`
+  created node1 `f26a792b...`, node2 `22eb270f...`, node3 `7f896eec...`.
+  `node scripts/mesh-rpc.mjs ws://127.0.0.1:19003 mesh.peers` returned node3
+  peer `local-node2`.
+  `node scripts/mesh-rpc.mjs ws://127.0.0.1:19003 mesh.world.query '{"limit":5}'`
+  returned 5 node1 T2 observation frames at node3.
+  `node scripts/frame-listen.mjs ws://127.0.0.1:19003 12 <node1-id>` observed
+  3 node1 frames at node3, p50 2 ms, min 2 ms, max 3 ms.
+  A dedicated canary-client identity was created and trusted by node1, then
+  `HOME=<canary> CLAWMESH_STATE_DIR=<canary> MESH_NAME=localmesh
+  scripts/safety-canary.sh ws://127.0.0.1:19001 <node1-id>` ran all shots:
+  A rejected `ACTUATION_DECLARATION_REQUIRED`, B rejected
+  `LLM_ONLY_ACTUATION_BLOCKED`, C executed. CANARY GREEN.
+- Cleanup:
+  `scripts/local-mesh.sh clean` completed and removed
+  `/tmp/clawmesh-local-mesh`.
+
+**Hardware acceptance:** UNCHECKED. Slice 3 names a Jetson real-LAN
+inference check, but the Jetson could not be reached or host-key verified
+from this Mac. Evidence: `nc -vz -G 5 192.168.1.50 22` failed
+`No route to host`; `ping -c 2 -W 1000 192.168.1.50` had 100% packet loss
+with `sendto: No route to host`; `ssh-keyscan -T 5 -t ed25519 192.168.1.50`
+returned no public key, so the required
+`SHA256:fTE7beVBYROu6KGfslsVbA2bZ91FPAeJeE+aPtO7j78` fingerprint could not
+be verified. One other ARP candidate (`192.168.1.36`) also had no SSH route.
+
+**Next:** Slice 4 — N=3 measurements.
+
+### REVIEW 2026-07-05
+
+| Slice | Status | Commit range | Tag |
+|---|---|---|---|
+| 1 — mDNS discovery repair | done | `20b4b01` | `slice-1-done-20260705` |
+| 2 — CLI truth | done | `20b4b01..slice-2-done-20260705` | `slice-2-done-20260705` |
+| 3 — LLM capability + streaming inference | done | `slice-2-done-20260705..slice-3-done-20260705` | `slice-3-done-20260705` |
+| 4 — N=3 measurements | untouched | — | — |
+| 5 — typecheck debt | untouched | — | — |
+
+**Acceptance evidence:** Slice 1 and Slice 2 evidence is recorded in their
+entries above. Slice 3 evidence: focused red/green tests, final full
+`src/mesh/ src/agents/` Vitest gate (136 / 2102), CLI gate (7 / 124),
+`pnpm exec tsc --noEmit`, deterministic `scripts/llm-infer-smoke.ts`, and
+the localhost 3-node mesh run with node3 receiving node1 frames plus full
+CANARY GREEN including positive shot C. Hardware inference remains explicitly
+unverified because SSH host-key verification could not be reached.
+
+**Canary status:** last run 2026-07-05 against localhost node1
+`ws://127.0.0.1:19001` with a dedicated canary identity in the `localmesh`
+named mesh; CANARY GREEN for A, B, and C.
+
+**Deviations & objections:** no design objections logged. Hardware check is
+unchecked, not claimed.
+
+**Open threads:** Slice 4 measurement pass is next. Slice 5 typecheck debt is
+now lower risk because `pnpm exec tsc --noEmit` passed after Slice 3, but the
+handoff still lists it as the final optional slice.
+
+**Repo state:** expected after this entry is committed and tagged: branch
+`main`, local-only, ahead of `origin/main`, nothing pushed to GitHub.
+`scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
+state dir or localhost node processes remain. A pre-existing Mac command
+center process for the `bhoomi` mesh was observed and left untouched.

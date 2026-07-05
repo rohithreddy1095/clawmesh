@@ -4,6 +4,7 @@ import type { PeerRegistry } from "./peer-registry.js";
 import type { ContextFrame } from "./context-types.js";
 import type { MeshEvidenceSource } from "./types.js";
 import { NODE_PROTOCOL_GENERATION } from "./protocol.js";
+import { createLlmEvidenceTrust } from "./llm-provenance.js";
 
 /**
  * Maximum number of hops a context frame will be re-propagated through the mesh.
@@ -154,10 +155,7 @@ export class ContextPropagator {
     return this.broadcast({
       kind: "inference",
       data: params.data,
-      trust: {
-        evidence_sources: ["llm"],
-        evidence_trust_tier: "T0_planning_inference",
-      },
+      trust: createLlmEvidenceTrust(),
       note: params.note,
     });
   }
@@ -173,10 +171,7 @@ export class ContextPropagator {
     return this.broadcast({
       kind: "agent_response",
       data: params.data,
-      trust: {
-        evidence_sources: ["llm"],
-        evidence_trust_tier: "T0_planning_inference",
-      },
+      trust: createLlmEvidenceTrust(),
       note: params.note,
     });
   }
