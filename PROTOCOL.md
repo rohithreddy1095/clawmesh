@@ -352,6 +352,7 @@ on any failure. No layer may assume another layer ran.
 | `mesh.peers` | `{}` | `{ peers: [{deviceId, displayName?, outbound, capabilities, role?, transportLabel?, connectedAtMs}] }` |
 | `mesh.status` | `{}` | local deviceId, peer summaries, planner activity/mode/model, discovery flag, configured static peers (with posture), pending proposals |
 | `mesh.health` | `{}` | status `healthy\|degraded\|unhealthy`, uptime, peers, world-model sizes, capabilities, planner state, memory, metrics, version |
+| `mesh.world.query` | `{ limit? ≤200, kind?, sourceDeviceId? }` | read-only world-model snapshot: `{ count, entries, frames, bySourceDeviceId, byKind, byTrustTier, peerTimestamp }` |
 | `mesh.events` | `{ limit? ≤200, type?, sinceMs? }` | `{ events, summary, total }` — system event log |
 | `mesh.trace` | `{ frameId? \| stage? \| {} }` | causal chains from the correlation tracker |
 | `mesh.message.forward` | §8.2/§8.3 | `{ messageId, channel }` |
@@ -361,6 +362,16 @@ Command-center/UI methods (`chat.subscribe`, `chat.proposal.approve`,
 `chat.proposal.reject`, `operator.intent`) share the envelope (§5.1) but are
 operator-surface contract, not peer-mesh contract; peers MUST NOT depend on
 them.
+
+### 10.1 World model query
+
+`mesh.world.query` is an operator/RPC read of the local node's current world
+model. It does not trigger gossip or anti-entropy and MUST NOT mutate the
+world model. Returned `frames` are recent context frames in log order (oldest
+to newest within the selected window) and MUST preserve `sourceDeviceId` and
+`trust.evidence_trust_tier` exactly as ingested, so operator surfaces can
+inspect provenance. `bySourceDeviceId`, `byKind`, and `byTrustTier` are
+breakdowns over the returned frames, not over the entire retained history.
 
 ## 11. Explicit non-guarantees (read before claiming otherwise)
 

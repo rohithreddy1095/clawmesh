@@ -19,6 +19,7 @@ import { validateStartupConfig, hasBlockingDiagnostics, formatDiagnostics } from
 import { createGracefulShutdown } from "./graceful-shutdown.js";
 import { resolveRuntimeRole, normalizeMeshName, resolveDiscoveryEnabledOption, formatDiscoveryMode, formatStaticPeerSummary } from "./cli-config.js";
 import { normalizePeerUrl } from "./cli-utils.js";
+import { registerLiveRpcCommands } from "./live-rpc-commands.js";
 
 function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
@@ -834,35 +835,7 @@ export function createClawMeshCli(): Command {
       }
     });
 
-  // ── peers ────────────────────────────────────────────────
-  program
-    .command("peers")
-    .description("List currently connected mesh peers")
-    .action(() => {
-      // In a running gateway, this would query PeerRegistry.
-      // For now, print a placeholder until the gateway server is running.
-      console.log("No gateway running. Start with `clawmesh start` first.");
-    });
-
-  // ── info (local identity) ────────────────────────────────
-  program
-    .command("info")
-    .description("Show local device identity and mesh info")
-    .action(() => {
-      const identity = loadOrCreateDeviceIdentity();
-      console.log(`Device ID:  ${identity.deviceId}`);
-      console.log("Gateway:    not running");
-      console.log("Mesh peers: 0");
-    });
-
-  // ── world ─────────────────────────────────────────────────
-  program
-    .command("world")
-    .description("Query the world model (requires running node)")
-    .action(() => {
-      console.log("World model query requires a running node.");
-      console.log("Use: clawmesh start --mock-sensor (and watch logs)");
-    });
+  registerLiveRpcCommands(program);
 
   // ── status ──────────────────────────────────────────────
   program

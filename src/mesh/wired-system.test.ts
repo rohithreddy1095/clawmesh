@@ -64,6 +64,7 @@ describe("Wired MeshNodeRuntime", () => {
       "mesh.connect",
       "mesh.peers",
       "mesh.status",
+      "mesh.world.query",
       "mesh.message.forward",
       "chat.subscribe",
       "chat.proposal.approve",

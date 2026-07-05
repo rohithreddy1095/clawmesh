@@ -77,11 +77,16 @@ describe("RpcDispatcher wiring in MeshNodeRuntime", () => {
     expect(runtime.rpcDispatcher.hasHandler("mesh.health")).toBe(true);
   });
 
+  it("registers mesh.world.query handler", () => {
+    expect(runtime.rpcDispatcher.hasHandler("mesh.world.query")).toBe(true);
+  });
+
   it("lists all registered methods", () => {
     const methods = runtime.rpcDispatcher.listMethods();
     expect(methods.length).toBeGreaterThanOrEqual(7);
     expect(methods).toContain("mesh.connect");
     expect(methods).toContain("mesh.peers");
+    expect(methods).toContain("mesh.world.query");
     expect(methods).toContain("context.sync");
     expect(methods).toContain("mesh.health");
   });

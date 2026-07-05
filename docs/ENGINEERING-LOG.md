@@ -379,3 +379,108 @@ so the real-LAN discovery-only mesh formation checks were not run.
 
 **Next:** Slice 2 — wire `clawmesh peers`, `world`, and `info` to the running
 node truth instead of placeholder output.
+
+## 2026-07-05 — Phase 2 Slice 2: CLI truth wired to running node RPCs
+
+**What changed (Spec/Red/Green):**
+- PROTOCOL.md now specifies `mesh.world.query` as a read-only world-model RPC:
+  `{ limit? ≤200, kind?, sourceDeviceId? }` returning recent frames, count,
+  entry count, per-source/per-kind/per-tier breakdowns, and peer timestamp.
+  The spec requires returned frames to preserve `sourceDeviceId` and
+  `trust.evidence_trust_tier` exactly as ingested.
+- Added `createWorldQueryHandlers` and registered `mesh.world.query` in
+  `MeshNodeRuntime`.
+- Replaced placeholder `clawmesh peers`, `clawmesh world`, and `clawmesh info`
+  output with live WebSocket RPC calls. `peers` calls `mesh.peers`; `world`
+  calls `mesh.world.query`; `info` prints local identity plus reachable
+  runtime status from `mesh.status`.
+- Extracted live-node CLI RPC code to `src/cli/live-rpc-commands.ts` so
+  `src/cli/clawmesh-cli.ts` stays below the 1000-line architecture guardrail.
+
+**Verification:**
+- Red tests before implementation:
+  `pnpm exec vitest run src/mesh/server-methods/world-query.test.ts
+  src/cli/cli-live-rpc.test.ts src/mesh/rpc-wiring.test.ts
+  src/mesh/wired-system.test.ts` failed on missing `./world-query.js`,
+  missing CLI `--url`, and absent runtime registration.
+- Targeted green:
+  `pnpm exec vitest run src/mesh/server-methods/world-query.test.ts
+  src/cli/cli-live-rpc.test.ts src/mesh/rpc-wiring.test.ts
+  src/mesh/wired-system.test.ts src/agents/architecture-regression.test.ts`
+  → 5 files / 51 tests passed.
+- Full relevant gate:
+  `pnpm exec vitest run src/mesh/ src/agents/ src/cli/` → 141 files /
+  2217 tests passed (60.71 s).
+- Typecheck sanity:
+  `pnpm exec tsc --noEmit --pretty false` still fails only on the known
+  handoff-listed debts in `src/agents/pi-session.ts` and
+  `src/mesh/node-runtime.ts`; no Slice 2 files report type errors.
+- Localhost live mesh:
+  `scripts/local-mesh.sh clean && (scripts/local-mesh.sh up 3 || true);
+  sleep 300`, then `scripts/local-mesh.sh status` → node1 peers
+  `local-node2`; node2 peers `local-node3,local-node1`; node3 peers
+  `local-node2`.
+  `pnpm exec tsx clawmesh.ts peers --url ws://127.0.0.1:19002` → connected
+  peers were local-node3 and local-node1, with node1 capabilities
+  `channel:clawmesh,actuator:mock`.
+  `pnpm exec tsx clawmesh.ts world --url ws://127.0.0.1:19003 --limit 5`
+  → 5 node1 observation frames with `sourceDeviceId=...885864...` and
+  `tier=T2_operational_observation`.
+  `pnpm exec tsx clawmesh.ts info --url ws://127.0.0.1:19002` → reachable
+  runtime ID `301bec...`, 2 peers, discovery disabled, planner disabled.
+  `node scripts/frame-listen.mjs ws://127.0.0.1:19003 8 88586407d70229c16ad7acd661d76cd87c81604f8d47695ce71ca784d1001aea`
+  → 2 node1 T2 frames received at node3, p50 2 ms same-host delta.
+- Safety canary:
+  `scripts/safety-canary.sh ws://127.0.0.1:19001` → CANARY GREEN;
+  A rejected `ACTUATION_DECLARATION_REQUIRED`, B rejected
+  `LLM_ONLY_ACTUATION_BLOCKED`; C skipped because no target deviceId was
+  passed for the localhost canary.
+- Cleanup:
+  `scripts/local-mesh.sh clean` completed and removed `/tmp/clawmesh-local-mesh`.
+
+**Hardware acceptance:** UNCHECKED for this slice. Slice 2 did not add a new
+hardware-specific requirement beyond "run against the live mesh"; live
+verification was on the committed localhost mesh harness. The Jetson remained
+unreachable by direct WS/SSH in Slice 1, so no Jetson CLI-truth check is
+claimed here.
+
+**Next:** Slice 3 — `llm:<provider/model>` capability and streaming
+`llm.infer` with T0 provenance surviving forwarding.
+
+### REVIEW 2026-07-05
+
+| Slice | Status | Commit range | Tag |
+|---|---|---|---|
+| 1 — mDNS discovery repair | done | `20b4b01` | `slice-1-done-20260705` |
+| 2 — CLI truth | done | `20b4b01..slice-2-done-20260705` | `slice-2-done-20260705` |
+| 3 — LLM capability + streaming inference | untouched | — | — |
+| 4 — N=3 measurements | untouched | — | — |
+| 5 — typecheck debt | untouched | — | — |
+
+**Acceptance evidence:** Slice 1: `pnpm exec vitest run src/mesh/ src/agents/`
+passed 133 files / 2090 tests; localhost `scripts/local-mesh.sh up 3`,
+`node scripts/frame-listen.mjs ws://127.0.0.1:19003 12 <node1-id>`, and
+`scripts/safety-canary.sh ws://127.0.0.1:19001` passed as logged above.
+Hardware discovery-only mesh formation was explicitly unverified because the
+Jetson was unreachable (`EHOSTUNREACH` / `No route to host`) despite mDNS
+advertising. Slice 2: `pnpm exec vitest run src/mesh/ src/agents/ src/cli/`
+passed 141 files / 2217 tests; localhost `clawmesh peers`, `world`, and
+`info` commands against ports 19002/19003 printed live runtime truth as logged
+above.
+
+**Canary status:** last run 2026-07-05 against localhost node1
+`ws://127.0.0.1:19001`; CANARY GREEN for rejection shots A/B; positive shot C
+skipped because no target deviceId was passed.
+
+**Deviations & objections:** no design objections logged. Hardware checks that
+could not be run are explicitly unchecked; no verification is claimed for
+Jetson after it became unreachable from this Mac.
+
+**Open threads:** Slice 3 is the next implementation slice. Slice 4 real-LAN
+N=3 remains untouched. Slice 5 typecheck debt remains the known pre-existing
+`pi-session.ts` / `node-runtime.ts` debt.
+
+**Repo state:** expected after this entry is committed and tagged: branch
+`main`, local-only, ahead of `origin/main`, nothing pushed to GitHub.
+`scripts/local-mesh.sh clean` has been run; no `/tmp/clawmesh-local-mesh`
+state dir or localhost node processes remain.

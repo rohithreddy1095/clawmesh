@@ -14,6 +14,7 @@ import { createMeshServerHandlers } from "./peer-server.js";
 import { createMeshForwardHandlers } from "./server-methods/forward.js";
 import { createMeshPeersHandlers } from "./server-methods/peers.js";
 import { createContextSyncHandlers } from "./server-methods/context-sync.js";
+import { createWorldQueryHandlers } from "./server-methods/world-query.js";
 import { createHealthCheckHandlers } from "./health-check.js";
 import { MeshEventBus } from "./event-bus.js";
 import { RpcDispatcher } from "./rpc-dispatcher.js";
@@ -267,6 +268,7 @@ export class MeshNodeRuntime {
     }
 
     this.rpcDispatcher.registerAll(createContextSyncHandlers({ worldModel: this.worldModel }));
+    this.rpcDispatcher.registerAll(createWorldQueryHandlers({ worldModel: this.worldModel }));
     this.rpcDispatcher.registerAll(createHealthCheckHandlers({
       nodeId: this.identity.deviceId,
       displayName: this.displayName,
