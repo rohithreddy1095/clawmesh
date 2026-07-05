@@ -24,6 +24,24 @@ vi.mock("@homebridge/ciao", () => {
   };
 });
 
+vi.mock("bonjour-service", () => {
+  const browser = {
+    on: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+  };
+  class Bonjour {
+    find() {
+      return browser;
+    }
+
+    destroy(callback?: () => void) {
+      callback?.();
+    }
+  }
+  return { default: Bonjour, Bonjour };
+});
+
 describe("MeshNodeRuntime", () => {
   let harness: MeshRuntimeHarness;
 
@@ -370,6 +388,32 @@ describe("MeshNodeRuntime", () => {
 
     const peerSeenByA = nodeA.runtime.listConnectedPeers().find((p) => p.deviceId === nodeB.identity.deviceId);
     expect(peerSeenByA?.transportLabel).toBe("mdns");
+  });
+
+  it("does not dial untrusted discovered peers", async () => {
+    const nodeB = await harness.startNode({
+      name: "node-b-untrusted-mdns",
+      capabilities: ["channel:clawmesh"],
+    });
+    const nodeA = await harness.startNode({
+      name: "node-a-untrusted-mdns",
+      capabilities: ["channel:clawmesh"],
+    });
+
+    if (!nodeA || !nodeB || !nodeA.runtime.discovery) return;
+
+    nodeA.runtime.discovery.emit("peer-discovered", {
+      deviceId: nodeB.identity.deviceId,
+      displayName: nodeB.runtime.displayName,
+      host: "127.0.0.1",
+      port: nodeB.address.port,
+      discoveredAtMs: Date.now(),
+    });
+
+    const connected = await nodeA.runtime.waitForPeerConnected(nodeB.identity.deviceId, 300);
+    expect(connected).toBe(false);
+    expect(nodeA.runtime.peerConnections.has(nodeB.identity.deviceId)).toBe(false);
+    expect(nodeA.runtime.autoConnect.getAttemptCount(nodeB.identity.deviceId)).toBe(0);
   });
 
   it("rebroadcasts remote context and proposal events to local UI subscribers", async () => {

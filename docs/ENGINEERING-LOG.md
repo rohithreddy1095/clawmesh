@@ -323,3 +323,59 @@ gossip delivery observed**: node1 observation frames (T2) arrived at
 node3, which has no direct node1 link, via node2 (same-host delta ~2 ms,
 3/3 frames). Hop-limit-3 flood works at N=3 on localhost; the real-LAN
 N=3 measurement remains Phase 2 Slice 4.
+
+## 2026-07-05 — Phase 2 Slice 1: mDNS discovery browse repaired
+
+**What changed (Spec/Red/Green):**
+- PROTOCOL.md §4 now states the browse-side rule explicitly: ignore
+  service records without `deviceId`, ignore self-discovery, and use
+  `deviceId` for the trust check before dialing.
+- `MeshDiscovery` keeps `@homebridge/ciao` for advertising but no longer
+  calls the nonexistent `createServiceBrowser`. Browse side now uses
+  `bonjour-service` against the same `_clawmesh._tcp.local` service type.
+- Discovery advertisements still carry `deviceId` and `version` TXT
+  records. Browser TXT parsing accepts string/Buffer forms and prefers IPv4
+  addresses when Bonjour provides multiple addresses.
+- Runtime auto-connect still goes through `AutoConnectManager.evaluateWithTrust`
+  and then `connectToPeer`, so discovery cannot bypass trust. Added a runtime
+  regression test proving an untrusted discovered peer is not dialed and does
+  not consume an auto-connect attempt.
+
+**Verification:**
+- Red test observed before implementation:
+  `pnpm exec vitest run src/mesh/discovery.test.ts src/mesh/node-runtime.test.ts`
+  failed on `TypeError: this.responder.createServiceBrowser is not a function`.
+- Green unit/integration gate:
+  `pnpm exec vitest run src/mesh/ src/agents/` → 133 files / 2090 tests passed
+  (61.56 s on final run).
+- Typecheck sanity:
+  `pnpm exec tsc --noEmit --pretty false` still fails only on the pre-existing
+  handoff-listed debts in `src/agents/pi-session.ts` and
+  `src/mesh/node-runtime.ts`; no discovery errors remain.
+- Localhost live mesh:
+  `scripts/local-mesh.sh clean && scripts/local-mesh.sh up 3`, then
+  `scripts/local-mesh.sh status` → node1 peers `local-node2`; node2 peers
+  `local-node3,local-node1`; node3 peers `local-node2`.
+  `node scripts/frame-listen.mjs ws://127.0.0.1:19003 12 35a22971938b2bd8719db522b7a1376bfb663719f246a7d7dbcbe91b5372f8a1`
+  → 2 node1 T2 frames received at node3, p50 2 ms same-host delta.
+  This verifies static peers / `--no-discovery` still work in the harness.
+- Safety canary:
+  `scripts/safety-canary.sh ws://127.0.0.1:19001` → CANARY GREEN;
+  A rejected `ACTUATION_DECLARATION_REQUIRED`, B rejected
+  `LLM_ONLY_ACTUATION_BLOCKED`; C skipped because no target deviceId was
+  passed for the localhost canary.
+- Cleanup:
+  `scripts/local-mesh.sh clean` completed and removed `/tmp/clawmesh-local-mesh`.
+
+**Hardware acceptance:** UNCHECKED. The Jetson could not be reached from this
+Mac during this slice. Evidence: `node scripts/mesh-rpc.mjs
+ws://192.168.1.50:18789 mesh.peers` returned `EHOSTUNREACH`;
+`ping jetson-field-01.local` and `ssh jetson@jetson-field-01.local` both
+reported `No route to host`; `ssh-keyscan -T 5 -t ed25519 192.168.1.50`
+returned no public key. mDNS still advertised
+`jetson-field-01._clawmesh._tcp.local` with the expected deviceId TXT record
+and port 18789, but direct traffic to the resolved address was unavailable,
+so the real-LAN discovery-only mesh formation checks were not run.
+
+**Next:** Slice 2 — wire `clawmesh peers`, `world`, and `info` to the running
+node truth instead of placeholder output.

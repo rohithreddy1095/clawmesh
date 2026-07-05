@@ -66,6 +66,9 @@ It is NOT a data plane. See §11 for explicit non-guarantees.
 - **mDNS/DNS-SD service type:** `clawmesh` (i.e. `_clawmesh._tcp.local`).
 - Advertised TXT records: `deviceId` (as §3), `version` (software version
   string). The service port is the node's WebSocket listen port.
+- Browsers MUST ignore service records without `deviceId` and MUST ignore
+  their own `deviceId`; `deviceId` is the identity used for the trust check
+  before any discovered address is dialed.
 - Discovery only *finds* peers. Connection eligibility is governed solely by
   the trust store (§3). Nodes MAY disable discovery entirely and use static
   peer configuration: `<deviceId>=<url>|<tlsFingerprint>|<transportLabel>`
