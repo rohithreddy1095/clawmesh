@@ -35,10 +35,8 @@ function fileLineCount(path: string): number {
 describe("Architecture Metrics", () => {
   // ─── God Object Decomposition ──────────────
 
-  it("node-runtime.ts is under 580 lines (decomposed from 754)", () => {
-    const lines = fileLineCount("src/mesh/node-runtime.ts");
-    expect(lines).toBeLessThan(580);
-  });
+  // node-runtime line-count guardrail lives in architecture-invariants.test.ts
+  // (was duplicated across four files; consolidated 2026-07-05).
 
   it("node-runtime.ts delegates to RpcDispatcher (no inline dispatch)", () => {
     const content = readFileSync("src/mesh/node-runtime.ts", "utf-8");

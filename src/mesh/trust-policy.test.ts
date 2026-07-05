@@ -16,6 +16,107 @@ describe("mesh trust policy", () => {
     expect(evaluateMeshForwardTrust(basePayload())).toEqual({ ok: true });
   });
 
+  describe("deny-by-default for actuator-targeted commands", () => {
+    it("rejects an actuator-targeted forward with NO trust metadata", () => {
+      const result = evaluateMeshForwardTrust({
+        ...basePayload(),
+        to: "actuator:pump:P1",
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe("ACTUATION_DECLARATION_REQUIRED");
+      }
+    });
+
+    it("rejects an actuator-targeted envelope that declares a non-actuation action_type", () => {
+      // The bypass: target an actuator but declare "communication" so the
+      // actuation gate never engages. Must be rejected by construction.
+      const result = evaluateMeshForwardTrust({
+        ...basePayload(),
+        to: "actuator:pump:P1",
+        command: {
+          version: 1,
+          kind: "clawmesh.command",
+          commandId: "cmd-1",
+          createdAtMs: Date.now(),
+          target: { kind: "capability", ref: "actuator:pump:P1" },
+          operation: { name: "open" },
+          trust: {
+            action_type: "communication",
+            evidence_trust_tier: "T0_planning_inference",
+            minimum_trust_tier: "T0_planning_inference",
+            verification_required: "none",
+          },
+        },
+        trust: {
+          action_type: "communication",
+          evidence_trust_tier: "T0_planning_inference",
+          minimum_trust_tier: "T0_planning_inference",
+          verification_required: "none",
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe("ACTUATION_DECLARATION_REQUIRED");
+      }
+    });
+
+    it("rejects when the envelope target is an actuator even if payload.to is not", () => {
+      const result = evaluateMeshForwardTrust({
+        ...basePayload(),
+        to: "some-channel-recipient",
+        command: {
+          version: 1,
+          kind: "clawmesh.command",
+          commandId: "cmd-2",
+          createdAtMs: Date.now(),
+          target: { kind: "capability", ref: "actuator:valve:V2" },
+          operation: { name: "open" },
+          trust: {
+            action_type: "observation",
+            evidence_trust_tier: "T2_operational_observation",
+            minimum_trust_tier: "T2_operational_observation",
+            verification_required: "none",
+          },
+        },
+        trust: {
+          action_type: "observation",
+          evidence_trust_tier: "T2_operational_observation",
+          minimum_trust_tier: "T2_operational_observation",
+          verification_required: "none",
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe("ACTUATION_DECLARATION_REQUIRED");
+      }
+    });
+
+    it("accepts an actuator-targeted command that properly declares actuation and passes the gate", () => {
+      const result = evaluateMeshForwardTrust({
+        ...basePayload(),
+        to: "actuator:pump:P1",
+        trust: {
+          action_type: "actuation",
+          evidence_sources: ["sensor", "human"],
+          evidence_trust_tier: "T3_verified_action_evidence",
+          minimum_trust_tier: "T2_operational_observation",
+          verification_required: "human",
+          verification_satisfied: true,
+        },
+      });
+      expect(result).toEqual({ ok: true });
+    });
+
+    it("still allows non-actuator forwards without trust metadata (legacy channel path)", () => {
+      const result = evaluateMeshForwardTrust({
+        ...basePayload(),
+        to: "telegram-chat-123",
+      });
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
   it("blocks actuation when evidence is LLM-only", () => {
     const result = evaluateMeshForwardTrust({
       ...basePayload(),

@@ -31,11 +31,8 @@ function countFiles(dir: string, pattern: RegExp): number {
 }
 
 describe("Architecture Graduation: Module Decomposition", () => {
-  it("node-runtime.ts is under 580 lines (from 754 original)", () => {
-    const content = readFileSync("src/mesh/node-runtime.ts", "utf-8");
-    const lines = content.split("\n").length;
-    expect(lines).toBeLessThan(580);
-  });
+  // node-runtime line-count guardrail lives in architecture-invariants.test.ts
+  // (was duplicated across four files; consolidated 2026-07-05).
 
   it("node-runtime.ts uses PeerConnectionManager (not raw outboundClients)", () => {
     const content = readFileSync("src/mesh/node-runtime.ts", "utf-8");

@@ -29,38 +29,32 @@ function makeFrame(overrides: Partial<ContextFrame> = {}): ContextFrame {
 // ─── Handshake auth payload ─────────────────────────
 
 describe("buildMeshAuthPayload - edge cases", () => {
-  it("builds basic payload", () => {
-    const result = buildMeshAuthPayload({
-      deviceId: "abc",
-      signedAtMs: 1000,
-    });
-    expect(result).toBe("mesh.connect|v1|abc|1000");
-  });
-
-  it("includes nonce when provided", () => {
+  it("builds basic v2 payload with all seven fixed positions", () => {
     const result = buildMeshAuthPayload({
       deviceId: "abc",
       signedAtMs: 1000,
       nonce: "test-nonce",
     });
-    expect(result).toBe("mesh.connect|v1|abc|1000|test-nonce");
+    expect(result).toBe("mesh.connect|v2|abc|1000|test-nonce||");
   });
 
-  it("omits nonce when undefined", () => {
+  it("never renders literal 'undefined' for absent optional fields", () => {
     const result = buildMeshAuthPayload({
       deviceId: "abc",
       signedAtMs: 1000,
+      nonce: "n",
     });
     expect(result).not.toContain("undefined");
-    expect(result.split("|")).toHaveLength(4);
+    expect(result.split("|")).toHaveLength(7);
   });
 
   it("handles empty deviceId", () => {
     const result = buildMeshAuthPayload({
       deviceId: "",
       signedAtMs: 0,
+      nonce: "n",
     });
-    expect(result).toBe("mesh.connect|v1||0");
+    expect(result).toBe("mesh.connect|v2||0|n||");
   });
 });
 

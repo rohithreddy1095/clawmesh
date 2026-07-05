@@ -187,32 +187,37 @@ describe("RPC dispatcher wire format", () => {
 // ─── Handshake auth payload format ──────────────────
 
 describe("Handshake auth payload format", () => {
-  it("v1 format with pipe separators", () => {
+  it("v2 format: fixed seven pipe-separated positions", () => {
     const payload = buildMeshAuthPayload({
       deviceId: "abc123",
       signedAtMs: 1234567890000,
-    });
-    const parts = payload.split("|");
-    expect(parts[0]).toBe("mesh.connect");
-    expect(parts[1]).toBe("v1");
-    expect(parts[2]).toBe("abc123");
-    expect(parts[3]).toBe("1234567890000");
-  });
-
-  it("nonce adds fifth part", () => {
-    const payload = buildMeshAuthPayload({
-      deviceId: "abc",
-      signedAtMs: 1000,
       nonce: "n123",
     });
     const parts = payload.split("|");
-    expect(parts).toHaveLength(5);
+    expect(parts).toHaveLength(7);
+    expect(parts[0]).toBe("mesh.connect");
+    expect(parts[1]).toBe("v2");
+    expect(parts[2]).toBe("abc123");
+    expect(parts[3]).toBe("1234567890000");
     expect(parts[4]).toBe("n123");
+    expect(parts[5]).toBe(""); // meshId slot, explicit empty
+    expect(parts[6]).toBe(""); // role slot, explicit empty
+  });
+
+  it("field values are encoded so they cannot contain the delimiter", () => {
+    const payload = buildMeshAuthPayload({
+      deviceId: "abc",
+      signedAtMs: 1000,
+      nonce: "n",
+      meshId: "evil|role-injection",
+    });
+    // Still exactly 7 positions — the embedded pipe is escaped, not structural.
+    expect(payload.split("|")).toHaveLength(7);
   });
 
   it("auth payload is deterministic", () => {
-    const a = buildMeshAuthPayload({ deviceId: "x", signedAtMs: 999 });
-    const b = buildMeshAuthPayload({ deviceId: "x", signedAtMs: 999 });
+    const a = buildMeshAuthPayload({ deviceId: "x", signedAtMs: 999, nonce: "n" });
+    const b = buildMeshAuthPayload({ deviceId: "x", signedAtMs: 999, nonce: "n" });
     expect(a).toBe(b);
   });
 });

@@ -199,14 +199,14 @@ describe("Safety - actuator target protection", () => {
 
 describe("Safety - auth payload tamper resistance", () => {
   it("different device IDs produce different payloads", () => {
-    const a = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 1000 });
-    const b = buildMeshAuthPayload({ deviceId: "xyz", signedAtMs: 1000 });
+    const a = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 1000, nonce: "n" });
+    const b = buildMeshAuthPayload({ deviceId: "xyz", signedAtMs: 1000, nonce: "n" });
     expect(a).not.toBe(b);
   });
 
   it("different timestamps produce different payloads", () => {
-    const a = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 1000 });
-    const b = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 2000 });
+    const a = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 1000, nonce: "n" });
+    const b = buildMeshAuthPayload({ deviceId: "abc", signedAtMs: 2000, nonce: "n" });
     expect(a).not.toBe(b);
   });
 

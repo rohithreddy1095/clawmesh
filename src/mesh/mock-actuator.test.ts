@@ -37,6 +37,59 @@ function makeForwardPayload(
   };
 }
 
+describe("MockActuatorController — executor-side deny-by-default", () => {
+  let controller: MockActuatorController;
+
+  beforeEach(() => {
+    controller = new MockActuatorController({ log: noop });
+  });
+
+  it("refuses to execute a command whose trust declares a non-actuation action_type", async () => {
+    // The executor must never trust upstream gating: an envelope targeting
+    // an actuator but declaring "communication" must not change state.
+    await controller.handleForward(makeForwardPayload({
+      trust: {
+        action_type: "communication",
+        evidence_trust_tier: "T0_planning_inference",
+        minimum_trust_tier: "T0_planning_inference",
+        verification_required: "none",
+      },
+    }));
+
+    const snapshot = controller.snapshot();
+    expect(snapshot.records).toHaveLength(0);
+    expect(snapshot.history).toHaveLength(0);
+    expect(controller.refusedCount).toBe(1);
+    expect(controller.lastRefusal?.code).toBe("ACTUATION_DECLARATION_REQUIRED");
+  });
+
+  it("refuses to execute when the actuation gate fails (LLM-only evidence)", async () => {
+    await controller.handleForward(makeForwardPayload({
+      trust: {
+        action_type: "actuation",
+        evidence_sources: ["llm"],
+        evidence_trust_tier: "T3_verified_action_evidence",
+        minimum_trust_tier: "T2_operational_observation",
+        verification_required: "none",
+      },
+    }));
+
+    const snapshot = controller.snapshot();
+    expect(snapshot.records).toHaveLength(0);
+    expect(controller.refusedCount).toBe(1);
+    expect(controller.lastRefusal?.code).toBe("LLM_ONLY_ACTUATION_BLOCKED");
+  });
+
+  it("executes a properly declared and gated actuation command", async () => {
+    await controller.handleForward(makeForwardPayload({
+      operation: { name: "start" },
+    }));
+    const snapshot = controller.snapshot();
+    expect(snapshot.records).toHaveLength(1);
+    expect(controller.refusedCount).toBe(0);
+  });
+});
+
 describe("MockActuatorController", () => {
   let controller: MockActuatorController;
 

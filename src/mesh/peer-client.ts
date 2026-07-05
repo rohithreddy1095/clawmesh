@@ -44,7 +44,9 @@ export class MeshPeerClient {
   private backoffMs = 1000;
   private closed = false;
   private connId: string = randomUUID();
+  private challengeRequestId: string | null = null;
   private connectRequestId: string | null = null;
+  private clientNonce: string | null = null;
   private connected = false;
 
   constructor(opts: MeshPeerClientOptions) {
@@ -56,7 +58,9 @@ export class MeshPeerClient {
       return;
     }
     this.connId = randomUUID();
+    this.challengeRequestId = null;
     this.connectRequestId = null;
+    this.clientNonce = null;
     this.connected = false;
     const url = this.opts.url;
 
@@ -91,7 +95,7 @@ export class MeshPeerClient {
     this.ws = new WebSocket(url, wsOptions);
 
     this.ws.on("open", () => {
-      this.sendMeshConnect();
+      this.sendMeshChallenge();
     });
     this.ws.on("message", (data) => this.handleMessage(rawDataToString(data)));
     this.ws.on("close", (_code, reason) => {
@@ -119,12 +123,27 @@ export class MeshPeerClient {
     }
   }
 
-  private sendMeshConnect() {
+  /** Step 1: ask the server for a single-use challenge nonce. */
+  private sendMeshChallenge() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return;
     }
+    const requestId = randomUUID();
+    this.challengeRequestId = requestId;
+    this.ws.send(
+      JSON.stringify({ type: "req", id: requestId, method: "mesh.challenge", params: {} }),
+    );
+  }
+
+  /** Step 2: sign over the server's nonce; include our own nonce for mutual anti-replay. */
+  private sendMeshConnect(serverNonce: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.clientNonce = randomUUID();
     const auth = buildMeshConnectAuth({
       identity: this.opts.identity,
+      nonce: serverNonce,
       displayName: this.opts.displayName,
       capabilities: this.opts.capabilities,
       meshId: this.opts.meshId,
@@ -136,7 +155,7 @@ export class MeshPeerClient {
       type: "req",
       id: requestId,
       method: "mesh.connect",
-      params: { version: 1, ...auth },
+      params: { version: 2, ...auth, clientNonce: this.clientNonce },
     });
     this.ws.send(frame);
   }
@@ -144,6 +163,24 @@ export class MeshPeerClient {
   private handleMessage(raw: string) {
     try {
       const parsed = JSON.parse(raw);
+      // Challenge response → proceed to signed connect.
+      if (
+        parsed.type === "res" &&
+        parsed.id &&
+        !this.connected &&
+        this.challengeRequestId &&
+        parsed.id === this.challengeRequestId
+      ) {
+        this.challengeRequestId = null;
+        const nonce = parsed.ok ? (parsed.payload as { nonce?: string })?.nonce : undefined;
+        if (typeof nonce !== "string" || !nonce) {
+          this.opts.onError?.(new Error(parsed.error?.message ?? "mesh.challenge failed"));
+          this.ws?.close(1008, "mesh.challenge failed");
+          return;
+        }
+        this.sendMeshConnect(nonce);
+        return;
+      }
       if (
         parsed.type === "res" &&
         parsed.id &&
@@ -203,14 +240,22 @@ export class MeshPeerClient {
       this.ws?.close(1008, "device ID mismatch");
       return;
     }
-    // Verify the server's signature (mutual auth).
+    // Verify the server's signature (mutual auth). The server must have
+    // signed over OUR clientNonce — a replayed response cannot have.
+    if (!this.clientNonce) {
+      this.opts.onError?.(new Error("mesh connect response before challenge completed"));
+      this.ws?.close(1008, "unexpected connect response");
+      return;
+    }
     const valid = verifyMeshConnectAuth({
       deviceId: result.deviceId,
       publicKey: result.publicKey,
       signature: result.signature,
       signedAtMs: result.signedAtMs,
+      nonce: result.nonce,
       meshId: result.meshId,
       role: result.role,
+      requiredNonce: this.clientNonce,
     });
     if (!valid) {
       this.opts.onError?.(new Error("mesh peer signature verification failed"));

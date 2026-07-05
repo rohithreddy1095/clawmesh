@@ -129,7 +129,7 @@ export type MeshCapabilities = {
 
 export type MeshConnectParams = {
   /** Protocol version. */
-  version: 1;
+  version: 2;
   /** Connecting peer's device ID. */
   deviceId: string;
   /** Connecting peer's public key (base64url of raw Ed25519). */
@@ -138,8 +138,10 @@ export type MeshConnectParams = {
   signature: string;
   /** Timestamp when the signature was created (ms). */
   signedAtMs: number;
-  /** Challenge nonce received from the server. */
-  nonce?: string;
+  /** Server-issued challenge nonce (from mesh.challenge). Mandatory. */
+  nonce: string;
+  /** Client-generated nonce the server must sign over in its response (mutual anti-replay). */
+  clientNonce: string;
   /** Display name. */
   displayName?: string;
   /** Stable mesh identity this peer belongs to. */
@@ -159,6 +161,8 @@ export type MeshConnectResult = {
   signature: string;
   /** Server's signed-at timestamp. */
   signedAtMs: number;
+  /** Echo of the client's clientNonce — the server signed over this. */
+  nonce: string;
   /** Server's display name. */
   displayName?: string;
   /** Server's stable mesh identity. */

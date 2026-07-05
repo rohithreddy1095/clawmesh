@@ -23,7 +23,8 @@ type TrustDecision =
         | "TRUST_METADATA_REQUIRED"
         | "INSUFFICIENT_TRUST_TIER"
         | "VERIFICATION_REQUIRED"
-        | "LLM_ONLY_ACTUATION_BLOCKED";
+        | "LLM_ONLY_ACTUATION_BLOCKED"
+        | "ACTUATION_DECLARATION_REQUIRED";
       message: string;
     };
 
@@ -41,6 +42,26 @@ function hasAtLeastTrustTier(actual: MeshTrustTier, minimum: MeshTrustTier): boo
 
 export function evaluateMeshForwardTrust(payload: MeshForwardPayload): TrustDecision {
   const trust = payload.trust;
+
+  // Deny-by-default: anything addressed at an actuator — via the payload
+  // recipient or the command envelope target — MUST declare
+  // action_type "actuation" so the full actuation gate below engages.
+  // Without this, a command could target an actuator while declaring
+  // "communication" and bypass every trust check.
+  const targetRefs = [payload.to, payload.command?.target?.ref].filter(
+    (r): r is string => typeof r === "string",
+  );
+  if (targetRefs.some((r) => r.startsWith("actuator:"))) {
+    if (!trust || trust.action_type !== "actuation") {
+      return {
+        ok: false,
+        code: "ACTUATION_DECLARATION_REQUIRED",
+        message:
+          "commands targeting an actuator must declare action_type \"actuation\" with full trust metadata",
+      };
+    }
+  }
+
   if (!trust) {
     return { ok: true };
   }

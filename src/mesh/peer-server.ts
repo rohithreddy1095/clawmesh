@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DeviceIdentity } from "../infra/device-identity.js";
+import { ChallengeStore } from "./challenge-store.js";
 import { buildMeshConnectAuth, verifyMeshConnectAuth } from "./handshake.js";
 import type { PeerRegistry } from "./peer-registry.js";
 import { isTrustedPeer, getTrustedPeer } from "./peer-trust.js";
@@ -21,19 +22,58 @@ export type MeshServerHandlerDeps = {
   meshId?: string;
   role?: MeshNodeRole;
   onPeerConnected?: (session: PeerSession) => void;
+  /** Injectable for tests; a fresh store is created if omitted. */
+  challengeStore?: ChallengeStore;
 };
 
 /**
  * Create gateway request handlers for inbound mesh peer connections.
+ *
+ * Handshake sequence (v2):
+ *   1. Client → mesh.challenge          → server issues single-use nonce
+ *   2. Client → mesh.connect (signed over nonce, carries clientNonce)
+ *   3. Server verifies nonce + signature, responds signed over clientNonce
  */
 export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRequestHandlers {
+  const challenges = deps.challengeStore ?? new ChallengeStore();
+
   return {
+    "mesh.challenge": ({ respond, req }) => {
+      const connId = (req as { _connId?: string })._connId ?? randomUUID();
+      const nonce = challenges.issue(connId);
+      respond(true, { nonce });
+    },
+
     "mesh.connect": async ({ params, respond, req }) => {
       const p = params as unknown as MeshConnectParams;
       if (!p || !p.deviceId || !p.publicKey || !p.signature || !p.signedAtMs) {
         respond(false, undefined, {
           code: "INVALID_PARAMS",
           message: "missing required mesh.connect params",
+        });
+        return;
+      }
+      if (typeof p.clientNonce !== "string" || !p.clientNonce) {
+        respond(false, undefined, {
+          code: "INVALID_PARAMS",
+          message: "missing clientNonce for mutual authentication",
+        });
+        return;
+      }
+
+      // The nonce must be one WE issued for THIS connection, unconsumed and fresh.
+      const connId = (req as { _connId?: string })._connId ?? randomUUID();
+      if (!p.nonce) {
+        respond(false, undefined, {
+          code: "AUTH_NONCE_REQUIRED",
+          message: "mesh.connect requires a server-issued nonce; call mesh.challenge first",
+        });
+        return;
+      }
+      if (!challenges.consume(connId, p.nonce)) {
+        respond(false, undefined, {
+          code: "AUTH_NONCE_INVALID",
+          message: "nonce was not issued for this connection, already used, or expired",
         });
         return;
       }
@@ -57,7 +97,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         return;
       }
 
-      // Verify the peer's Ed25519 signature.
+      // Verify the peer's Ed25519 signature over the nonce we issued.
       const valid = verifyMeshConnectAuth({
         deviceId: p.deviceId,
         publicKey: p.publicKey,
@@ -66,6 +106,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         nonce: p.nonce,
         meshId: p.meshId,
         role: p.role,
+        requiredNonce: p.nonce,
       });
       if (!valid) {
         respond(false, undefined, {
@@ -84,8 +125,10 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
       }
 
       // Build our own signed response for mutual authentication.
+      // We sign over the CLIENT's nonce so our response cannot be replayed either.
       const ourAuth = buildMeshConnectAuth({
         identity: deps.identity,
+        nonce: p.clientNonce,
         displayName: deps.displayName,
         capabilities: deps.capabilities,
         meshId: deps.meshId,
@@ -97,7 +140,6 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
       // but we need to associate it with this peer for RPC routing.
       // In a real implementation, we'd get the WS from the request context.
       // For now, we register with a placeholder that the manager will update.
-      const connId = (req as { _connId?: string })._connId ?? randomUUID();
       const socket = (req as { _socket?: WebSocket })._socket;
       const session: PeerSession = {
         deviceId: p.deviceId,
@@ -118,6 +160,7 @@ export function createMeshServerHandlers(deps: MeshServerHandlerDeps): GatewayRe
         publicKey: ourAuth.publicKey,
         signature: ourAuth.signature,
         signedAtMs: ourAuth.signedAtMs,
+        nonce: ourAuth.nonce,
         displayName: ourAuth.displayName,
         capabilities: ourAuth.capabilities,
         meshId: ourAuth.meshId,

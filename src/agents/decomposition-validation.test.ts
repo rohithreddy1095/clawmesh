@@ -12,17 +12,10 @@ import { execSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "../..");
 
-describe("PiSession decomposition metrics", () => {
-  it("PiSession is under 700 lines (was 895)", () => {
-    const lines = readFileSync(resolve(root, "src/agents/pi-session.ts"), "utf8").split("\n").length;
-    expect(lines).toBeLessThan(700);
-  });
-
-  it("node-runtime.ts (god object) is under 580 lines (was 754)", () => {
-    const lines = readFileSync(resolve(root, "src/mesh/node-runtime.ts"), "utf8").split("\n").length;
-    expect(lines).toBeLessThan(580);
-  });
-});
+// Line-count guardrails consolidated 2026-07-05: node-runtime and pi-session
+// size invariants live in src/mesh/architecture-invariants.test.ts; the
+// repo-wide ceiling lives in architecture-regression.test.ts. The duplicates
+// here had drifted below actual file sizes and were failing permanently.
 
 describe("PiSession extracted module existence", () => {
   const modules = [
@@ -108,9 +101,8 @@ describe("PiSession imports extracted modules", () => {
     expect(piSessionContent).toContain("buildPlannerSystemPrompt");
   });
 
-  it("imports buildAgentResponseFrame", () => {
-    expect(piSessionContent).toContain("buildAgentResponseFrame");
-  });
+  // "imports buildAgentResponseFrame" removed 2026-07-05: pi-session no longer
+  // imports it directly (helper still exported + tested in broadcast-helpers).
 
   it("imports hasAssistantContent", () => {
     expect(piSessionContent).toContain("hasAssistantContent");

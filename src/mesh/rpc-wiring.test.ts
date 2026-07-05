@@ -150,12 +150,8 @@ describe("MessageRouter wiring in MeshNodeRuntime", () => {
     try { rmSync(tmpDir, { recursive: true }); } catch {}
   });
 
-  it("node-runtime god object is under 580 lines", () => {
-    // This test documents and enforces the decomposition progress
-    const fs = require("node:fs");
-    const lines = fs.readFileSync("src/mesh/node-runtime.ts", "utf-8").split("\n").length;
-    expect(lines).toBeLessThan(580);
-  });
+  // node-runtime line-count guardrail lives in architecture-invariants.test.ts
+  // (was duplicated across four files; consolidated 2026-07-05).
 
   it("has all critical RPC handlers after message router wiring", () => {
     const methods = runtime.rpcDispatcher.listMethods();

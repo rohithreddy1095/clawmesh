@@ -1,4 +1,12 @@
+import { evaluateMeshForwardTrust } from "./trust-policy.js";
 import type { MeshForwardPayload } from "./types.js";
+
+export type MockActuatorRefusal = {
+  targetRef: string;
+  code: string;
+  message: string;
+  atMs: number;
+};
 
 export type MockActuatorStateRecord = {
   targetRef: string;
@@ -22,6 +30,10 @@ export class MockActuatorController {
   private state = new Map<string, MockActuatorStateRecord>();
   private history: MockActuatorEvent[] = [];
   private maxHistory: number;
+  /** Commands refused by the executor-side trust gate. */
+  refusedCount = 0;
+  /** Most recent refusal, for operator surfaces. */
+  lastRefusal?: MockActuatorRefusal;
   private log?: {
     info?: (msg: string) => void;
     warn?: (msg: string) => void;
@@ -47,6 +59,28 @@ export class MockActuatorController {
       return;
     }
     if (!command.target?.ref?.startsWith("actuator:")) {
+      return;
+    }
+
+    // Executor-side gate — the actuator never trusts upstream checks.
+    // Re-evaluate the full trust policy against the envelope's own trust
+    // metadata (deny-by-default: must declare actuation and pass the gate).
+    const decision = evaluateMeshForwardTrust({
+      ...payload,
+      to: command.target.ref,
+      trust: command.trust,
+    });
+    if (!decision.ok) {
+      this.refusedCount++;
+      this.lastRefusal = {
+        targetRef: command.target.ref,
+        code: decision.code,
+        message: decision.message,
+        atMs: Date.now(),
+      };
+      this.log?.warn?.(
+        `mock-actuator: REFUSED ${command.target.ref} <- ${command.operation.name}: ${decision.code}`,
+      );
       return;
     }
 

@@ -4,3 +4,5 @@ dist/
 backend.log
 .env
 .env.local
+# contains device credentials — never commit; delete after bootstrap
+docs/HANDOFF-2026-07-05-deploy.md
