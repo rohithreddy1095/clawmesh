@@ -123,6 +123,8 @@ export class MockActuatorController {
     return {
       records: states.map((s) => ({ ...s })),
       history: this.history.map((h) => ({ ...h })),
+      refusedCount: this.refusedCount,
+      lastRefusal: this.lastRefusal ? { ...this.lastRefusal } : undefined,
     };
   }
 

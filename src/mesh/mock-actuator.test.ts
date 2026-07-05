@@ -88,6 +88,24 @@ describe("MockActuatorController — executor-side deny-by-default", () => {
     expect(snapshot.records).toHaveLength(1);
     expect(controller.refusedCount).toBe(0);
   });
+
+  it("exposes refusal telemetry in snapshot so the state RPC carries it", async () => {
+    // Refusals must be observable over the wire (clawmesh.mock.actuator.state
+    // returns snapshot()), not just as in-process fields.
+    await controller.handleForward(makeForwardPayload({
+      trust: {
+        action_type: "communication",
+        evidence_trust_tier: "T0_planning_inference",
+        minimum_trust_tier: "T0_planning_inference",
+        verification_required: "none",
+      },
+    }));
+
+    const snapshot = controller.snapshot();
+    expect(snapshot.refusedCount).toBe(1);
+    expect(snapshot.lastRefusal?.code).toBe("ACTUATION_DECLARATION_REQUIRED");
+    expect(snapshot.lastRefusal?.targetRef).toBe("actuator:pump:P1");
+  });
 });
 
 describe("MockActuatorController", () => {
