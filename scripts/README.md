@@ -40,6 +40,7 @@ runs still required where the handoff says so.
 | `mesh-rpc.mjs <url> <method> [json]` | One-shot RPC probe (`mesh.peers`, `mesh.status`, `clawmesh.mock.actuator.state`, …). Exit 0 on `ok:true`. |
 | `frame-listen.mjs <url> [secs] [sourceId]` | Subscribe to a node's event stream, print context frames + tier. ⚠ timestamp deltas only valid same-host. |
 | `llm-infer-smoke.ts` | Starts a deterministic localhost LLM-serving node, runs `clawmesh infer`, and verifies streamed chunks stay out of the world model. |
+| `llm-serve-test.ts [port] [mesh]` | Serves a deterministic fake model over the mesh for cross-hardware `llm.infer` wire checks. |
 | `safety-canary.sh <url> [deviceId]` | The three-shot actuation-gate invariant check. CANARY RED = stop all agent work (docs/OVERSIGHT.md). |
 | `handshake-bench.ts <url> [n] [mesh]` | Handshake v2 timing. Baseline 2026-07-05: total p50 22.3 ms on WiFi LAN. Run via `pnpm exec tsx`. |
 | `local-mesh.sh up/status/down/clean` | N-node localhost chain mesh, no hardware. |
