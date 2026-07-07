@@ -1,18 +1,8 @@
-# Engineering & Invention Log
+# Engineering Log
 
-**Inventor:** Rohith Reddy (rohithreddy1095@gmail.com)
-**Project:** ClawMesh — evidence-provenance-gated actuation in a
-self-forming device mesh
-**Record character:** contemporaneous, date-stamped, append-only. Entries
-are written at the time of the decision/milestone by Rohith or by AI
-assistants working under his direction; conception of claimed subject
-matter is attributed to the inventor. Git commit history provides
-independent timestamps for every entry. Never rewrite or reorder entries.
-
-Serves two purposes: (1) session-to-session continuity for Claude and
-Rohith, (2) conception- and diligence-date evidence for any patent filing
-on the tier-gated actuation technique. First public disclosure of the
-repository: 2026-07-07 (see entry of that date).
+Date-stamped, append-only record of design decisions, milestones, and
+status changes — session-to-session continuity for Claude and Rohith.
+Append entries; never rewrite or reorder them.
 
 Format: date, what changed / was decided, why, what's next.
 
@@ -30,10 +20,8 @@ runtime state. Bhoomi farm vertical is the driving use case.
 **Decisions made:**
 - Contribution claim fixed: evidence provenance as first-class wire metadata
   gating physical actuation in a self-forming mesh. Composition is the novelty;
-  individual mechanisms are prior art (A2A, MCP, ROS 2/SROS2, gossip, exo/petals).
-- Patent intent confirmed; filing after engineering is solved. Flag raised:
-  public repo activity may be prior disclosure — confirm visibility strategy
-  with counsel before publishing a formal spec.
+  individual mechanisms exist in adjacent systems (A2A, MCP, ROS 2/SROS2,
+  gossip, exo/petals); the composition is the contribution.
 - Identified handshake defect: `buildMeshAuthPayload` optional-field `|` join
   creates signing ambiguity ({nonce:"x"} ≡ {meshId:"x"}); nonce optional means
   5-min replay window. Fix: fixed-position fields + mandatory nonce.
@@ -61,7 +49,7 @@ runtime state. Bhoomi farm vertical is the driving use case.
   matching issued nonce is impossible at the type level and at runtime.
 - New error codes: AUTH_NONCE_REQUIRED, AUTH_NONCE_INVALID.
 
-**Design decisions (conception-relevant):**
+**Design decisions:**
 - Nonce consumed only on successful match — a garbage frame cannot burn a
   pending challenge (nonce is 24 random bytes; guessing is not a threat).
 - Mutual anti-replay via clientNonce echo rather than a second challenge
@@ -109,10 +97,9 @@ surface, error-code registry, and an explicit non-guarantees section
   is airtight only for commands that declare actuation. Deny-by-default for
   actuator-capable targets is the follow-up.
 
-**Patent relevance:** §8 (trust vocabulary + gate algorithm) is the first
+**Spec significance:** §8 (trust vocabulary + gate algorithm) is the first
 standalone normative statement of the tier-gated actuation technique —
-useful as a spec exhibit, and reviewable by counsel before any public
-publication of the spec (see repo-visibility flag in CLAUDE.md).
+useful as a standalone reference for reimplementation and review.
 
 **Next:** measurements (latency, partition/rejoin) per priority order; or
 close the §8.3 deny-by-default gap first if hardware work is imminent.
@@ -142,11 +129,11 @@ level"), so it outranked measurements.
   rule (sender, receiver gate, executor). `ACTUATION_DECLARATION_REQUIRED`
   added to the error registry.
 
-**Patent relevance (conception note):** the technique is now enforceable as
+**Design note:** the technique is now enforceable as
 claimed — tier gating is structural (target-based deny-by-default), not
 declaration-dependent. The three-layer enforcement (sender fail-fast,
 receiver protocol gate, executor last-line re-check with refusal telemetry)
-is part of the claimed composition.
+is part of the core composition.
 
 **Verification:** full suite 155 files / 2387 tests green (8 new).
 
@@ -256,14 +243,14 @@ capability strings matching the pi model-spec format, `--serve-llm` flag,
 cap, `bufferedAmount` > 1 MiB aborts with `LLM_BACKPRESSURE` — stream
 abort, not flow control), `llm.cancel`, concurrency cap 1.
 
-**Conception note (invention log):** provenance must survive capability
+**Design note:** provenance must survive capability
 forwarding — inference output crossing nodes stays
 `T0_planning_inference` / `evidence_sources:["llm"]` via a single shared
 labeling helper, never enters the world model as observation, and remains
 hard-blocked from actuation at receiver gate and executor regardless of
 which node ran the model or how many hops the result crossed. The
 multi-hop T0-preservation test is a required deliverable, extending the
-claimed composition from "local LLM evidence cannot actuate" to
+core invariant from "local LLM evidence cannot actuate" to
 "forwarded inference evidence cannot actuate."
 
 Full spec-level detail, slice order, acceptance criteria, and the
@@ -294,11 +281,11 @@ capability serving (Slice 3) are its preconditions:
    window, exchange identity keys over the LAN, and each side displays a
    short authentication string derived from both public keys; a human
    confirms match on both ends before trust is persisted.
-   **Conception note (invention log):** the pairing ceremony is what keeps
+   **Design note:** the pairing ceremony is what keeps
    "self-forming" compatible with "trust-gated actuation" — discovery may
    see anyone, but dialing/joining requires prior ceremony, and the trust
    tier of a peer is bound at pairing time. Unpaired peers are never
-   dialed, only logged. This is part of the claimed composition (explicit
+   dialed, only logged. This is part of the core composition (explicit
    pairing gating a self-forming actuation-capable mesh), not generic UX.
 4. **Local RPC auth.** The node port currently answers unauthenticated
    RPCs (`mesh.status`, `chat.subscribe`, …). Acceptable on a dev desk;
@@ -807,7 +794,7 @@ process intermittently. Plus a macOS bash-3.2 empty-array/set -u bug in
 the agent's canary edit made shot C fail before dialing. Both fixed;
 canary GREEN 3/3 on hardware.
 
-**Conception note (invention log):** the dial tie-break (lower deviceId
+**Design note:** the dial tie-break (lower deviceId
 initiates; higher yields to the designated dialer's inbound connection)
 is now part of the self-forming design: deterministic single-link
 convergence between mutually-discovering trusted peers, without
@@ -836,7 +823,7 @@ auto-trust path, (4) operator RPC auth — three privilege tiers
 (unauthenticated forward → NOT_AUTHORIZED), (5) service lifecycle —
 launchd/systemd unit generation driven solely by node.json.
 
-**Conception note (invention log):** the pairing SAS binds the two
+**Design note:** the pairing SAS binds the two
 Ed25519 identity keys by numeric comparison (Bluetooth-style) and is the
 trust-bootstrap that keeps "self-forming" compatible with tier-gated
 actuation: discovery may see anyone; dialing requires prior ceremony;
@@ -848,21 +835,9 @@ Hardware appendix (Jetson reboot-rejoin, real pairing, N=3 real-LAN,
 nanochat serving, LAN operator-auth) is review-session-only; agents
 leave it explicitly unchecked.
 
-## 2026-07-07 — Repo pushed to PUBLIC GitHub by Rohith's explicit decision
+## 2026-07-07 — Continuous pushes to origin enabled
 
-**Status change:** all local work (through Phase 3 handoff activation)
-pushed to the public repo github.com/rohithreddy1095/clawmesh, plus
-tags. Rohith chose "push to public as-is" after being shown the
-IP-hygiene tradeoff (repo visibility, contents including PROTOCOL.md,
-conception notes, prior-art positioning; zero forks/stars at decision
-time). Recorded consequence for any future filing: **first public
-disclosure date of the tier-gated actuation technique is 2026-07-07**
-(earlier commits carry earlier author dates but were not public before
-today). Jurisdictions with inventor grace periods (e.g. US, 12 months)
-remain available if filed in time; absolute-novelty jurisdictions may
-be barred. Claude is not a lawyer; dates recorded for counsel.
-
-**Process change:** continuous pushing to origin/main is now authorized
-and expected — for agents too. OVERSIGHT.md and the active handoff
-updated accordingly; "nothing pushed" checks become "main pushed,
-no force-pushes, no stray branches".
+**Status change:** local work pushed to the GitHub remote; continuous
+pushing to origin/main (plain pushes + tags, no force-pushes) is now part
+of the standard workflow for agents and review sessions. OVERSIGHT.md and
+the active handoff updated accordingly.

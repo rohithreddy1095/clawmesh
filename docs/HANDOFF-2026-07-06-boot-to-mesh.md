@@ -106,12 +106,12 @@ where both are audible joins A, logs-and-skips B (localhost test: two
 local-mesh instances with different MESH_NAMEs + injected discovery
 events). meshId present in TXT records (unit-test the advertiser).
 
-## Slice 3 — Pairing ceremony (the IP slice — conception notes required)
+## Slice 3 — Pairing ceremony (the invariant-critical slice)
 
 Replaces manual two-sided `trust add` with a Bluetooth-style ceremony.
-Every design decision here is part of the claimed composition (explicit
+Every design decision here is part of the core composition (explicit
 human-confirmed pairing gating a self-forming actuation-capable mesh).
-Log design notes as invention-log entries with dates.
+Log design decisions as dated entries; flag them for the review session.
 
 **Decisions:**
 - Flow (exactly this, both CLIs interactive):

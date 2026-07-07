@@ -9,4 +9,6 @@ docs/HANDOFF-2026-07-05-deploy.md
 # session artifacts — never commit
 pi-session-*.html
 session-*.md
-autoresearch.jsonl
+
+# private IP material — never commit
+docs/private/

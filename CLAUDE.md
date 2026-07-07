@@ -7,31 +7,25 @@ where heterogeneous devices (laptop, Jetson, sensors, actuators, GPU boxes) pair
 explicitly, advertise capabilities, share emergent context, and eventually pool
 compute so local inference can run across connected hardware.
 
-## The contribution claim (candidate patent technique)
+## The core design invariant
 
-The defensible novelty is NOT any single mechanism (mDNS discovery, Ed25519
-pairing, gossip, capability routing all have prior art). It is the composition:
+What makes ClawMesh different from adjacent systems (agent protocols,
+robot middleware, device-identity overlays) is one composition, enforced
+on the wire rather than by application convention:
 
 > **Evidence provenance as first-class wire metadata that gates physical
 > actuation in a self-forming device mesh.** Every context frame carries an
 > evidence trust tier (T0 planning inference → T3 verified action evidence);
-> actuation paths enforce tier + approval level (L0–L3) on both sender and
-> receiver; LLM-only evidence (T0) is hard-blocked from physical actuation at
-> the protocol level, not as an application convention.
+> actuation paths enforce tier + approval level (L0–L3) on sender, receiver
+> gate, and executor independently; LLM-only evidence (T0) is hard-blocked
+> from physical actuation at the protocol level. Provenance survives
+> capability forwarding: inference produced on another node stays T0 across
+> any number of hops.
 
-Prior art to position against (and differentiate from) in any spec, paper, or
-patent filing: Google A2A, MCP, ROS 2 / SROS2 / DDS, Tailscale-style device
-identity, epidemic gossip protocols, exo/petals for distributed inference.
-
-**IP hygiene until filing:**
-- Treat the tier-gated actuation mechanism as the core technique. Do not
-  describe it as "standard practice" in docs or commit messages.
-- Keep an invention log: date-stamped notes for design decisions on the
-  technique (docs/ or a private log), since filing will need conception dates.
-- Note: public repo activity may constitute prior disclosure in
-  absolute-novelty jurisdictions. Rohith should confirm repo visibility
-  strategy with patent counsel before publishing a formal spec. (Claude is
-  not a lawyer; this is a flag, not legal advice.)
+This invariant outranks every feature. Never weaken it — not temporarily,
+not behind a flag, not to make a test pass. Design decisions that touch it
+get date-stamped notes in `docs/private/` (gitignored; maintained by
+review sessions).
 
 ## Claude's role
 
@@ -89,16 +83,19 @@ Jetson password.)
 
 ## Keeping this file current
 
-This file holds durable truths: vision, contribution claim, role, conventions.
+This file holds durable truths: vision, core invariant, role, conventions.
 Fast-moving state lives in `docs/ENGINEERING-LOG.md` — a date-stamped,
-append-only log that doubles as the invention log for the patent filing.
-Claude appends a log entry whenever a session produces a decision, milestone,
-or status change, and updates this file only when direction itself changes.
+append-only technical log. Claude appends a log entry whenever a session
+produces a decision, milestone, or status change, and updates this file
+only when direction itself changes. Notes on invariant-touching design
+decisions additionally go to `docs/private/` (gitignored, review sessions
+only).
 
 ## Working conventions
 
 - Small, test-backed slices; mesh reliability changes developed Red/Green.
-- Never weaken trust/safety constraints casually — the tier-gating is the IP.
+- Never weaken trust/safety constraints casually — the tier-gating is the
+  core of the system.
 - Tests should be risk-driven, not count-driven; consolidate, don't pad.
 - WAN/static behavior stays explicit and operator-visible.
 - UI reflects backend truth, never mock state.

@@ -1,7 +1,7 @@
 # Handoff: Phase 2 — self-healing discovery + inference as a mesh capability
 
 For: the next Claude Code session(s) on this repo. Read `CLAUDE.md` first
-(charter, IP claim, conventions), then `PROTOCOL.md` (wire contract), then
+(charter, core invariant, conventions), then `PROTOCOL.md` (wire contract), then
 the 2026-07-05 entries in `docs/ENGINEERING-LOG.md` (first real deployment:
 what worked, what broke, measured numbers).
 
@@ -62,14 +62,14 @@ agents and hardware" → pooled local inference) and the contribution claim
 
 1. **Make the mesh actually self-forming again** — mDNS discovery is
    broken on every node; the mesh only forms via static `--peer` entries
-   today. "Self-forming" is in the patent claim's preamble; it must be true.
+   today. "Self-forming" is a core product claim; it must be true.
 2. **Inference as a mesh capability** — advertise `llm:<provider/model>`,
    forward inference over the mesh with streaming, and make provenance
    survive it: anything an LLM produces is T0 planning inference and must
    remain hard-blocked from actuation even after crossing nodes. This
-   extends the claimed composition (provenance survives capability
+   extends the core invariant (provenance survives capability
    forwarding) — record design decisions in the engineering log as
-   invention-log entries.
+   dated design-note entries.
 
 Do the slices in order. Each slice is independently shippable, Red/Green,
 and ends with the full mesh suite green (`pnpm exec vitest run src/mesh/`)
@@ -261,8 +261,8 @@ stays green. Don't mix into the slices above.
 ## Ask Rohith (do not decide unilaterally)
 
 - **GitHub push**: all Phase-1/2 commits are local-only. Public repo
-  activity may be prior disclosure for the patent (CLAUDE.md IP-hygiene
-  note). Get an explicit yes before pushing anything.
+  push policy is Rohith's call. Get an explicit yes before pushing anything.
+  (Resolved 2026-07-07: pushes to origin/main authorized.)
 - **Jetson password rotation** is still pending (his action; key auth
   already works). The old password is compromised (was in chat logs).
 - **Gemini API key** on the Mac is invalid — planner runs in `observing`
@@ -277,8 +277,8 @@ stays green. Don't mix into the slices above.
 - Never weaken the tier gate "temporarily" — it is the IP. New paths
   (inference forwarding!) must add enforcement points, not holes.
 - Append a date-stamped engineering-log entry for every decision,
-  milestone, or surprising measurement — it doubles as the invention log
-  for the patent filing (conception dates matter).
+  milestone, or surprising measurement — dated entries matter for
+  reconstructing when and why decisions were made.
 - Farm/Bhoomi specifics stay out of `src/mesh/` — inference forwarding is
   generic; the farm planner is just its first consumer.
 

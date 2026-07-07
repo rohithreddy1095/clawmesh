@@ -520,6 +520,6 @@ New codes MUST be added here before use.
 ---
 
 *Related documents: `CLAUDE.md` (project charter), `docs/ENGINEERING-LOG.md`
-(dated design decisions / invention log),
+(dated design decisions),
 `farm/bhoomi/governance/evidence-trust-policy-v0.yaml` (policy vocabulary
 origin for the snake_case trust fields).*

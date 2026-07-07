@@ -78,7 +78,7 @@ Run against the real mesh (boot commands are in the active handoff).
    No hardware handy? `scripts/local-mesh.sh up 3` gives a full localhost
    mesh (see scripts/README.md) — valid for protocol checks, not a
    substitute for the real-LAN runs the handoff requires.
-4. **IP hygiene sweep:** log entries dated and appended (never edited);
+4. **Doc hygiene sweep:** log entries dated and appended (never edited);
    no doc/commit language calling the tier-gating "standard practice";
    pushes limited to origin/main + tags (authorized 2026-07-07); no
    force-pushes or history rewrites without Rohith.
@@ -119,5 +119,5 @@ Run against the real mesh (boot commands are in the active handoff).
 - **Review sessions (strongest model):** Tier 2/3 checkpoints, phase
   gates, writing the next handoff, editing this file.
 - **Rohith only:** repo visibility changes, force-pushes/history
-  rewrites, credentials/keys, patent-counsel
+  rewrites, credentials/keys, legal/strategy
   questions, anything under "Ask Rohith" in the active handoff.
