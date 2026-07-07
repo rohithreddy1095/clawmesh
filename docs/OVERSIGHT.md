@@ -26,7 +26,8 @@ The session prompt already requires these; spot-check that they happened:
 - [ ] `pnpm exec vitest run src/mesh/ src/agents/` fully green.
 - [ ] A dated entry appended to `docs/ENGINEERING-LOG.md` for the session.
 - [ ] Commits are small and scoped to one slice; messages name the slice.
-- [ ] `git status -sb` — ahead of origin is fine; NOTHING pushed to GitHub.
+- [ ] `git status -sb` — main pushed to origin (authorized by Rohith
+      2026-07-07); no force-pushes, no stray remote branches.
 
 ## Tier 2 — per completed slice (~15 min, Rohith or a review session)
 
@@ -79,7 +80,8 @@ Run against the real mesh (boot commands are in the active handoff).
    substitute for the real-LAN runs the handoff requires.
 4. **IP hygiene sweep:** log entries dated and appended (never edited);
    no doc/commit language calling the tier-gating "standard practice";
-   still nothing pushed to GitHub without an explicit OK.
+   pushes limited to origin/main + tags (authorized 2026-07-07); no
+   force-pushes or history rewrites without Rohith.
 5. **Repo hygiene:** stray branches merged or deleted on both machines;
    Jetson clone fast-forwarded to Mac main; no stashes silently dropped.
 
@@ -116,5 +118,6 @@ Run against the real mesh (boot commands are in the active handoff).
   specified. May propose changes only as log notes, never as code.
 - **Review sessions (strongest model):** Tier 2/3 checkpoints, phase
   gates, writing the next handoff, editing this file.
-- **Rohith only:** GitHub pushes, credentials/keys, patent-counsel
+- **Rohith only:** repo visibility changes, force-pushes/history
+  rewrites, credentials/keys, patent-counsel
   questions, anything under "Ask Rohith" in the active handoff.

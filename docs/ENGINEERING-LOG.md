@@ -838,3 +838,22 @@ may be spoken to).
 Hardware appendix (Jetson reboot-rejoin, real pairing, N=3 real-LAN,
 nanochat serving, LAN operator-auth) is review-session-only; agents
 leave it explicitly unchecked.
+
+## 2026-07-07 — Repo pushed to PUBLIC GitHub by Rohith's explicit decision
+
+**Status change:** all local work (through Phase 3 handoff activation)
+pushed to the public repo github.com/rohithreddy1095/clawmesh, plus
+tags. Rohith chose "push to public as-is" after being shown the
+IP-hygiene tradeoff (repo visibility, contents including PROTOCOL.md,
+conception notes, prior-art positioning; zero forks/stars at decision
+time). Recorded consequence for any future filing: **first public
+disclosure date of the tier-gated actuation technique is 2026-07-07**
+(earlier commits carry earlier author dates but were not public before
+today). Jurisdictions with inventor grace periods (e.g. US, 12 months)
+remain available if filed in time; absolute-novelty jurisdictions may
+be barred. Claude is not a lawyer; dates recorded for counsel.
+
+**Process change:** continuous pushing to origin/main is now authorized
+and expected — for agents too. OVERSIGHT.md and the active handoff
+updated accordingly; "nothing pushed" checks become "main pushed,
+no force-pushes, no stray branches".

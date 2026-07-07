@@ -257,4 +257,5 @@ reboot-rejoin run on the Jetson is the review session's job.
 4. Service unit generation snapshot-tested for both platforms.
 5. Suites + tsc green; dated log entries per slice; REVIEW package
    (per the long-run directive) appended to the log at the end;
-   hardware appendix left explicitly unchecked; nothing pushed.
+   hardware appendix left explicitly unchecked; main + tags pushed to
+   origin after each slice (authorized 2026-07-07; never force-push).
