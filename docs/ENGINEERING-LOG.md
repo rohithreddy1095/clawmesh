@@ -812,3 +812,29 @@ Jetson password rotation, Gemini key).
 Phase 2 definition-of-done: met, with the two real-model/N=3-hardware
 residuals noted above. Tree at 13209a2, tagged
 checkpoint-20260705-phase2-reviewed. Jetson synced to same commit.
+
+## 2026-07-07 — Phase 3 handoff active: boot-to-mesh
+
+**Decision:** Phase 3 (`docs/HANDOFF-2026-07-06-boot-to-mesh.md`) is the
+active work order for long-running agent sessions. Five slices, all
+localhost-verifiable: (1) node.json config with flag>file>default
+precedence, (2) plural known-meshes store with joinPolicy auto/ask/never
++ meshId in discovery TXT, (3) pairing ceremony — 120 s window,
+`pair.request`/`pair.confirm`, 6-digit SAS from
+SHA256("clawmesh-pair|"+min(pk)+"|"+max(pk)), mutual human confirm, no
+auto-trust path, (4) operator RPC auth — three privilege tiers
+(unauthenticated / mesh-peer / operator token), canary gains shot D
+(unauthenticated forward → NOT_AUTHORIZED), (5) service lifecycle —
+launchd/systemd unit generation driven solely by node.json.
+
+**Conception note (invention log):** the pairing SAS binds the two
+Ed25519 identity keys by numeric comparison (Bluetooth-style) and is the
+trust-bootstrap that keeps "self-forming" compatible with tier-gated
+actuation: discovery may see anyone; dialing requires prior ceremony;
+the ceremony requires a human on BOTH ends. Mesh membership (which
+networks to join) is deliberately kept separate from device trust (who
+may be spoken to).
+
+Hardware appendix (Jetson reboot-rejoin, real pairing, N=3 real-LAN,
+nanochat serving, LAN operator-auth) is review-session-only; agents
+leave it explicitly unchecked.

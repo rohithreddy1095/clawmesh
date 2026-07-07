@@ -76,15 +76,16 @@ convergence), say so plainly.
 
 ## Active handoff
 
-`docs/HANDOFF-2026-07-05-inference-phase.md` — Phase 2: fix mDNS discovery
-(self-forming must be true), inference as a mesh capability
-(`llm:<provider/model>` advert + streaming `llm.infer` RPC with T0
-provenance surviving forwarding), N=3 measurements. Design decisions are
-pre-made in the handoff; spec-first, Red/Green. Start there.
+`docs/HANDOFF-2026-07-06-boot-to-mesh.md` — Phase 3: node config file,
+known-meshes store, human-confirmed pairing ceremony (SAS), operator RPC
+auth tiers, service lifecycle. All five slices localhost-verifiable;
+hardware appendix reserved for review sessions. Decisions pre-made;
+spec-first, Red/Green. Start there.
 
-(Phase 1 — first real deployment — completed 2026-07-05; see engineering
-log. The old deploy handoff is gitignored and pending deletion once Rohith
-rotates the Jetson password.)
+(Phase 1 deployed and Phase 2 reviewed/accepted 2026-07-05 — see
+engineering log, tag `checkpoint-20260705-phase2-reviewed`. The Phase-1
+deploy handoff is gitignored, pending deletion once Rohith rotates the
+Jetson password.)
 
 ## Keeping this file current
 
