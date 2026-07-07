@@ -6,3 +6,7 @@ backend.log
 .env.local
 # contains device credentials — never commit; delete after bootstrap
 docs/HANDOFF-2026-07-05-deploy.md
+# session artifacts — never commit
+pi-session-*.html
+session-*.md
+autoresearch.jsonl

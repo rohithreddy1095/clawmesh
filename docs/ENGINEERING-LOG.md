@@ -1,9 +1,18 @@
 # Engineering & Invention Log
 
-Date-stamped record of design decisions, milestones, and status changes.
-Serves two purposes: (1) session-to-session continuity for Claude and Rohith,
-(2) conception-date evidence for the eventual patent filing on the tier-gated
-actuation technique. Append entries; never rewrite history.
+**Inventor:** Rohith Reddy (rohithreddy1095@gmail.com)
+**Project:** ClawMesh — evidence-provenance-gated actuation in a
+self-forming device mesh
+**Record character:** contemporaneous, date-stamped, append-only. Entries
+are written at the time of the decision/milestone by Rohith or by AI
+assistants working under his direction; conception of claimed subject
+matter is attributed to the inventor. Git commit history provides
+independent timestamps for every entry. Never rewrite or reorder entries.
+
+Serves two purposes: (1) session-to-session continuity for Claude and
+Rohith, (2) conception- and diligence-date evidence for any patent filing
+on the tier-gated actuation technique. First public disclosure of the
+repository: 2026-07-07 (see entry of that date).
 
 Format: date, what changed / was decided, why, what's next.
 
